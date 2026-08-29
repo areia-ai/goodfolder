@@ -93,9 +93,16 @@ works normally without it.
 
 ## Licence
 
-**Not yet chosen.** Until a LICENCE file lands here, default copyright applies
-and no permission to use, copy, or modify this code has been granted. That is a
-deliberate placeholder, not an invitation.
+[GNU Affero General Public License v3.0](LICENSE).
+
+In short: use it, read it, change it, run it for yourself or for other people.
+If you modify GoodFolder and let others use it over a network, you have to
+offer them your modified source too. That is the whole bargain, and it is why
+the hosted service and this repository can be the same thing.
 
 The GoodFolder name, mascot, wordmark, and the brand assets under
-`apps/web/public/brand` are excluded from whatever licence is chosen.
+`apps/web/public/brand` are trademarks and are **not** covered by the AGPL. Run
+your own instance freely; do not call it GoodFolder.
+
+No contributor agreement is in place yet, so please hold off on pull requests
+until one is.

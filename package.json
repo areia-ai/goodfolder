@@ -2,6 +2,7 @@
   "name": "goodfolder",
   "private": true,
   "version": "0.0.1",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "packageManager": "pnpm@11.22.0",
   "engines": {
