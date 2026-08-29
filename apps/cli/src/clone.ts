@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_API_URL, type FolderConfig } from "./config.ts";
+import { DEFAULT_API_URL, withCredentials, type FolderConfig } from "./config.ts";
 import { CliError } from "./cli-error.ts";
 import { findGitDir, git } from "./git.ts";
 import { bindRepo } from "./repo-setup.ts";
@@ -59,7 +59,7 @@ export async function cmdClone(
   const dir = dedupePath(join(parent, sanitizeName(project.name)));
 
   console.log(`Downloading "${project.name}"…`);
-  const remote = `${DEFAULT_API_URL.replace("https://", "https://x:" + minted.token + "@")}/git/${project.id}`;
+  const remote = `${withCredentials(DEFAULT_API_URL, minted.token)}/git/${project.id}`;
   const clone = git(parent, ["clone", remote, dir]);
   // An empty project clones with a warning and exit code 0 — fine.
   if (clone.code !== 0 && !/empty repository/i.test(clone.stderr)) {

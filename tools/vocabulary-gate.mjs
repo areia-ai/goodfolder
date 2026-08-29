@@ -24,6 +24,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TARGETS = [
   "apps/cli/src",
   "apps/mcp/src",
+  "apps/control-plane/src/index.ts",
   "apps/web/app",
   "apps/web/components",
   "apps/web/lib",
@@ -85,14 +86,7 @@ function targetFiles() {
         if (/\.(ts|tsx)$/.test(f)) files.push(f);
       }
     } catch {
-      // A single-file target, or one that does not exist in this checkout
-      // (the server workspaces live in a separate private repository).
-      try {
-        statSync(abs);
-        files.push(abs);
-      } catch {
-        /* not present here */
-      }
+      files.push(abs); // single-file target
     }
   }
   return files;

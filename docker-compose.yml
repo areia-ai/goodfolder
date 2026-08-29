@@ -1,0 +1,210 @@
+# GoodFolder, self-hosted. Everything it needs is in this file.
+#
+#   cp .env.example .env     # fill in the four CHANGE_ME secrets
+#   docker compose up -d --build
+#   GF_API_URL=http://localhost:4100 goodfolder connect ~/some-folder
+#
+# No third-party account is required: object storage is MinIO, sign-in links
+# are written to the server log when no email provider is set, and save labels
+# fall back to a generated summary without an AI key.
+#
+# The production deploy uses infra/docker-compose.yml, which builds from a
+# pre-bundled dist instead. This file is the one strangers run.
+
+name: goodfolder
+
+services:
+  goodfolder-postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gitea
+      POSTGRES_PASSWORD: ${GITEA_DB_PASSWORD}
+      POSTGRES_DB: gitea
+      GOODFOLDER_DB_PASSWORD: ${GOODFOLDER_DB_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./infra/postgres-init.sh:/docker-entrypoint-initdb.d/10-goodfolder.sh:ro
+      - ./infra/selfhost/20-schema.sh:/docker-entrypoint-initdb.d/20-schema.sh:ro
+      - ./infra/schema.sql:/goodfolder-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gitea -d gitea"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [goodfolder-net]
+
+  goodfolder-minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --address :9000
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY}
+    volumes:
+      - ./data/minio:/data
+    # Presigned uploads go straight from the client to storage, so this has to
+    # be reachable from the host. It must match PRESIGN_PUBLIC_ENDPOINT.
+    ports:
+      - "127.0.0.1:9100:9000"
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [goodfolder-net]
+
+  # One-shot: creates the bucket. Nothing in the app does this.
+  goodfolder-minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      goodfolder-minio:
+        condition: service_healthy
+    environment:
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-goodfolder}
+    entrypoint: >
+      sh -c "mc alias set gf http://goodfolder-minio:9000 \"$$S3_ACCESS_KEY_ID\" \"$$S3_SECRET_ACCESS_KEY\" &&
+             mc mb --ignore-existing gf/\"$$S3_BUCKET\" &&
+             echo bucket ready"
+    restart: "no"
+    networks: [goodfolder-net]
+
+  goodfolder-gitea:
+    image: gitea/gitea:1.26
+    restart: unless-stopped
+    # Transport only: LFS off, SSH off, registration off, never published.
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      GITEA__server__DOMAIN: goodfolder-gitea
+      GITEA__server__HTTP_ADDR: 0.0.0.0
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__server__ROOT_URL: http://goodfolder-gitea:3000/
+      GITEA__server__DISABLE_SSH: "true"
+      GITEA__server__OFFLINE_MODE: "true"
+      GITEA__database__DB_TYPE: postgres
+      GITEA__database__HOST: goodfolder-postgres:5432
+      GITEA__database__NAME: gitea
+      GITEA__database__USER: gitea
+      GITEA__database__PASSWD: ${GITEA_DB_PASSWORD}
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__security__SECRET_KEY: ${GITEA_SECRET_KEY}
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__service__SHOW_REGISTRATION_BUTTON: "false"
+      GITEA__lfs__ENABLED: "false"
+      GITEA__log__LEVEL: Info
+    volumes:
+      - ./data/gitea:/data
+    depends_on:
+      goodfolder-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/api/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+    networks: [goodfolder-net]
+
+  # One-shot: creates the service account the control plane signs in as.
+  # Nothing in the app does this either; on the hosted service it was made by
+  # hand once.
+  goodfolder-gitea-setup:
+    image: gitea/gitea:1.26
+    depends_on:
+      goodfolder-gitea:
+        condition: service_healthy
+    volumes:
+      - ./data/gitea:/data
+    environment:
+      GITEA_WORK_DIR: /data/gitea
+      GITEA_ADMIN_USER: ${GITEA_ADMIN_USER:-gf-service}
+      GITEA_ADMIN_PASSWORD: ${GITEA_ADMIN_PASSWORD}
+    # Array form on one line: a folded scalar splits the flags into separate
+    # shell words. su-exec git because Gitea refuses to run as root. Checks
+    # first rather than swallowing errors, so a real failure stops the stack
+    # instead of leaving a half-configured install that fails later.
+    entrypoint:
+      - sh
+      - -c
+      - if su-exec git gitea admin user list | awk 'NR>1{print $$2}' | grep -qx "$$GITEA_ADMIN_USER"; then echo "service account already exists"; else su-exec git gitea admin user create --admin --username "$$GITEA_ADMIN_USER" --password "$$GITEA_ADMIN_PASSWORD" --email service@goodfolder.local --must-change-password=false; fi
+    restart: "no"
+    networks: [goodfolder-net]
+
+  goodfolder-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP: control-plane
+    restart: unless-stopped
+    environment:
+      PORT: "4100"
+      DATABASE_URL: postgres://goodfolder:${GOODFOLDER_DB_PASSWORD}@goodfolder-postgres:5432/goodfolder
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:4100}
+      GITEA_INTERNAL_URL: http://goodfolder-gitea:3000
+      GITEA_ADMIN_USER: ${GITEA_ADMIN_USER:-gf-service}
+      GITEA_ADMIN_PASSWORD: ${GITEA_ADMIN_PASSWORD}
+      S3_ENDPOINT: http://goodfolder-minio:9000
+      S3_REGION: auto
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-goodfolder}
+      PUBLIC_LFS_ORIGIN: ${PUBLIC_LFS_ORIGIN:-http://localhost:4101}
+      LFS_INTERNAL_URL: http://goodfolder-lfs:4101
+      PRESIGN: ${PRESIGN:-1}
+      PRESIGN_PUBLIC_ENDPOINT: ${PRESIGN_PUBLIC_ENDPOINT:-http://localhost:9100}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LABEL_MODEL: ${LABEL_MODEL:-}
+      WEB_ORIGINS: ${WEB_ORIGINS:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-GoodFolder <onboarding@resend.dev>}
+      MAGIC_LINK_DEBUG: ${MAGIC_LINK_DEBUG:-}
+      DEV_API_KEY: ${DEV_API_KEY:-}
+    ports:
+      - "127.0.0.1:4100:4100"
+    depends_on:
+      goodfolder-postgres:
+        condition: service_healthy
+      goodfolder-gitea:
+        condition: service_healthy
+      goodfolder-gitea-setup:
+        condition: service_completed_successfully
+      goodfolder-minio-setup:
+        condition: service_completed_successfully
+    networks: [goodfolder-net]
+
+  goodfolder-lfs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP: lfs
+    restart: unless-stopped
+    environment:
+      PORT: "4101"
+      DATABASE_URL: postgres://goodfolder:${GOODFOLDER_DB_PASSWORD}@goodfolder-postgres:5432/goodfolder
+      GITEA_INTERNAL_URL: http://goodfolder-gitea:3000
+      GITEA_ADMIN_USER: ${GITEA_ADMIN_USER:-gf-service}
+      GITEA_ADMIN_PASSWORD: ${GITEA_ADMIN_PASSWORD}
+      S3_ENDPOINT: http://goodfolder-minio:9000
+      S3_REGION: auto
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-goodfolder}
+      PUBLIC_LFS_ORIGIN: ${PUBLIC_LFS_ORIGIN:-http://localhost:4101}
+      PRESIGN: ${PRESIGN:-1}
+      PRESIGN_PUBLIC_ENDPOINT: ${PRESIGN_PUBLIC_ENDPOINT:-http://localhost:9100}
+    ports:
+      - "127.0.0.1:4101:4101"
+    depends_on:
+      goodfolder-postgres:
+        condition: service_healthy
+      goodfolder-minio-setup:
+        condition: service_completed_successfully
+    networks: [goodfolder-net]
+
+networks:
+  goodfolder-net:
+    driver: bridge

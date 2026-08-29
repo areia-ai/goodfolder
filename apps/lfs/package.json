@@ -1,0 +1,21 @@
+{
+  "name": "@goodfolder/lfs",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "dev": "node --env-file=.env.dev --experimental-transform-types src/index.ts"
+  },
+  "dependencies": {
+    "@goodfolder/serverlib": "workspace:*",
+    "@goodfolder/shared": "workspace:*",
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.2"
+  }
+}

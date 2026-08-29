@@ -22,6 +22,9 @@ const HELP = `goodfolder — keep your folder safe
   goodfolder undo                 Undo the last save (shows what changes first)
   goodfolder restore <number>     Go back to an earlier save
   goodfolder login                Approve this computer (one-time setup)
+
+Set GF_API_URL to use a GoodFolder server you run yourself. Folders remember
+the server they were set up against, so this only affects new ones.
 `;
 
 async function main() {
@@ -56,7 +59,10 @@ async function main() {
       await cmdClone(positional[0], { dest: flags.dest });
       break;
     case "connect":
-      await cmdConnect(resolve(folder), opts(flags));
+      // The help has always advertised `connect [folder]`, but the argument
+      // was dropped and the current directory used instead, so following the
+      // documented usage silently connected the wrong folder.
+      await cmdConnect(resolve(positional[0] ?? folder), opts(flags));
       break;
     case "login":
       await cmdLogin();

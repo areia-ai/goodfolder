@@ -3,15 +3,13 @@ dist/
 coverage/
 *.log
 .DS_Store
-
-# Next.js build output. Never commit these: they churn on every build and
-# bloat history.
-.next/
-out/
-*.tsbuildinfo
-
-# Never commit real environment files or key material.
 .env
 .env.*
 !.env.example
+.turbo/
+.r2-token.tmp.json
+openrouter_key.rtf
 *.rtf
+
+# Self-host stack state (docker compose volumes). Never commit these.
+data/
