@@ -13,3 +13,11 @@ openrouter_key.rtf
 
 # Self-host stack state (docker compose volumes). Never commit these.
 data/
+
+# Build output. Never commit these: they churn on every build. This repo already
+# tracks apps/web/.next and apps/web/out from before the rule existed; untracking
+# them is a separate job. The rule stops anything NEW being swept in, and keeps
+# the public repository clean, which shares this file.
+.next/
+out/
+*.tsbuildinfo
