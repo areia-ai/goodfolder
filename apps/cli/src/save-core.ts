@@ -278,6 +278,17 @@ export async function runSavePipeline(
     return empty;
   }
 
+  // ---- routing MUST come before staging --------------------------------
+  // Git applies the large-file filter when a path is staged, reading the
+  // attributes as they are at that moment. Writing .gitattributes afterwards
+  // did nothing for the files in this save: they went into the folder's
+  // history as whole copies, and the attribute only took effect for some
+  // later save. Sizes come from the working tree, so this needs nothing
+  // staged.
+  traceSync("routing", () =>
+    applyRouting(folder, [...changes.added, ...changes.modified]),
+  );
+
   // ---- stage (import streams per-file progress; steady state is quick) ----
   let interrupted = false;
   const staged = await trace("stage", async () => {
@@ -323,7 +334,6 @@ export async function runSavePipeline(
 
   // ---- gates + metadata ---------------------------------------------------
   await trace("case-gate", () => enforceCaseGate(folder, changes, trackedPromise));
-  applyRouting(folder, [...changes.added, ...changes.modified]);
 
   const ai =
     opts.recorder

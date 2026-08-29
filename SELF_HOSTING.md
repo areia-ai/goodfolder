@@ -63,10 +63,13 @@ reverse proxy with TLS in front, then set:
 Leave `MAGIC_LINK_DEBUG` unset on anything reachable from outside: it returns
 sign-in links in the API response.
 
-## Known limitation
+## Large files
 
-Large files are meant to route to object storage rather than into the folder's
-history. That routing currently runs after files are staged, so a file added
-and saved in the same step goes into the history instead. It is tracked and
-does not lose data, but a folder of large files will grow faster than it
-should.
+Anything over 1 MB goes to object storage rather than into the folder's
+history, and the history keeps a small pointer to it. Nothing extra to
+configure; MinIO handles it.
+
+One caveat if you have been running GoodFolder since before this worked:
+large files saved by an older version went into the history as whole copies,
+and they stay that way until the file is next modified. New saves route
+correctly.

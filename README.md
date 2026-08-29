@@ -81,12 +81,6 @@ Expect this gate to reject wording a normal person would not say.
 Early. There is no installer and no desktop app yet, so a folder is set up from
 the computer it lives on. It has had the most use on macOS.
 
-Large files are meant to route to object storage rather than into the folder's
-history. That routing currently runs after files are staged, so a file added
-and saved in the same step goes into the history instead. It is tracked, it
-does not lose data, and it is worth knowing before you point this at a folder
-full of video.
-
 WebMCP, which lets a browser assistant read the dashboard, is a draft from the
 W3C Web Machine Learning Community Group. Where it is unavailable the dashboard
 works normally without it.
