@@ -1,0 +1,46 @@
+# GoodFolder CI — runs on every push and PR.
+#
+# Two gates, both blocking:
+#   1. Typecheck across all workspaces (pnpm gate step 1)
+#   2. Vocabulary gate — engine vocabulary must never leak into
+#      user-facing surfaces (tools/vocabulary-gate.mjs)
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck all workspaces
+        run: pnpm typecheck
+
+      - name: Vocabulary gate
+        run: node tools/vocabulary-gate.mjs
+
+      - name: Brand SVG validation
+        run: node tools/validate-brand.mjs
+
+      - name: Contrast check
+        run: node tools/check-contrast.mjs
+
+      - name: Unit tests (site tools logic)
+        run: node --experimental-transform-types --test apps/web/lib/webmcp.test.ts

@@ -1,0 +1,21 @@
+{
+  "name": "goodfolder",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm -r build",
+    "vocab": "node tools/vocabulary-gate.mjs",
+    "brand:validate": "node tools/validate-brand.mjs",
+    "contrast:check": "node tools/check-contrast.mjs",
+    "gate": "pnpm typecheck && pnpm vocab"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

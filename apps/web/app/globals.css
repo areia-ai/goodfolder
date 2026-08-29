@@ -1,0 +1,686 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   GoodFolder design tokens.
+
+   Source colors are only blue #3B82F6, white #FFFFFF, and black #000000.
+   Everything below is an alpha or color-mix derivative of those three, used
+   for hierarchy, borders, surfaces, focus rings, and accessible contrast.
+   No other source color may enter this file.
+--------------------------------------------------------------------------- */
+
+:root {
+  --gf-blue: #3B82F6;
+  --gf-white: #FFFFFF;
+  --gf-black: #000000;
+
+  /* Blue derivatives. --gf-blue-ink is the accessible blue for text and
+     solid buttons on white (checked by tools/check-contrast.mjs). */
+  --gf-blue-ink: color-mix(in srgb, var(--gf-blue) 74%, var(--gf-black));
+  --gf-blue-line: color-mix(in srgb, var(--gf-blue) 42%, transparent);
+  --gf-blue-line-soft: color-mix(in srgb, var(--gf-blue) 24%, transparent);
+  --gf-blue-soft: color-mix(in srgb, var(--gf-blue) 9%, var(--gf-white));
+  --gf-blue-wash: color-mix(in srgb, var(--gf-blue) 4%, var(--gf-white));
+
+  /* Ink levels. Flattened on white these are #616161 and #707070 — the
+     values tools/check-contrast.mjs asserts. */
+  --gf-ink: var(--gf-black);
+  --gf-ink-soft: color-mix(in srgb, var(--gf-black) 62%, transparent);
+  /* 56%, not 54%: metadata text also sits on --gf-surface-sunken, and 54%
+     falls to 4.37:1 there. Checked by tools/check-contrast.mjs. */
+  --gf-ink-faint: color-mix(in srgb, var(--gf-black) 56%, transparent);
+
+  /* Lines and surfaces. */
+  --gf-line: color-mix(in srgb, var(--gf-black) 11%, transparent);
+  --gf-line-strong: color-mix(in srgb, var(--gf-black) 20%, transparent);
+  --gf-line-heavy: color-mix(in srgb, var(--gf-black) 34%, transparent);
+  --gf-surface: var(--gf-white);
+  --gf-surface-sunken: color-mix(in srgb, var(--gf-blue) 3%, var(--gf-white));
+
+  /* Inverse surface tokens, for the black panels. */
+  --gf-on-dark: color-mix(in srgb, var(--gf-white) 74%, transparent);
+  --gf-on-dark-faint: color-mix(in srgb, var(--gf-white) 58%, transparent);
+  --gf-line-on-dark: color-mix(in srgb, var(--gf-white) 22%, transparent);
+
+  --gf-shadow-sm: 0 1px 2px color-mix(in srgb, var(--gf-black) 6%, transparent);
+  --gf-shadow: 0 1px 2px color-mix(in srgb, var(--gf-black) 5%, transparent),
+               0 8px 24px -18px color-mix(in srgb, var(--gf-black) 40%, transparent);
+  --gf-shadow-lg: 0 1px 2px color-mix(in srgb, var(--gf-black) 5%, transparent),
+                  0 24px 60px -34px color-mix(in srgb, var(--gf-black) 42%, transparent);
+
+  --gf-radius: 12px;
+  --gf-radius-sm: 9px;
+  --gf-radius-lg: 16px;
+  --gf-ring: 0 0 0 2px var(--gf-white), 0 0 0 4px var(--gf-blue-ink);
+  --gf-section-y: clamp(56px, 7.5vw, 104px);
+}
+
+@layer base {
+* { box-sizing: border-box; }
+html { background: var(--gf-white); -webkit-text-size-adjust: 100%; }
+body {
+  color: var(--gf-ink);
+  background: var(--gf-white);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: inherit; text-decoration: none; }
+button, input, textarea, select, [contenteditable] { font: inherit; outline: none; }
+img, svg { max-width: 100%; }
+
+/* One focus treatment everywhere: a blue ring with a white gap so it reads
+   on both white and blue-tinted surfaces. */
+:where(a, button, input, textarea, select, summary, [tabindex], [contenteditable]):focus-visible {
+  outline: none;
+  box-shadow: var(--gf-ring);
+  border-radius: var(--gf-radius-sm);
+}
+}
+
+@layer components {
+/* --- Typography ---------------------------------------------------------- */
+
+.gf-display {
+  font-size: clamp(2.125rem, 5vw, 3.5rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+.gf-h2 {
+  font-size: clamp(1.625rem, 3vw, 2.375rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+.gf-h3 { font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.015em; line-height: 1.35; }
+.gf-lead { font-size: clamp(1.0625rem, 1.2vw, 1.1875rem); line-height: 1.6; color: var(--gf-ink-soft); text-wrap: pretty; }
+.gf-body { line-height: 1.65; color: var(--gf-ink-soft); text-wrap: pretty; }
+.gf-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--gf-blue-ink);
+}
+.gf-muted { color: var(--gf-ink-soft); }
+.gf-faint { color: var(--gf-ink-faint); }
+.gf-accent { color: var(--gf-blue-ink); }
+.gf-on-dark { color: var(--gf-on-dark); }
+.gf-on-dark-faint { color: var(--gf-on-dark-faint); }
+.gf-num { font-variant-numeric: tabular-nums; }
+
+/* --- Identity ------------------------------------------------------------ */
+
+.gf-wordmark { display: block; width: auto; height: 1em; max-width: none; }
+.gf-lockup { display: inline-flex; align-items: center; gap: var(--gf-lockup-gap, 6px); }
+/* Clear space is space AROUND the lockup — a quarter of the mark's width on
+   every side, owned by whatever lays the lockup out. It must never be added
+   between the mark and its own wordmark, which is what made the two read as
+   two separate marks rather than one lockup. */
+
+/* --- Layout -------------------------------------------------------------- */
+
+.gf-shell { min-height: 100svh; background: var(--gf-surface-sunken); color: var(--gf-ink); }
+.gf-wrap { margin-inline: auto; width: 100%; max-width: 1120px; padding-inline: 20px; }
+@media (min-width: 640px) { .gf-wrap { padding-inline: 28px; } }
+.gf-section { padding-block: var(--gf-section-y); }
+.gf-rule { border-top: 1px solid var(--gf-line); }
+
+/* --- Surfaces ------------------------------------------------------------ */
+
+.gf-card {
+  border: 1px solid var(--gf-line);
+  border-radius: var(--gf-radius);
+  background: var(--gf-surface);
+  box-shadow: var(--gf-shadow-sm);
+}
+.gf-card-lg { border-radius: var(--gf-radius-lg); box-shadow: var(--gf-shadow); }
+.gf-card-interactive { transition: border-color .14s ease, box-shadow .14s ease; }
+.gf-card-interactive:hover { border-color: var(--gf-line-heavy); box-shadow: var(--gf-shadow); }
+.gf-card-interactive:focus-visible { box-shadow: var(--gf-ring); }
+.gf-panel-dark {
+  border: 1px solid var(--gf-black);
+  border-radius: var(--gf-radius-lg);
+  background: var(--gf-black);
+  color: var(--gf-white);
+}
+
+/* --- Buttons ------------------------------------------------------------- */
+
+.gf-button-primary, .gf-button-secondary, .gf-button-ghost {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: var(--gf-radius-sm);
+  border: 1px solid transparent;
+  padding: 8px 14px;
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+.gf-button-primary svg, .gf-button-secondary svg, .gf-button-ghost svg { height: 15px; width: 15px; flex: none; }
+.gf-button-primary { background: var(--gf-blue-ink); color: var(--gf-white); border-color: var(--gf-blue-ink); }
+.gf-button-primary:hover { background: var(--gf-black); border-color: var(--gf-black); }
+.gf-button-secondary { border-color: var(--gf-line-strong); background: var(--gf-white); color: var(--gf-black); }
+.gf-button-secondary:hover { border-color: var(--gf-line-heavy); background: var(--gf-blue-wash); }
+.gf-button-ghost { color: var(--gf-ink-soft); }
+.gf-button-ghost:hover { background: var(--gf-blue-soft); color: var(--gf-black); }
+.gf-button-primary:disabled, .gf-button-secondary:disabled, .gf-button-ghost:disabled { cursor: not-allowed; opacity: .48; }
+.gf-button-lg { min-height: 46px; padding: 12px 20px; font-size: 15px; border-radius: var(--gf-radius); }
+.gf-button-block { width: 100%; }
+/* On black panels the primary flips to a white button so it stays legible. */
+.gf-panel-dark .gf-button-primary { background: var(--gf-white); color: var(--gf-black); border-color: var(--gf-white); }
+.gf-panel-dark .gf-button-primary:hover { background: var(--gf-blue); border-color: var(--gf-blue); color: var(--gf-black); }
+.gf-panel-dark .gf-button-secondary { background: transparent; color: var(--gf-white); border-color: var(--gf-line-on-dark); }
+.gf-panel-dark .gf-button-secondary:hover { background: color-mix(in srgb, var(--gf-white) 12%, transparent); border-color: var(--gf-white); }
+.gf-panel-dark :where(a, button):focus-visible { box-shadow: 0 0 0 2px var(--gf-black), 0 0 0 4px var(--gf-white); }
+
+.gf-icon-button {
+  display: grid; height: 36px; width: 36px; place-items: center;
+  border: 1px solid var(--gf-line-strong); border-radius: var(--gf-radius-sm);
+  background: var(--gf-white); color: var(--gf-black); cursor: pointer;
+  transition: border-color .14s ease, background .14s ease;
+}
+.gf-icon-button svg { height: 16px; width: 16px; }
+.gf-icon-button:hover { border-color: var(--gf-line-heavy); background: var(--gf-blue-wash); }
+
+/* --- Forms --------------------------------------------------------------- */
+
+.gf-input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--gf-line-strong);
+  border-radius: var(--gf-radius-sm);
+  background: var(--gf-white);
+  padding: 9px 12px;
+  font-size: 14px;
+  color: var(--gf-black);
+  transition: border-color .14s ease;
+}
+.gf-input::placeholder { color: var(--gf-ink-faint); }
+.gf-input:hover { border-color: var(--gf-line-heavy); }
+.gf-input:focus-visible { border-color: var(--gf-blue-ink); }
+.gf-input-lg { min-height: 46px; padding: 12px 14px; font-size: 15px; border-radius: var(--gf-radius); }
+.gf-label { display: block; font-size: 12.5px; font-weight: 650; color: var(--gf-ink-soft); margin-bottom: 6px; }
+
+/* --- Notices ------------------------------------------------------------- */
+/* Kind is carried by an icon, a written label, and border style — never by
+   color alone, so it survives color-vision differences and monochrome. */
+
+.gf-notice {
+  display: flex; align-items: flex-start; gap: 9px;
+  border: 1px solid var(--gf-line-strong);
+  border-left-width: 3px;
+  border-radius: var(--gf-radius-sm);
+  background: var(--gf-white);
+  padding: 11px 13px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--gf-black);
+}
+.gf-notice svg { height: 17px; width: 17px; flex: none; margin-top: 1px; }
+.gf-notice-info { border-color: var(--gf-blue-line); border-left-color: var(--gf-blue-ink); background: var(--gf-blue-soft); }
+.gf-notice-quiet { border-left-width: 1px; background: var(--gf-white); }
+.gf-notice-done { border-color: var(--gf-blue-line); border-left-color: var(--gf-blue-ink); background: var(--gf-blue-wash); }
+.gf-notice-problem { border-color: var(--gf-line-heavy); border-left-color: var(--gf-black); border-left-style: double; border-left-width: 5px; background: var(--gf-white); }
+.gf-notice b { font-weight: 700; }
+
+/* --- Status badges ------------------------------------------------------- */
+/* Every badge pairs a shape/icon with a word. Blue fill, outline, dash, and
+   strike-through give four states that read without color. */
+
+.gf-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--gf-line-strong);
+  border-radius: 999px;
+  background: var(--gf-white);
+  padding: 3px 9px 3px 7px;
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.5;
+  color: var(--gf-ink-soft);
+  white-space: nowrap;
+}
+.gf-badge svg { height: 13px; width: 13px; flex: none; }
+.gf-badge-strong { border-color: var(--gf-blue-ink); background: var(--gf-blue-ink); color: var(--gf-white); }
+.gf-badge-open { border-color: var(--gf-line-heavy); color: var(--gf-black); }
+.gf-badge-attention { border-style: dashed; border-color: var(--gf-blue-ink); background: var(--gf-blue-wash); color: var(--gf-black); }
+.gf-badge-closed { border-color: var(--gf-line); color: var(--gf-ink-faint); text-decoration: line-through; text-decoration-thickness: 1px; }
+.gf-badge-quiet { border-style: dotted; }
+
+.gf-count { color: var(--gf-ink-faint); font-size: 12.5px; }
+.gf-count strong { color: var(--gf-black); font-weight: 700; }
+
+/* --- Tabs ---------------------------------------------------------------- */
+
+.gf-tabs {
+  display: flex; gap: 2px; align-items: stretch;
+  border-bottom: 1px solid var(--gf-line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.gf-tabs::-webkit-scrollbar { display: none; }
+.gf-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 0; border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 11px 12px;
+  margin-bottom: -1px;
+  font-size: 13.5px; font-weight: 650; white-space: nowrap;
+  color: var(--gf-ink-soft);
+  cursor: pointer;
+  transition: color .14s ease, border-color .14s ease, background .14s ease;
+}
+.gf-tab svg { height: 16px; width: 16px; flex: none; }
+.gf-tab:hover { color: var(--gf-black); background: var(--gf-blue-wash); }
+.gf-tab[aria-selected="true"] { color: var(--gf-black); font-weight: 750; border-bottom-color: var(--gf-blue-ink); }
+.gf-tab-count {
+  display: inline-grid; place-items: center; min-width: 19px; height: 19px;
+  border-radius: 999px; padding: 0 6px;
+  background: var(--gf-blue-ink); color: var(--gf-white);
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.gf-tab[aria-selected="false"] .gf-tab-count { background: var(--gf-white); color: var(--gf-black); border: 1px solid var(--gf-line-heavy); }
+
+/* --- Dashboard rail ------------------------------------------------------ */
+
+.gf-rail {
+  display: flex; flex-direction: column; gap: 4px;
+  border-right: 1px solid var(--gf-line);
+  background: var(--gf-white);
+  padding: 16px 12px;
+}
+.gf-rail-link {
+  display: flex; width: 100%; align-items: center; gap: 9px;
+  border: 1px solid transparent; border-radius: var(--gf-radius-sm);
+  padding: 9px 10px;
+  color: var(--gf-ink-soft);
+  font-size: 13.5px; font-weight: 650; text-align: left;
+  cursor: pointer;
+  transition: background .14s ease, color .14s ease;
+}
+.gf-rail-link svg { height: 17px; width: 17px; flex: none; }
+.gf-rail-link:hover { background: var(--gf-blue-wash); color: var(--gf-black); }
+.gf-rail-link[aria-current="page"] { background: var(--gf-blue-soft); border-color: var(--gf-blue-line-soft); color: var(--gf-black); font-weight: 700; }
+.gf-rail-heading {
+  padding: 0 10px; margin: 18px 0 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--gf-ink-faint);
+}
+
+/* --- Files list ---------------------------------------------------------- */
+
+.gf-file-row {
+  display: flex; width: 100%; align-items: center; gap: 9px;
+  border: 1px solid transparent; border-radius: var(--gf-radius-sm);
+  padding: 9px 10px;
+  min-height: 40px;
+  color: var(--gf-ink-soft);
+  font-size: 13px; text-align: left;
+  cursor: pointer;
+}
+.gf-file-row svg { height: 16px; width: 16px; flex: none; }
+.gf-file-row:hover { background: var(--gf-blue-wash); color: var(--gf-black); }
+.gf-file-row[aria-current="true"] { border-color: var(--gf-blue-line); background: var(--gf-blue-soft); color: var(--gf-black); font-weight: 650; }
+.gf-file-row small { color: var(--gf-ink-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.gf-folder-glyph {
+  display: grid; height: 40px; width: 40px; place-items: center;
+  border: 1px solid var(--gf-blue-line-soft); border-radius: 10px;
+  background: var(--gf-blue-soft); color: var(--gf-black);
+}
+.gf-folder-glyph svg { height: 20px; width: 20px; }
+
+.gf-avatar {
+  display: grid; height: 36px; width: 36px; place-items: center;
+  border: 1px solid var(--gf-blue-line-soft); border-radius: 999px;
+  background: var(--gf-blue-soft); color: var(--gf-black);
+  font-size: 13px; font-weight: 700;
+}
+
+/* --- Skeletons ----------------------------------------------------------- */
+
+.gf-skeleton {
+  border-radius: var(--gf-radius-sm);
+  background: color-mix(in srgb, var(--gf-black) 7%, transparent);
+  animation: gf-pulse 1.5s ease-in-out infinite;
+}
+@keyframes gf-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+/* --- Proposal before / after --------------------------------------------- */
+
+.gf-change {
+  max-height: 190px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  border: 1px solid var(--gf-line); border-radius: var(--gf-radius-sm);
+  padding: 12px;
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.gf-change-before { border-left: 3px solid var(--gf-line-heavy); background: color-mix(in srgb, var(--gf-black) 3%, var(--gf-white)); }
+.gf-change-after { border-left: 3px solid var(--gf-blue-ink); background: var(--gf-blue-wash); }
+.gf-change-label { display: block; margin-bottom: 6px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--gf-ink-faint); }
+
+/* --- Document editor ----------------------------------------------------- */
+
+.gf-editor {
+  min-height: 520px; max-width: 780px; margin: 0 auto; padding: 48px 56px 88px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px; line-height: 1.75; color: var(--gf-black);
+}
+.gf-editor h1, .gf-editor h2, .gf-editor h3 { font-family: ui-sans-serif, system-ui, sans-serif; font-weight: 750; letter-spacing: -.03em; }
+.gf-editor h1 { margin: 0 0 26px; font-size: 34px; line-height: 1.18; }
+.gf-editor h2 { margin: 34px 0 13px; font-size: 24px; line-height: 1.25; }
+.gf-editor h3 { margin: 26px 0 10px; font-size: 19px; }
+.gf-editor p { margin: 0 0 17px; }
+.gf-editor blockquote { margin: 22px 0; border-left: 3px solid var(--gf-blue-ink); padding: 4px 0 4px 18px; color: var(--gf-ink-soft); font-style: italic; }
+.gf-editor ul { margin: 0 0 19px; padding-left: 25px; list-style: disc; }
+.gf-editor a { color: var(--gf-blue-ink); text-decoration: underline; }
+
+.gf-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
+  min-width: 176px;
+  border: 1px solid var(--gf-line-strong); border-radius: var(--gf-radius);
+  background: var(--gf-white); padding: 5px;
+  box-shadow: var(--gf-shadow-lg);
+}
+.gf-menu-item {
+  display: block; width: 100%; min-height: 36px;
+  border-radius: 7px; padding: 8px 10px;
+  text-align: left; font-size: 13px; color: var(--gf-black); cursor: pointer;
+}
+.gf-menu-item:hover { background: var(--gf-blue-soft); }
+.gf-toolbar { display: flex; flex-wrap: wrap; gap: 3px; }
+.gf-toolbar button {
+  min-width: 34px; min-height: 32px;
+  border: 1px solid transparent; border-radius: 7px; padding: 5px 9px;
+  color: var(--gf-ink-soft); font-size: 12.5px; font-weight: 650; cursor: pointer;
+}
+.gf-toolbar button:hover { border-color: var(--gf-line); background: var(--gf-white); color: var(--gf-black); }
+
+/* --- Landing-only pieces ------------------------------------------------- */
+
+.gf-feature-icon {
+  display: grid; height: 40px; width: 40px; place-items: center;
+  border: 1px solid var(--gf-line-strong); border-radius: 10px;
+  background: var(--gf-white); color: var(--gf-black);
+}
+.gf-feature-icon svg { height: 20px; width: 20px; }
+.gf-step-number {
+  display: grid; height: 28px; width: 28px; place-items: center;
+  border-radius: 999px; background: var(--gf-blue-ink); color: var(--gf-white);
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.gf-check { color: var(--gf-blue-ink); height: 17px; width: 17px; flex: none; margin-top: 2px; }
+.gf-panel-dark .gf-check { color: var(--gf-blue); }
+
+/* Static product previews. Nothing inside is focusable or interactive — they
+   illustrate the real interface with example content. */
+.gf-preview {
+  min-width: 0;
+  border: 1px solid var(--gf-line-strong);
+  border-radius: var(--gf-radius-lg);
+  background: var(--gf-white);
+  box-shadow: var(--gf-shadow-lg);
+  overflow: hidden;
+}
+.gf-preview-bar {
+  display: flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid var(--gf-line);
+  background: var(--gf-surface-sunken);
+  padding: 10px 14px;
+  font-size: 12px; font-weight: 650; color: var(--gf-ink-soft);
+}
+.gf-preview-dot { height: 8px; width: 8px; border-radius: 999px; border: 1px solid var(--gf-line-heavy); }
+.gf-preview-body { padding: 14px; }
+.gf-preview-caption { margin-top: 10px; font-size: 12px; color: var(--gf-ink-faint); }
+
+/* Real tool names, shown as code without shouting. */
+.gf-tool-chip {
+  border: 1px solid var(--gf-blue-line-soft);
+  border-radius: 6px;
+  background: var(--gf-blue-soft);
+  padding: 1px 6px;
+  color: var(--gf-black);
+  font: 500 11px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* The standards credential in the hero: quiet, but unmistakably a claim. */
+.gf-spec-strip {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; max-width: 30rem;
+  border: 1px solid var(--gf-line-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-white);
+  padding: 11px 13px;
+  font-size: 13px; line-height: 1.45;
+  color: var(--gf-ink-soft);
+  transition: border-color .14s ease, background .14s ease;
+}
+.gf-spec-strip:hover { border-color: var(--gf-blue-ink); background: var(--gf-blue-wash); }
+.gf-spec-strip b { color: var(--gf-black); font-weight: 700; }
+.gf-spec-strip > .gf-badge { flex: none; align-self: flex-start; }
+.gf-spec-strip > svg { height: 16px; width: 16px; flex: none; margin-left: auto; color: var(--gf-blue-ink); }
+
+.gf-faq { border-top: 1px solid var(--gf-line); }
+.gf-faq:last-of-type { border-bottom: 1px solid var(--gf-line); }
+.gf-faq summary {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+  padding: 18px 2px;
+  font-size: 16px; font-weight: 700; letter-spacing: -.015em;
+  cursor: pointer; list-style: none;
+}
+.gf-faq summary::-webkit-details-marker { display: none; }
+.gf-faq summary svg { height: 18px; width: 18px; flex: none; margin-top: 2px; color: var(--gf-ink-faint); transition: transform .16s ease; }
+.gf-faq[open] summary svg { transform: rotate(45deg); }
+.gf-faq summary:hover { color: var(--gf-blue-ink); }
+.gf-faq-answer { padding: 0 2px 20px; max-width: 68ch; line-height: 1.65; color: var(--gf-ink-soft); }
+
+/* --- Landing: display, bands, and pictures -------------------------------- */
+
+/* The hero gets one size larger than anything else on the site. Nothing
+   below it competes, which is what makes the first screen land. */
+.gf-display-xl {
+  font-size: clamp(2.5rem, 6.6vw, 4.75rem);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+/* Second clause of a two-beat headline, stepped back rather than shrunk.
+   Large text, so --gf-ink-faint clears its 3:1 requirement comfortably. */
+.gf-display-xl i { font-style: normal; color: var(--gf-ink-faint); }
+
+/* Sections are bands, not stacked cards. Tint and ink alternate the rhythm. */
+.gf-band { padding-block: var(--gf-section-y); }
+.gf-band-tint { background: var(--gf-surface-sunken); border-block: 1px solid var(--gf-line); }
+.gf-band-tight { padding-block: calc(var(--gf-section-y) * 0.62); }
+
+/* Section opener: eyebrow, heading, one line of lead. Nothing else. */
+.gf-head { max-width: 44rem; }
+
+/* Escape the wrap for a picture that should touch both edges. */
+.gf-bleed { margin-inline: calc(50% - 50vw); width: 100vw; max-width: 100vw; }
+
+/* A soft halo behind the hero picture so the shot sits on the page instead
+   of being pasted onto it. Decorative and inert. */
+.gf-stage { position: relative; isolation: isolate; }
+.gf-stage::before {
+  content: "";
+  position: absolute;
+  inset: -10% -4% 14%;
+  z-index: -1;
+  background: radial-gradient(58% 58% at 50% 42%,
+              color-mix(in srgb, var(--gf-blue) 26%, transparent), transparent 72%);
+  filter: blur(46px);
+  pointer-events: none;
+}
+
+/* --- Picture slots -------------------------------------------------------- */
+
+.gf-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--gf-line-strong);
+  border-radius: var(--gf-radius-lg);
+  background: var(--gf-white);
+  box-shadow: var(--gf-shadow-lg);
+  object-fit: cover;
+}
+.gf-shot-plain { box-shadow: var(--gf-shadow); }
+/* Until the picture exists the slot holds its exact space and states the
+   brief, so the layout is finished before the artwork is. */
+.gf-shot-pending {
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  border-style: dashed;
+  border-color: var(--gf-blue-line);
+  box-shadow: none;
+  background:
+    repeating-linear-gradient(135deg,
+      var(--gf-blue-wash) 0 14px, var(--gf-white) 14px 28px);
+}
+.gf-shot-brief { max-width: 46ch; text-align: center; }
+.gf-shot-brief p { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--gf-ink-soft); }
+.gf-shot-tag {
+  display: inline-block;
+  border: 1px solid var(--gf-blue-line);
+  border-radius: 999px;
+  background: var(--gf-white);
+  padding: 3px 10px;
+  font: 700 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  color: var(--gf-blue-ink);
+}
+.gf-shot-meta { display: block; margin-top: 10px; font-size: 11.5px; color: var(--gf-ink-faint); }
+.gf-shot-caption { margin-top: 12px; font-size: 12.5px; line-height: 1.5; color: var(--gf-ink-faint); }
+
+/* --- Landing: file kinds -------------------------------------------------- */
+
+.gf-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--gf-line);
+  border-radius: 999px;
+  background: var(--gf-white);
+  padding: 7px 15px 7px 11px;
+  font-size: 13.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.gf-kind svg { height: 17px; width: 17px; flex: none; color: var(--gf-blue-ink); }
+.gf-kind small { font-size: 12px; font-weight: 500; color: var(--gf-ink-faint); }
+
+/* --- Landing: the four verbs --------------------------------------------- */
+/* Rows, not cards: four short lines read faster than four boxes. */
+.gf-verb {
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid var(--gf-line);
+  padding-block: 20px;
+}
+.gf-verb:last-child { border-bottom: 1px solid var(--gf-line); }
+.gf-verb-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+.gf-verb-name svg { height: 19px; width: 19px; flex: none; color: var(--gf-blue-ink); }
+@media (min-width: 768px) {
+  .gf-verb { grid-template-columns: 190px minmax(0, 1fr); gap: 28px; align-items: baseline; }
+}
+
+/* --- Landing: the sentence you say to an agent ---------------------------- */
+
+.gf-prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--gf-line-strong);
+  border-radius: var(--gf-radius);
+  background: var(--gf-white);
+  padding: 14px 16px;
+  font: 500 13.5px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--gf-black);
+  overflow-wrap: anywhere;
+}
+.gf-prompt svg { height: 17px; width: 17px; flex: none; margin-top: 2px; color: var(--gf-blue-ink); }
+.gf-prompt-alt { background: var(--gf-surface-sunken); }
+
+/* --- Landing: numbered facts --------------------------------------------- */
+
+.gf-figure-num {
+  display: block;
+  font-size: clamp(1.75rem, 3vw, 2.375rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Utilities ----------------------------------------------------------- */
+
+.gf-scroll-x { overflow-x: auto; }
+.gf-truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gf-skip-link {
+  position: absolute; left: 12px; top: 12px; z-index: 60;
+  display: inline-flex; align-items: center; min-height: 44px;
+  transform: translateY(-160%);
+  border-radius: var(--gf-radius-sm);
+  background: var(--gf-black); color: var(--gf-white);
+  padding: 9px 14px; font-size: 13px; font-weight: 650;
+  transition: transform .14s ease;
+}
+.gf-skip-link:focus-visible { transform: translateY(0); }
+
+/* --- Responsive / preference adjustments --------------------------------- */
+
+@media (max-width: 640px) {
+  .gf-editor { padding: 30px 20px 64px; font-size: 16px; }
+  /* Drop the tab icons on a phone so all four section names fit without a
+     swipe. The active state still reads from weight, color, and underline. */
+  .gf-tab { padding-inline: 8px; gap: 6px; }
+  .gf-tab > svg { display: none; }
+}
+@media (pointer: coarse) {
+  .gf-button-primary, .gf-button-secondary, .gf-button-ghost { min-height: 44px; }
+  .gf-icon-button, button.gf-avatar { height: 44px; width: 44px; }
+  .gf-input { min-height: 44px; }
+  .gf-tab { padding-block: 14px; }
+  .gf-file-row, .gf-rail-link, .gf-menu-item { min-height: 44px; }
+  .gf-toolbar button { min-height: 44px; min-width: 44px; }
+  .gf-faq summary { padding-block: 20px; }
+}
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+@media (forced-colors: active) {
+  .gf-card, .gf-preview, .gf-notice, .gf-badge { border: 1px solid CanvasText; }
+  .gf-tab[aria-selected="true"] { border-bottom-color: Highlight; }
+}
+@media print {
+  body * { visibility: hidden; }
+  .gf-editor, .gf-editor * { visibility: visible; }
+  .gf-editor { position: absolute; inset: 0; max-width: none; padding: 30px; }
+}

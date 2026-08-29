@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+
+# Next.js build output. Never commit these: they churn on every build and
+# bloat history.
+.next/
+out/
+*.tsbuildinfo
+
+# Never commit real environment files or key material.
+.env
+.env.*
+!.env.example
+*.rtf

@@ -1,0 +1,21 @@
+{
+  "name": "@goodfolder/cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "goodfolder": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "dev": "node --experimental-transform-types src/index.ts"
+  },
+  "dependencies": {
+    "@goodfolder/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.2"
+  }
+}

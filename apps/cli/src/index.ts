@@ -1,0 +1,102 @@
+#!/usr/bin/env node
+// goodfolder — two verbs and a timeline. Git never surfaces.
+import { resolve } from "node:path";
+import { cmdConnect, requireConnection } from "./connect.ts";
+import { cmdSave } from "./save.ts";
+import { cmdSync } from "./sync.ts";
+import { cmdRestore } from "./restore.ts";
+import { cmdUndo } from "./undo.ts";
+import { cmdLog } from "./log.ts";
+import { cmdCreate } from "./create.ts";
+import { cmdClone } from "./clone.ts";
+import { cmdLogin } from "./auth.ts";
+
+const HELP = `goodfolder — keep your folder safe
+
+  goodfolder create <name>        Start a brand-new GoodFolder on this machine
+  goodfolder clone <name>         Download an existing GoodFolder to here
+  goodfolder connect [folder]     Connect an existing folder (first time)
+  goodfolder save [-m note]       Save a checkpoint of everything in it
+  goodfolder sync                 Bring in changes from your other devices
+  goodfolder log                  Show the timeline
+  goodfolder undo                 Undo the last save (shows what changes first)
+  goodfolder restore <number>     Go back to an earlier save
+  goodfolder login                Approve this computer (one-time setup)
+`;
+
+async function main() {
+  const argv = process.argv.slice(2);
+  const cmd = argv[0];
+  const flags: Record<string, string> = {};
+  const bools = new Set<string>();
+  const positional: string[] = [];
+  for (let i = 1; i < argv.length; i++) {
+    if (argv[i] === "-m" || argv[i] === "--message") flags.message = argv[++i] ?? "";
+    else if (argv[i] === "--name") flags.name = argv[++i] ?? "";
+    else if (argv[i] === "--dest") flags.dest = argv[++i] ?? "";
+    else if (argv[i] === "-y" || argv[i] === "--yes") bools.add("yes");
+    else if (argv[i] === "--session") bools.add("session");
+    else positional.push(argv[i]!);
+  }
+  const folder = process.cwd();
+
+  switch (cmd) {
+    case "create":
+      if (!positional[0]) {
+        console.error("What should it be called? e.g.: goodfolder create \"Trip Planning\"");
+        process.exit(1);
+      }
+      await cmdCreate(positional[0], { dest: flags.dest });
+      break;
+    case "clone":
+      if (!positional[0]) {
+        console.error("Which GoodFolder? e.g.: goodfolder clone \"Recipe Book\"");
+        process.exit(1);
+      }
+      await cmdClone(positional[0], { dest: flags.dest });
+      break;
+    case "connect":
+      await cmdConnect(resolve(folder), opts(flags));
+      break;
+    case "login":
+      await cmdLogin();
+      break;
+    case "save":
+      await cmdSave(folder, requireConnection(folder).cfg, flags);
+      break;
+    case "sync":
+      await cmdSync(folder);
+      break;
+    case "log":
+      await cmdLog(folder);
+      break;
+    case "restore":
+      if (!positional[0]) {
+        console.error("Which save? Pick a number from: goodfolder log");
+        process.exit(1);
+      }
+      await cmdRestore(folder, positional[0]);
+      break;
+    case "undo":
+      await cmdUndo(folder, { yes: bools.has("yes"), session: bools.has("session") });
+      break;
+    default:
+      console.log(HELP);
+      if (cmd !== undefined && cmd !== "help" && cmd !== "--help") {
+        console.error(`Unknown command: ${cmd}`);
+        process.exit(1);
+      }
+  }
+}
+
+function opts(flags: Record<string, string>): { name?: string | undefined } {
+  return {
+    name: flags.name,
+  };
+}
+
+main().catch((e: unknown) => {
+  const err = e as { message?: string; exitCode?: number };
+  console.error(err.message ?? "Something went wrong.");
+  process.exit(err.exitCode ?? 1);
+});
