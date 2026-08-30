@@ -101,7 +101,8 @@ your own instance freely; do not call it GoodFolder.
 ## Contributing
 
 Pull requests are paused until there is a contributor licence agreement;
-[CONTRIBUTING.md](CONTRIBUTING.md) explains why and what is open in the
-meantime. If you are running an AI agent on the code, read
-[AGENTS.md](AGENTS.md). Security reports go to the address in
-[SECURITY.md](SECURITY.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) explains why. In the meantime, bugs and
+self-hosting trouble go in issues, everything else goes in
+[Discussions](https://github.com/areia-ai/goodfolder/discussions), and security
+reports go to the address in [SECURITY.md](SECURITY.md). If you are running an
+AI agent on the code, read [AGENTS.md](AGENTS.md) first.

@@ -104,9 +104,9 @@ session.
 Hold off for now. There is no contributor licence agreement yet, and merging
 outside code without one would permanently rule out ever dual-licensing
 GoodFolder, because the project would no longer hold the rights to all of its
-own code. `CONTRIBUTING.md` has the detail. Issues and design discussion are
-open; anything that could be used against a running instance goes to the
-address in `SECURITY.md` instead of a public issue.
+own code. `CONTRIBUTING.md` has the detail. Bugs go in issues, direction and
+questions go in Discussions, and anything that could be used against a running
+instance goes to the address in `SECURITY.md` rather than a public issue.
 
 ## Before you hand work back
 

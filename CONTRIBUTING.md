@@ -15,8 +15,9 @@ GoodFolder will settle on something similar before opening pull requests.
 
 Until then:
 
-- **Issues** are open — bugs, missing pieces, self-hosting trouble, arguments
-  about direction.
+- **Issues** are for bugs and self-hosting trouble. There's a form for each.
+- **Discussions** are for everything else — how a feature should behave, where
+  the project should go, questions about running it, showing what you built.
 - **Security** goes to the address in [SECURITY.md](SECURITY.md), not a public
   issue.
 - **Forks** for your own use are the point of the AGPL. Run it, change it, host

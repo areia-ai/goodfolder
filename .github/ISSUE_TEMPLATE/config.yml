@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Idea, question, or something you built
+    url: https://github.com/areia-ai/goodfolder/discussions
+    about: Direction, how a feature should behave, using it, showing your setup. Issues are for bugs.
   - name: Security problem
     url: https://github.com/areia-ai/goodfolder/blob/main/SECURITY.md
     about: Anything that could be turned against a running instance. Email it, do not open a public issue.
