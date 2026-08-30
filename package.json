@@ -14,6 +14,7 @@
     "vocab": "node tools/vocabulary-gate.mjs",
     "brand:validate": "node tools/validate-brand.mjs",
     "contrast:check": "node tools/check-contrast.mjs",
+    "test": "pnpm -r --if-present test",
     "gate": "pnpm typecheck && pnpm vocab"
   },
   "devDependencies": {

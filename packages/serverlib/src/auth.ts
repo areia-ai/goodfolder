@@ -10,6 +10,7 @@ import type { Sql } from "./config.ts";
 export interface TokenScope {
   deviceId: string;
   projectId: string;
+  ownerAccountId: string;
   deviceKind: "user" | "agent";
 }
 
@@ -59,9 +60,10 @@ export async function resolveScope(
   rawToken: string,
 ): Promise<TokenScope | null> {
   const rows = await sql`
-    SELECT d.id AS device_id, d.project_id, d.kind AS device_kind
+    SELECT d.id AS device_id, d.project_id, p.account_id, d.kind AS device_kind
     FROM transfer_tokens t
     JOIN devices d ON d.id = t.device_id
+    JOIN projects p ON p.id = d.project_id
     WHERE t.token_hash = ${hashToken(rawToken)}
       AND t.expires_at > now()
     LIMIT 1`;
@@ -70,6 +72,7 @@ export async function resolveScope(
   return {
     deviceId: String(r.device_id),
     projectId: String(r.project_id),
+    ownerAccountId: String(r.account_id),
     deviceKind: r.device_kind === "agent" ? "agent" : "user",
   };
 }

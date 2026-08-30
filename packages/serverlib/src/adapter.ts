@@ -53,6 +53,22 @@ export class RepositoryAdapter {
     return res.ok;
   }
 
+  /** Remove one backing repository during an authorized retention cleanup. */
+  async deleteRepo(projectId: string): Promise<void> {
+    const res = await this.api(this.repoPath(projectId), { method: "DELETE" });
+    if (res.status === 404 || res.status === 204) return;
+    if (!res.ok) throw new Error(`deleteRepo failed (${res.status})`);
+  }
+
+  /** Gitea's repository `size` field is kibibytes. Normalize it to bytes. */
+  async repositorySizeBytes(projectId: string): Promise<number> {
+    const res = await this.api(this.repoPath(projectId));
+    if (res.status === 404) return 0;
+    if (!res.ok) throw new Error(`repositorySizeBytes failed (${res.status})`);
+    const body = await res.json() as { size?: number };
+    return normalizeGiteaRepositorySize(body.size);
+  }
+
   private repoPath(projectId: string): string {
     return `/repos/${encodeURIComponent(this.cfg.giteaAdminUser)}/${encodeURIComponent(projectId)}`;
   }
@@ -148,4 +164,10 @@ export class RepositoryAdapter {
     if (!commitSha) throw new Error("writeFile returned no save id");
     return { commitSha };
   }
+}
+
+export function normalizeGiteaRepositorySize(sizeKiB: unknown): number {
+  const value = Number(sizeKiB ?? 0);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.floor(value * 1024);
 }
