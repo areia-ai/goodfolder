@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { Transform } from "node:stream";
 import {
   createCipheriv,
   createDecipheriv,
@@ -17,10 +18,14 @@ import {
   resolveAuthContext,
   resolveScope,
   GetObjectCommand,
+  loadBillingConfig,
   makeS3,
+  isPlanCode,
+  PLANS,
   type AuthContext,
   type TokenScope,
 } from "@goodfolder/serverlib";
+import { HostedBilling } from "./hosted-billing.ts";
 import { safeDocumentPath } from "./collaboration.ts";
 import {
   TABLE_EDIT_CAP,
@@ -40,6 +45,8 @@ const repos = new RepositoryAdapter(cfg);
 // bodies are piped straight through, never buffered whole (the container has
 // a hard memory cap and shares the box with other services).
 const previewStorage = makeS3(cfg);
+const billingConfig = loadBillingConfig();
+const billing = new HostedBilling(sql, billingConfig, repos, previewStorage, cfg.s3Bucket);
 
 /** Absolute origin browsers are sent back to (magic links, pairing pages). */
 const PUBLIC_BASE = process.env.PUBLIC_URL ?? "https://api.trygoodfolder.com";
@@ -80,7 +87,7 @@ app.use("/api/*", async (c, next) => {
   if (origin && originAllowed(origin)) {
     c.header("Access-Control-Allow-Origin", origin);
     c.header("Vary", "Origin");
-    c.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    c.header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
     c.header("Access-Control-Allow-Headers", "authorization, content-type");
     c.header("Access-Control-Allow-Credentials", "true");
     c.header("Access-Control-Max-Age", "86400");
@@ -790,6 +797,113 @@ async function accountFrom(c: {
   return { kind: "account", accountId: session.accountId, email: session.email, accountDeviceId: "session" };
 }
 
+function billingError(error: unknown): { code: string; message: string; status: 400 | 402 | 409 | 503 } {
+  const code = (error as Error).message;
+  if (code === "billing-unavailable") return { code, message: "Hosted billing is not available on this server.", status: 503 };
+  if (code === "subscription-required") return { code, message: "Start your hosted trial before changing a folder.", status: 402 };
+  if (code === "subscription-active") return { code, message: "This account already has hosted access.", status: 409 };
+  if (code === "invalid-plan") return { code, message: "Choose a valid plan.", status: 400 };
+  if (code === "overage-cap") return { code, message: "Choose no overage or a $10 step between $10 and $100.", status: 400 };
+  return { code: "billing-unavailable", message: "Billing could not be reached. Try again shortly.", status: 503 };
+}
+
+async function writeAccessError(accountId: string): Promise<{ code: string; message: string; status: 402 | 403 | 409 } | null> {
+  const entitlement = await billing.entitlement(accountId);
+  if (entitlement.canWrite) return null;
+  if (entitlement.reason === "quota-exceeded") {
+    return { code: "quota-exceeded", message: "This account has reached its protected-data limit. Existing files and earlier versions are still available.", status: 409 };
+  }
+  if (entitlement.reason === "read-only") {
+    return { code: "read-only", message: "This account is in read and export mode. Existing files and earlier versions are still available.", status: 403 };
+  }
+  return { code: "subscription-required", message: "Start the hosted trial before changing a folder.", status: 402 };
+}
+
+async function projectWriteAccessError(projectId: string): Promise<{ code: string; message: string; status: 402 | 403 | 409 } | null> {
+  const rows = await sql`SELECT account_id AS "accountId" FROM projects WHERE id = ${projectId} LIMIT 1`;
+  return rows[0]?.accountId ? writeAccessError(String(rows[0].accountId)) : null;
+}
+
+app.get("/api/account/plan", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  return c.json(await billing.plan(acct.accountId));
+});
+
+app.get("/api/account/usage", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const plan = await billing.plan(acct.accountId);
+  return c.json({
+    usageBytes: plan.usageBytes,
+    reservedBytes: plan.reservedBytes,
+    includedBytes: plan.includedBytes,
+    authorizedBytes: plan.authorizedBytes,
+    accruedOverageCents: plan.accruedOverageCents,
+    accruedExcessGbMonth: plan.accruedExcessGbMonth,
+    canWrite: plan.canWrite,
+    reason: plan.reason,
+  });
+});
+
+app.get("/api/plans", (c) => c.json(PLANS));
+
+app.post("/api/billing/checkout", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "Sign in before starting a trial." } }, 403);
+  const body = await c.req.json<{ plan?: string; interval?: string }>().catch(() => ({} as { plan?: string; interval?: string }));
+  const planCode = isPlanCode(body.plan) ? body.plan : null;
+  const interval = body.interval === "year" ? "year" : "month";
+  if (!planCode) return c.json({ error: { code: "invalid-plan", message: "Choose a valid plan." } }, 400);
+  try {
+    return c.json(await billing.createCheckout(acct.accountId, acct.email, planCode, interval));
+  } catch (error) {
+    const failure = billingError(error);
+    return c.json({ error: { code: failure.code, message: failure.message } }, failure.status);
+  }
+});
+
+app.post("/api/billing/portal", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "Sign in to manage billing." } }, 403);
+  try {
+    return c.json(await billing.createPortal(acct.accountId));
+  } catch (error) {
+    const failure = billingError(error);
+    return c.json({ error: { code: failure.code, message: failure.message } }, failure.status);
+  }
+});
+
+app.put("/api/billing/overage", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "Sign in to change the spending limit." } }, 403);
+  const body = await c.req.json<{ capCents?: number }>().catch(() => ({} as { capCents?: number }));
+  try {
+    await billing.setOverageCap(acct.accountId, Number(body.capCents));
+    return c.json(await billing.plan(acct.accountId));
+  } catch (error) {
+    const failure = billingError(error);
+    return c.json({ error: { code: failure.code, message: failure.message } }, failure.status);
+  }
+});
+
+app.post("/api/billing/webhook", async (c) => {
+  if (!billingConfig.stripe) return c.json({ error: { code: "billing-unavailable" } }, 503);
+  const rawBody = await c.req.text();
+  let event;
+  try {
+    event = billing.verifyWebhook(rawBody, c.req.header("Stripe-Signature"));
+  } catch {
+    return c.json({ error: { code: "signature", message: "Invalid webhook signature." } }, 401);
+  }
+  try {
+    return c.json({ ok: true, result: await billing.applyWebhook(event) });
+  } catch (error) {
+    console.error("Stripe webhook failed:", error);
+    return c.json({ error: { code: "webhook", message: "Webhook processing failed." } }, 500);
+  }
+});
+
 /** List the account's folders, newest first. */
 app.get("/api/projects", async (c) => {
   const acct = await accountFrom(c);
@@ -820,6 +934,8 @@ app.post("/api/projects", async (c) => {
   if (!acct) {
     return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   }
+  const denied = await writeAccessError(acct.accountId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   if (!rateLimit("project-create", acct.accountId, 30, 3_600_000)) {
     return c.json({ error: { code: "rate", message: "too many folders created — try again later" } }, 429);
   }
@@ -980,6 +1096,9 @@ async function recordWebSave(input: {
   await sql`
     INSERT INTO audit_log (actor, action, detail)
     VALUES (${input.accountEmail}, 'document.saved', ${sql.json({ projectId: input.projectId, paths: input.changedPaths })})`;
+  void billing.refreshProject(input.projectId, "web-save").catch((error) => {
+    console.error("usage refresh after browser save failed:", error);
+  });
   return Number(rows[0]!.seq);
 }
 
@@ -1132,6 +1251,8 @@ app.post("/api/projects/:id/document/save", async (c) => {
   if (await projectAccess(projectId, acct.accountId) !== "owner") {
     return c.json({ error: { code: "owner-only", message: "Only the folder owner can save directly. Create a Change Proposal instead." } }, 403);
   }
+  const denied = await projectWriteAccessError(projectId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const body = await c.req.json<{ path?: string; content?: string; baseHead?: string | null; label?: string }>().catch(() => ({} as { path?: string; content?: string; baseHead?: string | null; label?: string }));
   const path = safeDocumentPath(body.path);
   if (!path || !EDITABLE_DOCUMENT.test(path)) return c.json({ error: { code: "path", message: "Choose a supported document." } }, 400);
@@ -1184,6 +1305,8 @@ app.post("/api/projects/:id/proposals", async (c) => {
   const projectId = c.req.param("id");
   const role = await projectAccess(projectId, acct.accountId);
   if (!role) return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
+  const denied = await projectWriteAccessError(projectId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   type ProposalOperationInput = {
     path?: string;
     kind?: "text_replace" | "table_update" | "asset_replace";
@@ -1337,6 +1460,8 @@ app.post("/api/projects/:id/proposals/:proposalId/comments", async (c) => {
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   if (!await projectAccess(projectId, acct.accountId)) return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
+  const denied = await projectWriteAccessError(projectId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const body = await c.req.json<{ body?: string; suggestionId?: string }>().catch(() => ({} as { body?: string; suggestionId?: string }));
   const comment = typeof body.body === "string" ? body.body.trim().slice(0, 4000) : "";
   if (!comment) return c.json({ error: { code: "comment", message: "Comment can't be empty." } }, 400);
@@ -1370,6 +1495,8 @@ app.post("/api/projects/:id/document/comments", async (c) => {
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   if (!await projectAccess(projectId, acct.accountId)) return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
+  const denied = await projectWriteAccessError(projectId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const body = await c.req.json<{ path?: string; quotedText?: string; body?: string }>().catch(() => ({} as { path?: string; quotedText?: string; body?: string }));
   const path = safeDocumentPath(body.path);
   const comment = body.body?.trim().slice(0, 4000) ?? "";
@@ -1386,6 +1513,8 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   if (await projectAccess(projectId, acct.accountId) !== "owner") return c.json({ error: { code: "owner-only", message: "Only the folder owner can review suggestions." } }, 403);
+  const denied = await projectWriteAccessError(projectId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const reviewerAccountId = acct.accountId;
   const proposalId = c.req.param("proposalId");
   const body = await c.req.json<{ action?: "accept" | "reject"; suggestionId?: string }>().catch(() => ({} as { action?: "accept" | "reject"; suggestionId?: string }));
@@ -1532,6 +1661,8 @@ app.post("/api/projects/:id/invitations", async (c) => {
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   if (await projectAccess(projectId, acct.accountId) !== "owner") return c.json({ error: { code: "owner-only", message: "Only the folder owner can invite people." } }, 403);
+  const denied = await projectWriteAccessError(projectId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   // Abuse throttle only — not a collaborator cap. Protects the sending
   // domain's reputation if a credential leaks or a client loops. Real
   // onboarding (even a whole team in one sitting) stays well under this.
@@ -1564,6 +1695,8 @@ app.post("/api/invitations/accept", async (c) => {
     WHERE token_hash = ${sha256(token)} AND expires_at > now() AND accepted_at IS NULL LIMIT 1`;
   const invite = rows[0];
   if (!invite || String(invite.email).toLowerCase() !== acct.email.toLowerCase()) return c.json({ error: { code: "invite", message: "This invitation is invalid, expired, or belongs to another email address." } }, 400);
+  const denied = await projectWriteAccessError(String(invite.projectId));
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   await sql.begin(async (tx) => {
     await tx`INSERT INTO project_members (project_id, account_id, role) VALUES (${invite.projectId}, ${acct.accountId}, 'contributor') ON CONFLICT DO NOTHING`;
     await tx`UPDATE project_invitations SET accepted_at = now() WHERE id = ${invite.id}`;
@@ -1672,6 +1805,17 @@ function fallbackOf(ai?: { summary: string }): string {
   return ai?.summary ? `Updated files (${ai.summary.split(".")[0]})` : "Saved changes";
 }
 
+app.get("/api/save/preflight", async (c) => {
+  const scope = c.get("scope");
+  if (!scope) return c.json({ error: { code: "project-scope", message: "folder token required" } }, 403);
+  const entitlement = await billing.entitlement(scope.ownerAccountId);
+  if (!entitlement.canWrite) {
+    const denied = await writeAccessError(scope.ownerAccountId);
+    return c.json({ error: { code: denied!.code, message: denied!.message } }, denied!.status);
+  }
+  return c.json({ ok: true, canWrite: true, authorizedBytes: entitlement.authorizedBytes, usageBytes: entitlement.usageBytes, reservedBytes: entitlement.reservedBytes });
+});
+
 app.post("/api/saves", async (c) => {
   const scope = c.get("scope");
   if (!scope) {
@@ -1680,6 +1824,8 @@ app.post("/api/saves", async (c) => {
       403,
     );
   }
+  const denied = await writeAccessError(scope.ownerAccountId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const b = await c.req.json<{
     label?: string;
     labelSource?: "user" | "agent";
@@ -1732,6 +1878,9 @@ app.post("/api/saves", async (c) => {
   const save = rows[0]!;
   await sql`
     UPDATE devices SET cursor_save_seq = ${save.seq} WHERE id = ${scope.deviceId}`;
+  void billing.refreshProject(scope.projectId, "save").catch((error) => {
+    console.error("usage refresh after save failed:", error);
+  });
   return c.json({ id: save.id, seq: save.seq, label });
 });
 
@@ -1764,13 +1913,13 @@ app.get("/api/saves", async (c) => {
 // ---------------------------------------------------------------------------
 
 async function gitProxy(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) {
-  const deny = (code: number, msg: string) => {
+  const deny = (code: number, msg: string, errorCode?: string) => {
     const headers: Record<string, string> = { "content-type": "application/json" };
     // RFC-required challenge: stock git clients only offer credentials
     // after seeing this on a 401.
     if (code === 401) headers["www-authenticate"] = 'Basic realm="GoodFolder"';
     res.writeHead(code, headers);
-    res.end(JSON.stringify({ error: { code: code === 403 ? "project-scope" : "unauthorized", message: msg } }));
+    res.end(JSON.stringify({ error: { code: errorCode ?? (code === 403 ? "project-scope" : "unauthorized"), message: msg } }));
   };
 
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
@@ -1782,6 +1931,28 @@ async function gitProxy(req: import("node:http").IncomingMessage, res: import("n
   const scope = raw ? await resolveScope(sql, raw) : null;
   if (!scope) return deny(401, "unauthorized");
   if (m[1] !== scope.projectId) return deny(403, "token not valid for this project");
+
+  const isWrite = /\/git-receive-pack$/.test(m[2]!) || url.searchParams.get("service") === "git-receive-pack";
+  let remainingBytes = Number.POSITIVE_INFINITY;
+  if (isWrite) {
+    const entitlement = await billing.entitlement(scope.ownerAccountId);
+    if (!entitlement.canWrite) {
+      const code = entitlement.reason ?? "subscription-required";
+      const message = code === "quota-exceeded"
+        ? "Protected-data limit reached; existing files and earlier versions remain available."
+        : code === "read-only"
+          ? "This account is in read and export mode."
+          : "Hosted access is required before saving.";
+      return deny(code === "quota-exceeded" ? 409 : code === "subscription-required" ? 402 : 403, message, code);
+    }
+    if (entitlement.authorizedBytes !== null) {
+      remainingBytes = Math.max(0, entitlement.authorizedBytes - entitlement.usageBytes - entitlement.reservedBytes);
+      const declared = Number(req.headers["content-length"] ?? 0);
+      if (Number.isFinite(declared) && declared > remainingBytes) {
+        return deny(413, "This save is larger than the remaining protected-data allowance.", "quota-exceeded");
+      }
+    }
+  }
 
   const upstream = `${cfg.giteaInternalUrl}/${cfg.giteaAdminUser}/${m[1]}.git${m[2]}${url.search}`;
   const headers = new Headers();
@@ -1804,12 +1975,28 @@ async function gitProxy(req: import("node:http").IncomingMessage, res: import("n
     headers,
   };
   if (!["GET", "HEAD"].includes(method)) {
-    init.body = req as unknown as import("node:stream/web").ReadableStream;
+    if (isWrite && Number.isFinite(remainingBytes)) {
+      let received = 0;
+      const meter = new Transform({
+        transform(chunk, _encoding, callback) {
+          received += Buffer.byteLength(chunk);
+          if (received > remainingBytes) return callback(new Error("quota-exceeded"));
+          callback(null, chunk);
+        },
+      });
+      req.pipe(meter);
+      init.body = meter as unknown as import("node:stream/web").ReadableStream;
+    } else {
+      init.body = req as unknown as import("node:stream/web").ReadableStream;
+    }
     init.duplex = "half";
   }
   try {
     upstreamRes = await fetch(upstream, init);
   } catch (e) {
+    if ((e as Error).message.includes("quota-exceeded")) {
+      return deny(413, "This save is larger than the remaining protected-data allowance.", "quota-exceeded");
+    }
     console.error("transport upstream request failed:", e);
     return deny(502, "repository service unreachable");
   }
@@ -1900,6 +2087,21 @@ const server = createServer((req, res) => {
   if (p.startsWith("/lfs/")) return void lfsProxy(req, res);
   return listener(req, res);
 });
+
+if (billingConfig.mode === "stripe") {
+  const reconcileTimer = setTimeout(() => {
+    void billing.reconcile().catch((error) => console.error("usage reconciliation failed:", error));
+  }, 10_000);
+  reconcileTimer.unref();
+  const daily = setInterval(() => {
+    void billing.reconcile().catch((error) => console.error("usage reconciliation failed:", error));
+  }, 24 * 60 * 60_000);
+  daily.unref();
+  const hourly = setInterval(() => {
+    void billing.settleUpcomingOverage().catch((error) => console.error("overage worker failed:", error));
+  }, 60 * 60_000);
+  hourly.unref();
+}
 
 server.listen(Number(process.env.PORT ?? 4100), () => {
   console.log(`control plane listening on :${process.env.PORT ?? 4100}`);
