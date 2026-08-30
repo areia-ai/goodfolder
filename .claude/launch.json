@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "web",
+      "name": "goodfolder-web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@goodfolder/web", "dev"],
       "port": 4300

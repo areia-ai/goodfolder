@@ -1,0 +1,228 @@
+"use client";
+
+import {
+  ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, CloseIcon, GearIcon,
+  PeopleIcon, SearchIcon, SidebarIcon, SortIcon, StarIcon, TimelineIcon,
+  ViewColumnsIcon, ViewGalleryIcon, ViewIconsIcon, ViewListIcon,
+} from "@/components/icons";
+import { Menu, type MenuItem } from "@/components/finder/menu";
+import type {
+  GroupKey, SortDirection, SortKey, ViewMode, ViewPreference,
+} from "@/components/finder/types";
+
+const VIEWS: Array<{ id: ViewMode; label: string; hint: string; Glyph: (p: { className?: string }) => React.ReactElement }> = [
+  { id: "icons", label: "Icons", hint: "1", Glyph: ViewIconsIcon },
+  { id: "list", label: "List", hint: "2", Glyph: ViewListIcon },
+  { id: "columns", label: "Columns", hint: "3", Glyph: ViewColumnsIcon },
+  { id: "gallery", label: "Gallery", hint: "4", Glyph: ViewGalleryIcon },
+];
+
+const SORTS: Array<{ id: SortKey; label: string }> = [
+  { id: "name", label: "Name" },
+  { id: "kind", label: "Kind" },
+  { id: "size", label: "Size" },
+  { id: "changed", label: "Last changed" },
+  { id: "review", label: "Waiting for review" },
+];
+
+const GROUPS: Array<{ id: GroupKey; label: string }> = [
+  { id: "none", label: "Nothing" },
+  { id: "kind", label: "Kind" },
+  { id: "changed", label: "Last changed" },
+];
+
+export interface ToolbarProps {
+  title: string;
+  preference: ViewPreference;
+  onPreference: (patch: Partial<ViewPreference>) => void;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  canGoUp: boolean;
+  onBack: () => void;
+  onForward: () => void;
+  onUp: () => void;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
+  search: string;
+  onSearch: (value: string) => void;
+  searchLabel: string;
+  /** True while a file fills the window: the view controls have no listing to act on. */
+  reading?: boolean;
+  /** Folder-only actions; absent at the root. */
+  folderActions?: {
+    isPinned: boolean;
+    onTogglePin: () => void;
+    onShare: () => void;
+    onTimeline: () => void;
+    canShare: boolean;
+  };
+  extraActions?: MenuItem[];
+}
+
+export function Toolbar(props: ToolbarProps) {
+  const { preference, onPreference } = props;
+
+  const sortItems: MenuItem[] = [
+    ...SORTS.map((sort) => ({
+      id: `sort-${sort.id}`,
+      label: sort.label,
+      checked: preference.sort === sort.id,
+      onSelect: () => onPreference({ sort: sort.id }),
+    })),
+    ...(["asc", "desc"] as SortDirection[]).map((direction, index) => ({
+      id: `direction-${direction}`,
+      label: direction === "asc" ? "Ascending" : "Descending",
+      checked: preference.direction === direction,
+      dividerBefore: index === 0,
+      onSelect: () => onPreference({ direction }),
+    })),
+    ...GROUPS.map((group, index) => ({
+      id: `group-${group.id}`,
+      label: index === 0 ? "Group by nothing" : `Group by ${group.label.toLowerCase()}`,
+      checked: preference.group === group.id,
+      dividerBefore: index === 0,
+      onSelect: () => onPreference({ group: group.id }),
+    })),
+  ];
+
+  const actionItems: MenuItem[] = [
+    {
+      id: "preview",
+      label: preference.previewPane ? "Hide the preview panel" : "Show the preview panel",
+      onSelect: () => onPreference({ previewPane: !preference.previewPane }),
+    },
+    ...(props.folderActions
+      ? [
+          {
+            id: "pin",
+            label: props.folderActions.isPinned ? "Stop keeping this to hand" : "Keep this folder to hand",
+            dividerBefore: true,
+            onSelect: props.folderActions.onTogglePin,
+          },
+          { id: "timeline", label: "What has happened here", onSelect: props.folderActions.onTimeline },
+          {
+            id: "share",
+            label: "Who can see this",
+            onSelect: props.folderActions.onShare,
+          },
+        ]
+      : []),
+    ...(props.extraActions ?? []),
+  ];
+
+  return (
+    <div className="gf-win-toolbar" role="toolbar" aria-label="Window controls">
+      <button
+        type="button"
+        className="gf-win-tool"
+        aria-pressed={props.sidebarCollapsed}
+        aria-label={props.sidebarCollapsed ? "Show the places list" : "Hide the places list"}
+        onClick={props.onToggleSidebar}
+      >
+        <SidebarIcon />
+      </button>
+
+      <div className="flex flex-none items-center">
+        <button
+          type="button"
+          className="gf-win-tool"
+          aria-label="Back"
+          disabled={!props.canGoBack}
+          onClick={props.onBack}
+        >
+          <ArrowLeftIcon />
+        </button>
+        <button
+          type="button"
+          className="gf-win-tool"
+          aria-label="Forward"
+          disabled={!props.canGoForward}
+          onClick={props.onForward}
+        >
+          <ArrowRightIcon />
+        </button>
+        <button
+          type="button"
+          className="gf-win-tool"
+          aria-label="Up one level"
+          disabled={!props.canGoUp}
+          onClick={props.onUp}
+        >
+          <ChevronUpIcon />
+        </button>
+      </div>
+
+      <p className="gf-win-title gf-truncate flex-1">{props.title}</p>
+
+      {!props.reading && (
+      <div className="gf-win-views" role="group" aria-label="How to show this">
+        {VIEWS.map((view) => (
+          <button
+            key={view.id}
+            type="button"
+            aria-pressed={preference.view === view.id}
+            aria-label={`${view.label} view`}
+            title={`${view.label} (⌘${view.hint})`}
+            onClick={() => onPreference({ view: view.id })}
+          >
+            <view.Glyph />
+          </button>
+        ))}
+      </div>
+      )}
+
+      {!props.reading && <Menu label="Sort and group" trigger={<SortIcon />} items={sortItems} />}
+
+      {props.folderActions?.canShare && (
+        <button
+          type="button"
+          className="gf-win-tool hidden sm:inline-flex"
+          aria-label="Who can see this"
+          onClick={props.folderActions.onShare}
+        >
+          <PeopleIcon />
+        </button>
+      )}
+      {props.folderActions && (
+        <button
+          type="button"
+          className="gf-win-tool hidden sm:inline-flex"
+          aria-label="What has happened here"
+          onClick={props.folderActions.onTimeline}
+        >
+          <TimelineIcon />
+        </button>
+      )}
+      {props.folderActions && (
+        <button
+          type="button"
+          className="gf-win-tool hidden sm:inline-flex"
+          aria-pressed={props.folderActions.isPinned}
+          aria-label={props.folderActions.isPinned ? "Stop keeping this to hand" : "Keep this folder to hand"}
+          onClick={props.folderActions.onTogglePin}
+        >
+          <StarIcon />
+        </button>
+      )}
+
+      <Menu label="More actions" trigger={<GearIcon />} items={actionItems} />
+
+      <label className="gf-win-search">
+        <SearchIcon />
+        <span className="sr-only">{props.searchLabel}</span>
+        <input
+          type="search"
+          value={props.search}
+          placeholder={props.searchLabel}
+          onChange={(event) => props.onSearch(event.target.value)}
+          data-window-search="true"
+        />
+        {props.search && (
+          <button type="button" aria-label="Clear the search" onClick={() => props.onSearch("")}>
+            <CloseIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </label>
+    </div>
+  );
+}

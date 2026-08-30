@@ -191,3 +191,98 @@ export function GitHubIcon({ className = "" }: IconProps) {
 export function NoteIcon(props: IconProps) {
   return <Icon {...props}><path d="M5 4.5h9.5L19 9v10.5H5z" /><path d="M8.5 9.5h5M8.5 13h6M8.5 16.5h3.5" /></Icon>;
 }
+
+/* --- The window ---------------------------------------------------------- */
+
+export function ChevronRightIcon(props: IconProps) {
+  return <Icon {...props}><path d="m9 6 6 6-6 6" /></Icon>;
+}
+
+export function ChevronUpIcon(props: IconProps) {
+  return <Icon {...props}><path d="m6 15 6-6 6 6" /></Icon>;
+}
+
+export function ViewIconsIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="4" y="4" width="6.5" height="6.5" rx="1.6" />
+      <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6" />
+      <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6" />
+      <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6" />
+    </Icon>
+  );
+}
+
+export function ViewListIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 6.5h2M4 12h2M4 17.5h2" />
+      <path d="M9.5 6.5H20M9.5 12H20M9.5 17.5H20" />
+    </Icon>
+  );
+}
+
+export function ViewColumnsIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <path d="M9.5 4.5v15M15 4.5v15" />
+    </Icon>
+  );
+}
+
+export function ViewGalleryIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.5" y="4" width="17" height="10.5" rx="2" />
+      <path d="M4.5 18.5h3M10.5 18.5h3M16.5 18.5h3" />
+    </Icon>
+  );
+}
+
+export function SidebarIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.4" />
+      <path d="M9.5 4.5v15" />
+    </Icon>
+  );
+}
+
+export function SortIcon(props: IconProps) {
+  return <Icon {...props}><path d="M7 4.5v15M7 4.5 4 8M7 4.5 10 8" /><path d="M17 19.5v-15M17 19.5 14 16M17 19.5 20 16" /></Icon>;
+}
+
+export function GearIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="3.1" />
+      <path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M18 6l-1.6 1.6M7.6 16.4 6 18M18 18l-1.6-1.6M7.6 7.6 6 6" />
+    </Icon>
+  );
+}
+
+export function StarIcon(props: IconProps) {
+  return <Icon {...props}><path d="m12 4.5 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4-3.9-3.8 5.4-.8z" /></Icon>;
+}
+
+export function ShareIcon(props: IconProps) {
+  return <Icon {...props}><path d="M12 15.5V4M12 4 8.5 7.5M12 4l3.5 3.5" /><path d="M5.5 13v5.5a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V13" /></Icon>;
+}
+
+export function CloseIcon(props: IconProps) {
+  return <Icon {...props}><path d="M6 6l12 12M18 6 6 18" /></Icon>;
+}
+
+export function ExpandIcon(props: IconProps) {
+  return <Icon {...props}><path d="M4 9.5V4h5.5M20 14.5V20h-5.5M20 9.5V4h-5.5M4 14.5V20h5.5" /></Icon>;
+}
+
+export function FolderOpenIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3.5 17.2V6.8A1.8 1.8 0 0 1 5.3 5h3.9a1.8 1.8 0 0 1 1.4.7l1.2 1.6a1.8 1.8 0 0 0 1.4.7h5.5a1.8 1.8 0 0 1 1.8 1.8v1" />
+      <path d="M3.5 17.2 5.8 11.4a1.8 1.8 0 0 1 1.7-1.1h13a1.2 1.2 0 0 1 1.1 1.6l-2.1 5.7a1.8 1.8 0 0 1-1.7 1.2H5.3a1.8 1.8 0 0 1-1.8-1.6z" />
+    </Icon>
+  );
+}

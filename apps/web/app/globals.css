@@ -635,6 +635,299 @@ img, svg { max-width: 100%; }
   font-variant-numeric: tabular-nums;
 }
 
+/* --- The window ---------------------------------------------------------- */
+/* One file browser, at the root and inside every folder. Chrome is drawn from
+   the same three source colors as everything else: the tinted surface stands
+   in for the grey a desktop window would use, and selection is the accessible
+   blue on white that the contrast gate already checks. */
+
+.gf-win {
+  display: grid;
+  min-height: 100svh;
+  background: var(--gf-surface);
+}
+@media (min-width: 1024px) {
+  .gf-win { grid-template-columns: var(--gf-win-side, 244px) minmax(0, 1fr); height: 100svh; overflow: hidden; }
+  .gf-win-collapsed { --gf-win-side: 0px; }
+}
+
+.gf-win-main { display: flex; min-width: 0; flex-direction: column; }
+@media (min-width: 1024px) { .gf-win-main { height: 100svh; overflow: hidden; } }
+
+/* Sidebar ----------------------------------------------------------------- */
+
+.gf-win-sheet {
+  position: fixed; inset: 0 auto 0 0; z-index: 55;
+  width: min(280px, 86vw);
+  box-shadow: var(--gf-shadow-lg);
+}
+.gf-win-sidebar {
+  display: flex; flex-direction: column; gap: 2px;
+  height: 100%; min-height: 0; overflow-y: auto;
+  border-right: 1px solid var(--gf-line);
+  background: var(--gf-surface-sunken);
+  padding: 10px 10px 12px;
+}
+.gf-win-side-heading {
+  padding: 14px 8px 5px;
+  font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--gf-ink-faint);
+}
+.gf-win-side-link {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; min-height: 32px;
+  border: 1px solid transparent; border-radius: var(--gf-radius-sm);
+  padding: 5px 8px;
+  text-align: left; font-size: 13.5px; color: var(--gf-ink-soft);
+}
+.gf-win-side-link > svg { height: 16px; width: 16px; flex: none; color: var(--gf-blue-ink); }
+.gf-win-side-link:hover { background: var(--gf-blue-wash); color: var(--gf-black); }
+.gf-win-side-link[aria-current="page"] {
+  background: var(--gf-blue-soft); border-color: var(--gf-blue-line-soft);
+  color: var(--gf-black); font-weight: 650;
+}
+.gf-win-initial {
+  display: grid; height: 20px; width: 20px; flex: none; place-items: center;
+  border: 1px solid var(--gf-blue-line-soft); border-radius: 999px;
+  background: var(--gf-blue-soft); color: var(--gf-black);
+  font-size: 10.5px; font-weight: 700;
+}
+.gf-win-side-count {
+  margin-left: auto; flex: none;
+  border-radius: 999px; background: var(--gf-blue-ink); color: var(--gf-white);
+  padding: 1px 7px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.gf-win-side-pin { margin-left: auto; flex: none; opacity: 0; color: var(--gf-ink-faint); }
+.gf-win-side-pin > svg { height: 14px; width: 14px; }
+.gf-win-side-link:hover .gf-win-side-pin, .gf-win-side-pin:focus-visible { opacity: 1; }
+.gf-win-side-pin[data-pinned="true"] { opacity: 1; color: var(--gf-blue-ink); }
+
+/* Toolbar ----------------------------------------------------------------- */
+
+.gf-win-toolbar {
+  display: flex; align-items: center; gap: 8px; flex: none; flex-wrap: wrap;
+  border-bottom: 1px solid var(--gf-line);
+  background: color-mix(in srgb, var(--gf-white) 94%, var(--gf-blue));
+  padding: 9px 12px;
+  backdrop-filter: blur(14px);
+}
+.gf-win-tool {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 30px; min-width: 30px; flex: none;
+  border: 1px solid transparent; border-radius: var(--gf-radius-sm);
+  padding-inline: 6px;
+  font-size: 13px; color: var(--gf-ink-soft);
+}
+.gf-win-tool > svg { height: 16px; width: 16px; flex: none; }
+.gf-win-tool:hover:not(:disabled) { background: var(--gf-blue-soft); color: var(--gf-black); }
+.gf-win-tool:disabled { opacity: .34; cursor: default; }
+.gf-win-tool[aria-pressed="true"], .gf-win-tool[aria-expanded="true"] {
+  background: var(--gf-blue-soft); border-color: var(--gf-blue-line-soft); color: var(--gf-black);
+}
+
+.gf-win-views {
+  display: inline-flex; flex: none; gap: 2px;
+  border: 1px solid var(--gf-line-strong); border-radius: var(--gf-radius-sm);
+  background: var(--gf-white); padding: 2px;
+}
+.gf-win-views button {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 24px; width: 30px;
+  border-radius: 6px; color: var(--gf-ink-faint);
+}
+.gf-win-views button > svg { height: 15px; width: 15px; }
+.gf-win-views button:hover { color: var(--gf-black); background: var(--gf-blue-wash); }
+.gf-win-views button[aria-pressed="true"] { background: var(--gf-blue-ink); color: var(--gf-white); }
+
+.gf-win-title { min-width: 0; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+.gf-win-search {
+  display: flex; align-items: center; gap: 7px;
+  min-width: 0; max-width: 260px; flex: 1 1 130px;
+  height: 30px;
+  border: 1px solid var(--gf-line-strong); border-radius: 999px;
+  background: var(--gf-white); padding-inline: 10px;
+}
+.gf-win-search > svg { height: 14px; width: 14px; flex: none; color: var(--gf-ink-faint); }
+.gf-win-search input { min-width: 0; flex: 1; background: none; font-size: 13px; }
+.gf-win-search:focus-within { border-color: var(--gf-blue-ink); }
+
+/* Body -------------------------------------------------------------------- */
+
+.gf-win-body { display: flex; min-height: 0; flex: 1; }
+.gf-win-listing { min-width: 0; flex: 1; overflow: auto; }
+.gf-win-aside {
+  display: none; flex: none; width: 340px; min-height: 0; overflow: auto;
+  border-left: 1px solid var(--gf-line);
+  background: var(--gf-surface-sunken);
+}
+.gf-win-aside-open { display: block; }
+/* Narrower than this the panel cannot sit beside the listing without
+   squeezing it, so it comes over the top instead and can be dismissed. */
+@media (max-width: 1099px) {
+  .gf-win-aside-open {
+    position: fixed; inset: 0 0 0 auto; z-index: 55;
+    width: min(384px, 92vw);
+    box-shadow: var(--gf-shadow-lg);
+  }
+}
+.gf-win-scrim {
+  position: fixed; inset: 0; z-index: 50;
+  background: color-mix(in srgb, var(--gf-black) 28%, transparent);
+}
+@media (min-width: 1100px) { .gf-win-scrim { display: none; } }
+
+.gf-win-aside-head {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; gap: 6px;
+  border-bottom: 1px solid var(--gf-line);
+  background: var(--gf-surface-sunken);
+  padding: 8px 10px;
+}
+.gf-win-fact {
+  display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 8px;
+  padding: 6px 0;
+  font-size: 12.5px;
+  border-top: 1px solid color-mix(in srgb, var(--gf-black) 6%, transparent);
+}
+.gf-win-fact dt { color: var(--gf-ink-faint); }
+.gf-win-fact dd { min-width: 0; color: var(--gf-ink); overflow-wrap: anywhere; }
+
+/* List view --------------------------------------------------------------- */
+
+.gf-win-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.gf-win-table thead th {
+  position: sticky; top: 0; z-index: 2;
+  border-bottom: 1px solid var(--gf-line);
+  background: var(--gf-surface);
+  padding: 0;
+  text-align: left; font-size: 11.5px; font-weight: 650; color: var(--gf-ink-faint);
+  white-space: nowrap;
+}
+.gf-win-table thead th + th { border-left: 1px solid var(--gf-line); }
+.gf-win-table thead button {
+  display: flex; align-items: center; gap: 5px;
+  width: 100%; min-height: 30px;
+  padding: 0 10px;
+  color: inherit; font: inherit;
+}
+.gf-win-table thead button:hover { background: var(--gf-blue-wash); color: var(--gf-black); }
+.gf-win-table thead button > svg { height: 12px; width: 12px; flex: none; opacity: .9; }
+.gf-win-table th[aria-sort] button { color: var(--gf-black); font-weight: 750; }
+
+.gf-win-row > td {
+  border-bottom: 1px solid color-mix(in srgb, var(--gf-black) 5%, transparent);
+  padding: 0 10px;
+  height: 30px;
+  white-space: nowrap;
+  color: var(--gf-ink-soft);
+}
+.gf-win-row > td:first-child { padding-left: 0; color: var(--gf-ink); }
+.gf-win-row:hover > td { background: var(--gf-blue-wash); }
+.gf-win-row[aria-selected="true"] > td { background: var(--gf-blue-ink); color: var(--gf-white); }
+.gf-win-row[aria-selected="true"] .gf-win-glyph { color: var(--gf-white); }
+.gf-win-row[aria-selected="true"] .gf-win-glyph-tint { background: color-mix(in srgb, var(--gf-white) 22%, transparent); }
+.gf-win-row[data-cursor="true"]:not([aria-selected="true"]) > td {
+  box-shadow: inset 0 1px 0 var(--gf-blue-line), inset 0 -1px 0 var(--gf-blue-line);
+}
+.gf-win-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.gf-win-name span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gf-win-num { font-variant-numeric: tabular-nums; text-align: right; }
+
+.gf-win-twist {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 22px; width: 22px; flex: none;
+  border-radius: 5px; color: var(--gf-ink-faint);
+}
+.gf-win-twist > svg { height: 13px; width: 13px; transition: transform .12s ease; }
+.gf-win-twist[aria-expanded="true"] > svg { transform: rotate(90deg); }
+.gf-win-twist:hover { background: color-mix(in srgb, var(--gf-black) 7%, transparent); color: var(--gf-black); }
+.gf-win-row[aria-selected="true"] .gf-win-twist { color: var(--gf-white); }
+
+.gf-win-glyph { display: inline-flex; flex: none; color: var(--gf-blue-ink); }
+.gf-win-glyph > svg { height: 16px; width: 16px; }
+.gf-win-glyph-tint {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px; background: var(--gf-blue-soft); padding: 3px;
+}
+.gf-win-group {
+  position: sticky; top: 30px; z-index: 1;
+}
+.gf-win-group > td {
+  border-bottom: 1px solid var(--gf-line);
+  background: var(--gf-surface-sunken);
+  padding: 5px 10px;
+  font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--gf-ink-faint);
+}
+.gf-win-flag {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid var(--gf-blue-ink); border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--gf-blue-ink);
+}
+.gf-win-row[aria-selected="true"] .gf-win-flag { border-color: var(--gf-white); color: var(--gf-white); }
+.gf-win-subpath { font-size: 11.5px; color: var(--gf-ink-faint); }
+.gf-win-row[aria-selected="true"] .gf-win-subpath { color: color-mix(in srgb, var(--gf-white) 88%, transparent); }
+
+/* Path bar and status bar -------------------------------------------------- */
+
+.gf-win-foot { flex: none; border-top: 1px solid var(--gf-line); background: var(--gf-surface-sunken); }
+.gf-win-path {
+  display: flex; align-items: center; gap: 1px;
+  overflow-x: auto; scrollbar-width: none;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--gf-line);
+}
+.gf-win-path::-webkit-scrollbar { display: none; }
+.gf-win-path button, .gf-win-path span[aria-current] {
+  display: inline-flex; align-items: center; gap: 5px;
+  flex: none; min-height: 26px;
+  border-radius: 6px; padding: 0 7px;
+  font-size: 12px; color: var(--gf-ink-soft); white-space: nowrap;
+}
+.gf-win-path button:hover { background: var(--gf-blue-soft); color: var(--gf-black); }
+.gf-win-path [aria-current="page"] { color: var(--gf-black); font-weight: 650; }
+.gf-win-path > svg { height: 12px; width: 12px; flex: none; color: var(--gf-ink-faint); }
+
+.gf-win-status {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 12px;
+  font-size: 11.5px; color: var(--gf-ink-faint);
+}
+.gf-win-status b { color: var(--gf-ink-soft); font-weight: 650; font-variant-numeric: tabular-nums; }
+.gf-win-meter {
+  height: 5px; width: 96px; flex: none;
+  overflow: hidden; border-radius: 999px; background: var(--gf-blue-soft);
+}
+.gf-win-meter > span { display: block; height: 100%; border-radius: 999px; background: var(--gf-blue-ink); }
+
+/* Empty and loading -------------------------------------------------------- */
+
+.gf-win-empty {
+  display: grid; place-items: center;
+  min-height: 320px; padding: 40px 24px; text-align: center;
+}
+.gf-win-empty p { margin-top: 8px; max-width: 34rem; font-size: 13.5px; line-height: 1.6; color: var(--gf-ink-soft); }
+
+/* Narrow enough that the search cannot share a row with seven controls
+   without squeezing every one of them. It takes a line of its own. */
+@media (max-width: 640px) {
+  .gf-win-search { order: 9; flex-basis: 100%; max-width: none; }
+  .gf-win-title { flex-basis: auto; }
+}
+@media (pointer: coarse) {
+  .gf-win-row > td { height: 44px; }
+  .gf-win-table thead button { min-height: 40px; }
+  .gf-win-side-link { min-height: 44px; }
+  .gf-win-tool { height: 40px; min-width: 40px; }
+  .gf-win-views button { height: 34px; width: 40px; }
+  .gf-win-twist { height: 34px; width: 34px; }
+}
+@media (forced-colors: active) {
+  .gf-win-row[aria-selected="true"] > td { background: Highlight; color: HighlightText; }
+}
+
 /* --- Utilities ----------------------------------------------------------- */
 
 .gf-scroll-x { overflow-x: auto; }

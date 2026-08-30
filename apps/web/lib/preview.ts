@@ -90,10 +90,16 @@ export function previewKindLabel(path: string): string {
   return ext ? `${ext.toUpperCase()} file` : "File";
 }
 
-/** "3.4 MB" / "820 KB" / "12 B" for viewer captions. */
+/** "12 B" / "820 KB" / "3.4 MB" / "11.8 GB" — for captions and the status bar. */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  const mb = bytes / 1024 / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  const gb = mb / 1024;
+  // A storage limit is read in gigabytes. Four figures of megabytes is the
+  // same number said in a way nobody checks against their plan.
+  if (gb < 1024) return `${gb.toFixed(gb >= 100 ? 0 : 1)} GB`;
+  return `${(gb / 1024).toFixed(1)} TB`;
 }

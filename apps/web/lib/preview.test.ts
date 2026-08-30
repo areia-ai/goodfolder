@@ -40,6 +40,9 @@ test("formatBytes stays honest at every scale", () => {
   assert.equal(formatBytes(12), "12 B");
   assert.equal(formatBytes(820 * 1024), "820 KB");
   assert.equal(formatBytes(3.5 * 1024 * 1024), "3.5 MB");
+  assert.equal(formatBytes(11.8 * 1024 ** 3), "11.8 GB");
+  assert.equal(formatBytes(240 * 1024 ** 3), "240 GB");
+  assert.equal(formatBytes(2.5 * 1024 ** 4), "2.5 TB");
   assert.equal(formatBytes(-1), "");
 });
 

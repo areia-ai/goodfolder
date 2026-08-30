@@ -10,6 +10,8 @@
 //   #707070  --gf-ink-faint      black 56% on white
 //   #F9FBFF  --gf-surface-sunken blue 3% on white
 //   #F7FAFF  --gf-blue-wash      blue 4% on white
+//   #F3F8FE  window toolbar      white 94% + blue
+//   #E6ECF6  white 88% flattened on --gf-blue-ink (a selected row's subtext)
 //   #BDBDBD  --gf-on-dark        white 74% on black
 //   #949494  --gf-on-dark-faint  white 58% on black
 
@@ -26,6 +28,13 @@ const pairs = [
   ["body text on dark panel", "#BDBDBD", "#000000", 4.5],
   ["quiet text on dark panel", "#949494", "#000000", 4.5],
   ["blue icon on dark panel", "#3B82F6", "#000000", 3],
+  // The window: a selected row is white on the accessible blue, and the
+  // toolbar sits on a barely-tinted white that metadata text still has to
+  // read against.
+  ["selected row text", "#FFFFFF", "#2C60B6", 4.5],
+  ["selected row secondary text", "#E6ECF6", "#2C60B6", 4.5],
+  ["toolbar text on window chrome", "#616161", "#F3F8FE", 4.5],
+  ["toolbar metadata on window chrome", "#707070", "#F3F8FE", 4.5],
 ];
 
 function luminance(hex) {
