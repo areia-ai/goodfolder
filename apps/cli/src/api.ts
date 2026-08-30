@@ -53,12 +53,29 @@ export async function accountCall<T = any>(
     /* non-JSON error bodies */
   }
   if (!res.ok) {
+    const billing = billingErrorMessage(json?.error?.code);
+    if (billing) throw new CliError(`✗ ${billing}`);
     if (res.status === 401 || res.status === 403) throw new CliError(`✗ ${authHint()}`);
     throw new CliError(
       `✗ ${json?.error?.message ?? `GoodFolder request failed (${res.status})`}`,
     );
   }
   return json as T;
+}
+
+function billingErrorMessage(code: unknown): string | null {
+  if (code === "subscription-required") return "Start your GoodFolder Hosted trial before saving new work.";
+  if (code === "read-only") return "This account is in read and export mode. Your existing files and earlier versions are still available.";
+  if (code === "quota-exceeded") return "You have reached your protected-data limit. Nothing was removed; increase your limit or free some capacity before saving again.";
+  if (code === "billing-unavailable") return "Hosted billing is unavailable right now. Try again shortly.";
+  return null;
+}
+
+export async function preflightSave(cfg: FolderConfig): Promise<void> {
+  const result = await call(cfg, "GET", "/api/save/preflight");
+  if (result.ok) return;
+  const message = billingErrorMessage(result.json?.error?.code);
+  throw new CliError(`✗ ${message ?? result.json?.error?.message ?? `GoodFolder request failed (${result.status})`}`);
 }
 
 export interface ProjectCreateResponse {

@@ -13,6 +13,7 @@ import { CliError } from "./cli-error.ts";
 import { git, gitOk, gitStream, gitAsync, findGitDir } from "./git.ts";
 import { trace, traceSync, renderTrace, snapshotMarks } from "./perf.ts";
 import type { GitResult } from "./git.ts";
+import { preflightSave } from "./api.ts";
 
 interface ChangeSet {
   added: string[];
@@ -277,6 +278,11 @@ export async function runSavePipeline(
     const empty: SaveOutcome = { sha: "", changedCount: 0, wasImport: true, seq: undefined, label: "", truncated: false, pushSkipped: opts.skipPush ?? false, timings: {}, counts: { added: 0, changed: 0, removed: 0 }, topPaths: [] };
     return empty;
   }
+
+  // Check hosted access before routing or staging changes anything locally.
+  // The server repeats the check on every write path; this one exists to give
+  // the person a useful error while their working folder is still untouched.
+  if (!opts.skipPush) await trace("access-preflight", () => preflightSave(cfg));
 
   // ---- routing MUST come before staging --------------------------------
   // Git applies the large-file filter when a path is staged, reading the

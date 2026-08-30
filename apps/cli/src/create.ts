@@ -81,6 +81,6 @@ export async function cmdCreate(
   bindRepo(dir, gitDir, cfg);
 
   console.log(`✓ Created "${clean}" at ${dir}`);
-  console.log("  Empty and ready — anything saved here is kept forever.");
+  console.log("  Empty and ready. Saves stay protected while this account has access and capacity.");
   return { path: dir, projectId: cfg.projectId };
 }

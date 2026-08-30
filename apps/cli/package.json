@@ -10,6 +10,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
+    "test": "node --experimental-transform-types --test src/*.test.ts",
     "dev": "node --experimental-transform-types src/index.ts"
   },
   "dependencies": {
