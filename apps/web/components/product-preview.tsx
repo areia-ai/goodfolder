@@ -74,70 +74,67 @@ const SAVES = [
  */
 export function TimelinePreview() {
   return (
-    <figure className="m-0">
-      <div className="gf-mock" aria-hidden="true">
-        <div className="gf-mock-bar">
-          <span className="gf-preview-dot" />
-          <span className="gf-preview-dot" />
-          <span className="gf-preview-dot" />
-          <ArrowLeftIcon />
-          <ArrowRightIcon />
-          <span className="gf-mock-title">Q3 Report</span>
-          <span className="gf-mock-views">
-            <span><ViewIconsIcon /></span>
-            <span className="on"><ViewListIcon /></span>
-            <span><ViewColumnsIcon /></span>
-            <span><ViewGalleryIcon /></span>
+    <div className="gf-mock" aria-hidden="true">
+      <div className="gf-mock-bar">
+        <span className="gf-preview-dot" />
+        <span className="gf-preview-dot" />
+        <span className="gf-preview-dot" />
+        <ArrowLeftIcon />
+        <ArrowRightIcon />
+        <span className="gf-mock-title">Q3 Report</span>
+        <span className="gf-mock-views">
+          <span><ViewIconsIcon /></span>
+          <span className="on"><ViewListIcon /></span>
+          <span><ViewColumnsIcon /></span>
+          <span><ViewGalleryIcon /></span>
+        </span>
+      </div>
+
+      <div className="gf-mock-body">
+        <div className="gf-mock-side">
+          <p className="gf-mock-heading">Locations</p>
+          <span className="gf-mock-place"><FolderIcon /><b>All folders</b></span>
+          <p className="gf-mock-heading">Smart</p>
+          <span className="gf-mock-place">
+            <ProposalIcon /><b>Review</b>
+            <span className="gf-mock-count">2</span>
           </span>
+          <span className="gf-mock-place"><ClockIcon /><b>Recent</b></span>
+          <p className="gf-mock-heading">To hand</p>
+          <span className="gf-mock-place on"><FolderIcon /><b>Q3 Report</b></span>
         </div>
 
-        <div className="gf-mock-body">
-          <div className="gf-mock-side">
-            <p className="gf-mock-heading">Locations</p>
-            <span className="gf-mock-place"><FolderIcon /><b>All folders</b></span>
-            <p className="gf-mock-heading">Smart</p>
-            <span className="gf-mock-place">
-              <ProposalIcon /><b>Review</b>
-              <span className="gf-mock-count">2</span>
-            </span>
-            <span className="gf-mock-place"><ClockIcon /><b>Recent</b></span>
-            <p className="gf-mock-heading">To hand</p>
-            <span className="gf-mock-place on"><FolderIcon /><b>Q3 Report</b></span>
+        <div className="gf-mock-panel">
+          <div className="gf-mock-tabs">
+            <span>Info</span>
+            <span>Review</span>
+            <span className="on">History</span>
+            <span>People</span>
           </div>
-
-          <div className="gf-mock-panel">
-            <div className="gf-mock-tabs">
-              <span>Info</span>
-              <span>Review</span>
-              <span className="on">History</span>
-              <span>People</span>
-            </div>
-            <ol className="mt-3.5 grid gap-2">
-              {SAVES.map((s) => (
-                <li key={s.seq} className="gf-mock-save">
-                  <div className="gf-mock-save-head">
-                    <span className="gf-mock-seq">#{s.seq}</span>
-                    <span className="gf-mock-actor">{s.actor}</span>
-                    {s.restore && <span className="gf-mock-back">Went back</span>}
-                    <span className="gf-mock-when">{s.when}</span>
-                  </div>
-                  <p className="gf-mock-label">{s.label}</p>
-                  <p className="gf-mock-counts">{s.counts} · {s.paths}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-
-        <div className="gf-mock-foot">
-          <span>GoodFolder</span>
-          <ChevronRightIcon />
-          <span className="now">Q3 Report</span>
-          <span className="ml-auto"><b>7 items</b> · 4.4 MB</span>
+          <ol className="mt-3.5 grid gap-2">
+            {SAVES.map((s) => (
+              <li key={s.seq} className="gf-mock-save">
+                <div className="gf-mock-save-head">
+                  <span className="gf-mock-seq">#{s.seq}</span>
+                  <span className="gf-mock-actor">{s.actor}</span>
+                  {s.restore && <span className="gf-mock-back">Went back</span>}
+                  <span className="gf-mock-when">{s.when}</span>
+                </div>
+                <p className="gf-mock-label">{s.label}</p>
+                <p className="gf-mock-counts">{s.counts} · {s.paths}</p>
+              </li>
+            ))}
+          </ol>
         </div>
       </div>
-      <figcaption className="gf-preview-caption">Example content. No real files or activity shown.</figcaption>
-    </figure>
+
+      <div className="gf-mock-foot">
+        <span>GoodFolder</span>
+        <ChevronRightIcon />
+        <span className="now">Q3 Report</span>
+        <span className="ml-auto"><b>7 items</b> · 4.4 MB</span>
+      </div>
+    </div>
   );
 }
 
