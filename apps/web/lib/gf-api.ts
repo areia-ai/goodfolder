@@ -133,6 +133,59 @@ async function send<T>(path: string, body: unknown): Promise<T> {
   return json;
 }
 
+async function put<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as T & { error?: { message?: string } };
+  if (!res.ok) throw Object.assign(new Error(json.error?.message ?? `GoodFolder request failed (${res.status})`), { status: res.status, payload: json });
+  return json;
+}
+
+export type PlanCode = "starter" | "plus" | "studio";
+export type BillingInterval = "month" | "year";
+
+export interface PlanDefinition {
+  code: PlanCode;
+  name: string;
+  includedBytes: number;
+  overageCentsPerGbMonth: number;
+  monthlyPriceCents: number;
+  annualPriceCents: number;
+}
+
+export interface AccountPlan {
+  billingMode: "disabled" | "stripe";
+  enforcement: "observe" | "enforce";
+  status: "self_hosted" | "none" | "trialing" | "active" | "past_due" | "canceled" | "paused" | "expired";
+  planCode: PlanCode | null;
+  access: "full" | "read_only" | "expired";
+  canWrite: boolean;
+  reason: "subscription-required" | "read-only" | "quota-exceeded" | null;
+  observedReason: "subscription-required" | "read-only" | "quota-exceeded" | null;
+  includedBytes: number | null;
+  authorizedBytes: number | null;
+  usageBytes: number;
+  reservedBytes: number;
+  overageCapCents: number;
+  accruedOverageCents: number;
+  accruedExcessGbMonth: number;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  writeAccessEndsAt: string | null;
+  retentionEndsAt: string | null;
+}
+
+export const getPlans = () => get<Record<PlanCode, PlanDefinition>>("/api/plans");
+export const getAccountPlan = () => get<AccountPlan>("/api/account/plan");
+export const startHostedTrial = (plan: PlanCode, interval: BillingInterval) =>
+  send<{ url: string }>("/api/billing/checkout", { plan, interval });
+export const openBillingPortal = () => send<{ url: string }>("/api/billing/portal", {});
+export const setOverageCap = (capCents: number) => put<AccountPlan>("/api/billing/overage", { capCents });
+
 export const me = () => get<{ id: string; email: string }>("/api/me");
 
 export const listFolders = () => get<Folder[]>("/api/projects");

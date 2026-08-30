@@ -7,6 +7,7 @@
     "dev": "next dev -p 4300",
     "build": "next build",
     "start": "next start",
+    "test": "node --experimental-transform-types --test lib/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

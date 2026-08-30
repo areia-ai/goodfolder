@@ -7,8 +7,12 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { FolderCards, FolderCardsSkeleton } from "@/components/folder-card";
 import { FolderWorkspace } from "@/components/folder-workspace";
 import { AlertIcon, ArrowLeftIcon, FolderIcon, MailIcon, SearchIcon, SparklesIcon } from "@/components/icons";
-import { EmptyState, Notice, Skeleton, problem, type NoticeMessage } from "@/components/ui";
-import { listFolders, acceptInvitation, me, requestSignInLink, type Folder } from "@/lib/gf-api";
+import { EmptyState, Notice, Skeleton, done, problem, type NoticeMessage } from "@/components/ui";
+import {
+  listFolders, acceptInvitation, getAccountPlan, getPlans, me, openBillingPortal,
+  requestSignInLink, setOverageCap, startHostedTrial,
+  type AccountPlan, type Folder, type PlanCode, type PlanDefinition,
+} from "@/lib/gf-api";
 import { registerDashboardTools, unregisterDashboardTools, webMcpSupported } from "@/lib/webmcp";
 
 interface Me {
@@ -41,6 +45,8 @@ export default function Dashboard() {
   const [folderQuery, setFolderQuery] = useState("");
   // A failed load is not an empty account — the two states must not look alike.
   const [loadFailed, setLoadFailed] = useState(false);
+  const [plan, setPlan] = useState<AccountPlan | null>(null);
+  const [plans, setPlans] = useState<Record<PlanCode, PlanDefinition> | null>(null);
 
   const loadProjects = useCallback(async () => {
     setProjects(null);
@@ -54,8 +60,10 @@ export default function Dashboard() {
         params.set("folder", accepted.projectId);
         history.replaceState(null, "", `/dashboard?${params.toString()}`);
       }
-      const rows = await listFolders();
+      const [rows, accountPlan, planCatalog] = await Promise.all([listFolders(), getAccountPlan(), getPlans()]);
       setProjects(rows);
+      setPlan(accountPlan);
+      setPlans(planCatalog);
       const folderId = new URLSearchParams(window.location.search).get("folder");
       const requested = rows.find((row) => row.id === folderId);
       if (requested) setWorkspace(requested);
@@ -113,6 +121,8 @@ export default function Dashboard() {
     setAgentReady(false);
     setNotice(null);
     setLoadFailed(false);
+    setPlan(null);
+    setPlans(null);
     history.replaceState(null, "", "/dashboard");
   }
 
@@ -174,6 +184,15 @@ export default function Dashboard() {
           )}
 
           {notice && <Notice message={notice} className="mt-6" />}
+
+          {plan && plans && (
+            <BillingCard
+              plan={plan}
+              plans={plans}
+              onPlan={setPlan}
+              onNotice={setNotice}
+            />
+          )}
 
           {projects === null ? (
             <div className="mt-8">
@@ -252,6 +271,165 @@ export default function Dashboard() {
         </div>
       )}
     </DashboardShell>
+  );
+}
+
+function formatProtected(bytes: number): string {
+  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(bytes >= 10_000_000_000 ? 0 : 1)} GB`;
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(0)} MB`;
+  return `${Math.max(0, bytes / 1_000).toFixed(0)} KB`;
+}
+
+function dateLabel(value: string | null): string | null {
+  if (!value) return null;
+  return new Date(value).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+function BillingCard({
+  plan,
+  plans,
+  onPlan,
+  onNotice,
+}: {
+  plan: AccountPlan;
+  plans: Record<PlanCode, PlanDefinition>;
+  onPlan: (plan: AccountPlan) => void;
+  onNotice: (notice: NoticeMessage | null) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const used = plan.usageBytes + plan.reservedBytes;
+  const percent = plan.authorizedBytes ? Math.min(100, (used / plan.authorizedBytes) * 100) : 0;
+  const currentPlan = plan.planCode ? plans[plan.planCode] : null;
+  const statusLine = plan.status === "trialing" ? `Trial ends ${dateLabel(plan.trialEndsAt) ?? "soon"}`
+    : plan.status === "past_due" ? `Payment needs attention. Full access ends ${dateLabel(plan.writeAccessEndsAt) ?? "soon"}`
+    : plan.access === "read_only" ? `Read and export access ends ${dateLabel(plan.retentionEndsAt) ?? "soon"}`
+    : plan.status === "canceled" ? `Hosted access ends ${dateLabel(plan.currentPeriodEnd) ?? "soon"}`
+    : plan.status === "active" ? `Next renewal ${dateLabel(plan.currentPeriodEnd) ?? "soon"}`
+    : "No hosted plan yet";
+
+  async function start(planCode: PlanCode) {
+    setBusy(true);
+    onNotice(null);
+    try {
+      const result = await startHostedTrial(planCode, "month");
+      window.location.assign(result.url);
+    } catch (error) {
+      onNotice(problem((error as Error).message));
+      setBusy(false);
+    }
+  }
+
+  async function manage() {
+    setBusy(true);
+    onNotice(null);
+    try {
+      const result = await openBillingPortal();
+      window.location.assign(result.url);
+    } catch (error) {
+      onNotice(problem((error as Error).message));
+      setBusy(false);
+    }
+  }
+
+  async function changeCap(capCents: number) {
+    const description = capCents === 0 ? "disable extra capacity" : `set a $${capCents / 100} monthly ceiling`;
+    if (!window.confirm(`Confirm that you want to ${description}. Existing protected data will not be deleted.`)) return;
+    setBusy(true);
+    onNotice(null);
+    try {
+      onPlan(await setOverageCap(capCents));
+      onNotice(done(capCents === 0 ? "Extra capacity is off." : `Extra capacity can add at most $${capCents / 100} to a monthly bill.`));
+    } catch (error) {
+      onNotice(problem((error as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (plan.billingMode === "disabled") {
+    return (
+      <section className="gf-card mt-6 p-5 sm:p-6" aria-label="Protected data">
+        <p className="gf-eyebrow">Self-hosted</p>
+        <h2 className="mt-2 text-[17px] font-bold">Capacity comes from this server</h2>
+        <p className="gf-body mt-2 text-[13.5px]">GoodFolder does not apply a hosted plan or spending limit here.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="gf-card mt-6 p-5 sm:p-6" aria-label="Hosted plan and protected data">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="gf-eyebrow">GoodFolder Hosted</p>
+          <h2 className="mt-2 text-[18px] font-bold">
+            {plan.status === "none" || plan.status === "expired" ? "Choose a plan, with a 7-day trial" : `${currentPlan?.name ?? "Hosted"} — ${statusLine}`}
+          </h2>
+          <p className="gf-body mt-2 max-w-2xl text-[13.5px]">
+            Current files and earlier versions stay protected without an arbitrary expiry date. Reaching the limit pauses new Saves; it does not remove what is already here.
+          </p>
+        </div>
+        {plan.status === "none" || plan.status === "expired" ? (
+          <div className="flex flex-wrap gap-2">
+            {(["starter", "plus", "studio"] as const).map((code) => (
+              <button
+                key={code}
+                type="button"
+                disabled={busy}
+                onClick={() => void start(code)}
+                className={code === "plus" ? "gf-button-primary" : "gf-button-secondary"}
+              >
+                {busy ? "Opening…" : `${plans[code].name} $${plans[code].monthlyPriceCents / 100}/mo`}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <button type="button" disabled={busy} onClick={() => void manage()} className="gf-button-secondary">
+            Manage billing
+          </button>
+        )}
+      </div>
+
+      {plan.authorizedBytes !== null && (
+        <div className="mt-5 border-t border-[var(--gf-line)] pt-5">
+          <div className="flex flex-wrap items-end justify-between gap-2 text-[13px]">
+            <span><b>{formatProtected(used)}</b> protected</span>
+            <span className="gf-faint">{formatProtected(plan.authorizedBytes)} authorized</span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--gf-blue-soft)]" aria-label={`${percent.toFixed(0)} percent used`}>
+            <div className="h-full rounded-full bg-[var(--gf-blue-ink)]" style={{ width: `${Math.max(percent > 0 ? 2 : 0, percent)}%` }} />
+          </div>
+          <div className="mt-3 flex flex-wrap justify-between gap-2 text-[12.5px]">
+            <span className="gf-faint">Not enough activity to estimate when this limit may be reached.</span>
+            <span>Estimated extra charge: ${(plan.accruedOverageCents / 100).toFixed(2)}</span>
+          </div>
+        </div>
+      )}
+
+      {["active", "past_due"].includes(plan.status) && (
+        <div className="mt-5 border-t border-[var(--gf-line)] pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <b className="text-[13.5px]">Extra protected capacity</b>
+              <p className="gf-faint mt-1 text-[12.5px]">
+                ${((currentPlan?.overageCentsPerGbMonth ?? 10) / 100).toFixed(2)} per GB-month, never above the ceiling you choose.
+              </p>
+            </div>
+            <select
+              aria-label="Monthly extra-capacity ceiling"
+              value={plan.overageCapCents}
+              disabled={busy}
+              onChange={(event) => void changeCap(Number(event.target.value))}
+              className="gf-input w-auto min-w-44"
+            >
+              <option value={0}>Off</option>
+              {[1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000].map((cents) => (
+                <option key={cents} value={cents}>${cents / 100} monthly ceiling</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

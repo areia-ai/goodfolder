@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BrandLockup, BrandMark } from "@/components/brand";
 import { Faq, type FaqItem } from "@/components/faq";
+import { PricingTiers } from "@/components/pricing";
 import { AgentPreview, TimelinePreview } from "@/components/product-preview";
 import { Shot } from "@/components/shot";
 import {
@@ -219,6 +220,13 @@ const QUESTIONS: FaqItem[] = [
     answer: [
       "No. GoodFolder isn’t a replacement for your cloud drive or backup, so keep the backup you already trust.",
       "Its job is to remember what happened inside a working folder and help you recover an earlier version. It keeps a copy so you can use the same folder on your other computers, but it isn’t meant as a place to dump files for storage.",
+    ],
+  },
+  {
+    question: "Do earlier versions disappear after 90 days?",
+    answer: [
+      "No. While your hosted account is active and within its authorized capacity, current files and earlier versions stay protected without an arbitrary expiry date.",
+      "If hosted access ends, the account moves to read and export mode for 30 days before scheduled deletion. We send reminders at the start of that period, seven days before deletion, and 24 hours before deletion.",
     ],
   },
 ];
@@ -603,6 +611,21 @@ export default function Landing() {
               </div>
               <AgentPreview />
             </div>
+          </div>
+        </section>
+
+        {/* --------------------------------------------------------------- Pricing */}
+        <section id="pricing" className="gf-band gf-band-tint scroll-mt-16">
+          <div className="gf-wrap">
+            <div className="gf-head">
+              <p className="gf-eyebrow">Run it yourself, or let us run it</p>
+              <h2 className="gf-h2 mt-4">Three hosted plans. No folder or contributor limits.</h2>
+              <p className="gf-lead mt-5">
+                You pay for the protected data inside your folders, not how many folders you make. Documents often use little capacity; photos and video use more.
+              </p>
+            </div>
+
+            <PricingTiers selfHostUrl={SOURCE_URL} />
           </div>
         </section>
 
