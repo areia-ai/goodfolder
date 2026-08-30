@@ -1,6 +1,6 @@
 # GoodFolder, self-hosted. Everything it needs is in this file.
 #
-#   cp .env.example .env     # fill in the four CHANGE_ME secrets
+#   cp .env.example .env     # replace every CHANGE_ME value
 #   docker compose up -d --build
 #   GF_API_URL=http://localhost:4100 goodfolder connect ~/some-folder
 #

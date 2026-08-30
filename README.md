@@ -23,7 +23,7 @@ for people who would rather not run a server.
 You need Docker. No cloud account, no email provider, no AI key.
 
 ```bash
-cp .env.example .env          # fill in the four CHANGE_ME secrets
+cp .env.example .env          # replace every CHANGE_ME value
 docker compose up -d --build
 
 export GF_API_URL=http://localhost:4100
@@ -98,5 +98,10 @@ The GoodFolder name, mascot, wordmark, and the brand assets under
 `apps/web/public/brand` are trademarks and are **not** covered by the AGPL. Run
 your own instance freely; do not call it GoodFolder.
 
-No contributor agreement is in place yet, so please hold off on pull requests
-until one is.
+## Contributing
+
+Pull requests are paused until there is a contributor licence agreement;
+[CONTRIBUTING.md](CONTRIBUTING.md) explains why and what is open in the
+meantime. If you are running an AI agent on the code, read
+[AGENTS.md](AGENTS.md). Security reports go to the address in
+[SECURITY.md](SECURITY.md).

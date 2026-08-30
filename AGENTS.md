@@ -1,111 +1,114 @@
-# AGENTS.md - working on GoodFolder
+# AGENTS.md — working on GoodFolder
 
-Read this before changing anything in this repository.
-
-## Repository authority
-
-This repository is the sole source of truth for GoodFolder:
-
-```text
-https://github.com/areia-ai/goodfolder
-```
-
-Work directly in a checkout whose `origin` points to that URL. Do not inspect,
-edit, copy from, commit to, push to, or synchronize another GoodFolder
-repository. If the remote does not match, stop before making changes.
-
-Before every working session, run:
-
-```bash
-git remote get-url origin
-git status --short --branch
-git config --get user.name
-git config --get user.email
-```
-
-The expected author identity is:
-
-```text
-Carlos Marcial <carlosmarcialtorres@gmail.com>
-```
-
-Set it in this repository's local Git configuration if either value differs.
-Do not replace global Git identity settings for this purpose. GitHub must
-attribute GoodFolder commits to `carlosmarcial`, never `paradigm-carlos`.
+Written for AI agents and the people running them. A human contributor gets the
+same picture; read it before you change anything.
 
 ## What GoodFolder is
 
-GoodFolder puts readable history, Save, Sync, Timeline, and Restore around an
-ordinary folder. It uses an established version-control engine underneath, but
-that vocabulary must not reach people using the product.
+GoodFolder puts readable history, Save, Sync, Timeline and Restore around an
+ordinary folder. There is a version-control engine underneath, and that
+vocabulary must never reach anyone using the product: no "commit", no "branch",
+no "repository" in a label, a screen, an error, or a line the CLI prints.
+`pnpm vocab` checks this and CI fails the build when it leaks.
 
-## Repository layout
+## Where the code lives
 
 ```text
-apps/cli            command-line client
-apps/mcp            agent tools
-apps/control-plane  accounts, folders, saves, permissions, transport proxy
-apps/lfs            large-file transfers
+apps/cli            the `goodfolder` command
+apps/mcp            Model Context Protocol server, so agents drive the same verbs
+apps/control-plane  accounts, folders, saves, permissions, the transport proxy
+apps/lfs            large-file transfers against S3-compatible storage
 apps/web            landing page and dashboard
-packages/shared     shared domain rules and types
-packages/serverlib  database, credentials, storage, transport adapter
-infra/              schema, migrations, containers
+packages/shared     domain types, the routing rule, the case-collision finder
+packages/serverlib  database, credentials, object storage, transport adapter
+infra/              schema, migrations, the production compose file
+tools/              the gates CI runs: vocabulary, brand SVG, contrast
 ```
 
-## Product and security rules
+## Rules a change must not break
 
-1. Case-colliding paths must never reach a Save.
-2. Authorization belongs in GoodFolder middleware; the transport service gets
-   no trust and publishes no ports.
-3. Browser-session account routes must stay above scoped bearer middleware.
-   Hono runs handlers in registration order.
-4. A failed AI-written label must fall back and must never block a Save.
-5. Keep engine vocabulary out of every user-facing surface.
-6. Restore creates a new Save; it never rewrites history.
-7. Never commit credentials or `.env` files.
-8. Self-hosting must keep working without a cloud account, mail provider,
-   billing provider, or AI key.
+1. Case-colliding paths — `README.md` and `readme.md` in one folder — must
+   never reach a Save. There is a hard gate for this and it exists because some
+   filesystems keep both and others silently merge them.
+2. Authorisation lives in GoodFolder's own middleware. The transport service
+   (Gitea) is given no trust, publishes no ports, and never sees an end-user
+   credential.
+3. Account routes that a browser session uses sit above the scoped bearer
+   middleware. Hono runs handlers in registration order, so a middleware
+   registered after the routes never runs for them.
+4. A Save label is written by an AI model when a key is configured and falls
+   back to a plain summary when it isn't. A slow or failed label must never
+   block or delay the Save.
+5. Restore writes a new Save. It never rewrites history.
+6. Self-hosting works with nothing but Docker — no cloud account, no mail
+   provider, no billing provider, no AI key. Any change to the server keeps
+   that true.
+7. Never commit a real `.env`, a key, or a token.
 
-## Commands
+## Working on it
+
+Node 22 or newer, and pnpm 11 (`package.json` pins the exact version in
+`packageManager`).
 
 ```bash
 pnpm install
-pnpm typecheck
-pnpm vocab
-pnpm gate
+pnpm gate     # typecheck every workspace, then the vocabulary gate
+```
+
+CI runs two more checks that `pnpm gate` doesn't, worth running when you touch
+`apps/web`:
+
+```bash
+node tools/validate-brand.mjs
+node tools/check-contrast.mjs
+```
+
+Tests are plain files run with the Node test runner, not a `test` script:
+
+```bash
 node --experimental-transform-types --test apps/web/lib/webmcp.test.ts
 ```
 
-Run tests that match the changed subsystem. Production flow tests create real
-folders and storage records, so do not run them without explicit authorization
-and a cleanup plan.
+Run the ones near what you changed (`apps/control-plane/src/*.test.ts`,
+`apps/web/lib/*.test.ts`, `apps/cli/src/undo.test.ts`). CI runs the webmcp one.
+`apps/mcp/flow-test.mts` and `test-mcp.mts` hit a live server and create real
+folders and storage rows, so only run them against a server you control, with a
+plan to clean up after.
 
-## Working rules
+To watch the whole stack run, follow `SELF_HOSTING.md`:
+`docker compose up -d --build` brings up Postgres, MinIO, Gitea and both
+services on your machine.
 
-- Preserve unrelated changes in a dirty worktree.
-- Use additive database migrations and keep `infra/schema.sql` current.
-- Check rendered behavior for user-interface work; code presence alone is not
-  proof.
-- Do not deploy, apply a production migration, publish a package, or perform a
-  destructive cleanup without action-time authorization.
-- Keep `README.md` and `SELF_HOSTING.md` accurate when behavior changes.
+## Habits that keep the tree clean
 
-## Local working records
+- Stage only what your change touches. Leave an unrelated mess in the worktree
+  alone.
+- Migrations are additive: add a file under `infra/migrations/` and keep
+  `infra/schema.sql` matching it.
+- For anything that renders, check the rendered result. Code that compiles is
+  not proof the screen is right.
+- Keep `README.md` and `SELF_HOSTING.md` true when behaviour changes.
+- Commit under your own name and email. `git config user.name` and
+  `git config user.email` should be you, whatever the repo you cloned or forked
+  from was set to.
 
-`LOG.md`, `LOCAL_PRICING_DECISIONS.md`, and
-`LOCAL_HOSTED_PRICING_ACCESS_PLAN.md` are private working files. Git ignores
-them deliberately. Never add them with `--force`, quote their contents in a
-public commit, or publish them elsewhere. A fresh clone may not contain them.
+## Things not to do on your own
 
-When a local `LOG.md` exists, read it for local context and append substantive
-decisions, completed work, tests, and remaining work. Do not rewrite earlier
-entries. Its absence in a fresh clone is expected and must not block work.
+The hosted service runs from this same code, so a careless push travels. Don't
+deploy, apply a migration to a production database, publish a package, or run a
+destructive cleanup unless the person you are working for asks for it in that
+session.
 
-## End of session
+## Pull requests
 
-Before handing work back:
+Hold off for now. There is no contributor licence agreement yet, and merging
+outside code without one would permanently rule out ever dual-licensing
+GoodFolder, because the project would no longer hold the rights to all of its
+own code. `CONTRIBUTING.md` has the detail. Issues and design discussion are
+open; anything that could be used against a running instance goes to the
+address in `SECURITY.md` instead of a public issue.
 
-1. Run the relevant tests and `pnpm gate`.
-2. Recheck `origin` and the effective author identity.
-3. If a local `LOG.md` exists, append the result, tests, and remaining work.
-4. Commit only intended files. Push only when the user authorized it.
+## Before you hand work back
+
+Run `pnpm gate` and the tests for what you touched. Check `git status` and
+commit only the files you meant to. Push only if you were asked to.

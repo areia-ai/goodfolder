@@ -4,7 +4,7 @@ Everything GoodFolder needs is in `docker-compose.yml`. You need Docker and
 nothing else: no cloud account, no email provider, no AI key.
 
 ```bash
-cp .env.example .env          # fill in the four CHANGE_ME secrets
+cp .env.example .env          # replace every CHANGE_ME value
 docker compose up -d --build  # first build takes a few minutes
 ```
 
