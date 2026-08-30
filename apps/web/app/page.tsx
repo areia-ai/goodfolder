@@ -308,7 +308,7 @@ export default function Landing() {
               <div className="text-center lg:text-left">
                 <p className="gf-eyebrow">For documents, spreadsheets, decks, photos, and recordings</p>
                 <h1 className="gf-display-xl mt-5">
-                  Let the agent work on your files.
+                  Let the AI agent work on your files.
                   <br />
                   <i>Keep a way back.</i>
                 </h1>
