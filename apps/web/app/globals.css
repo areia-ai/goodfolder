@@ -647,8 +647,11 @@ img, svg { max-width: 100%; }
   background: var(--gf-surface);
 }
 @media (min-width: 1024px) {
-  .gf-win { grid-template-columns: var(--gf-win-side, 244px) minmax(0, 1fr); height: 100svh; overflow: hidden; }
-  .gf-win-collapsed { --gf-win-side: 0px; }
+  /* Hiding the sidebar removes it from the grid entirely, so the collapsed
+     window needs one track rather than a zero-width one — otherwise the main
+     column inherits the empty track and everything is squeezed to nothing. */
+  .gf-win { grid-template-columns: 244px minmax(0, 1fr); height: 100svh; overflow: hidden; }
+  .gf-win-collapsed { grid-template-columns: minmax(0, 1fr); }
 }
 
 .gf-win-main { display: flex; min-width: 0; flex-direction: column; }
@@ -755,6 +758,10 @@ img, svg { max-width: 100%; }
 
 .gf-win-body { display: flex; min-height: 0; flex: 1; }
 .gf-win-listing { min-width: 0; flex: 1; overflow: auto; }
+/* Columns and Gallery lay out inside their own height and do their own
+   scrolling; a second scrollbar around them is only ever in the way. */
+.gf-win-listing-fill { overflow: hidden; }
+.gf-win-listing-fill > :last-child { height: 100%; }
 .gf-win-aside {
   display: none; flex: none; width: 340px; min-height: 0; overflow: auto;
   border-left: 1px solid var(--gf-line);
@@ -870,6 +877,135 @@ img, svg { max-width: 100%; }
 .gf-win-subpath { font-size: 11.5px; color: var(--gf-ink-faint); }
 .gf-win-row[aria-selected="true"] .gf-win-subpath { color: color-mix(in srgb, var(--gf-white) 88%, transparent); }
 
+/* Icons view -------------------------------------------------------------- */
+
+.gf-win-group-label {
+  padding: 12px 6px 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--gf-ink-faint);
+}
+.gf-win-tiles {
+  display: grid; gap: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--gf-tile, 112px), 1fr));
+}
+.gf-win-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: 1px solid transparent; border-radius: var(--gf-radius);
+  padding: 8px 6px 10px;
+  text-align: center; cursor: default;
+}
+.gf-win-tile:hover { background: var(--gf-blue-wash); }
+.gf-win-tile[aria-selected="true"] { background: var(--gf-blue-ink); color: var(--gf-white); }
+.gf-win-tile[aria-selected="true"] .gf-win-tile-meta { color: color-mix(in srgb, var(--gf-white) 88%, transparent); }
+.gf-win-tile[aria-selected="true"] .gf-win-glyph { color: var(--gf-white); }
+.gf-win-tile[aria-selected="true"] .gf-win-glyph-tint { background: color-mix(in srgb, var(--gf-white) 22%, transparent); }
+.gf-win-tile[data-cursor="true"]:not([aria-selected="true"]) { border-color: var(--gf-blue-line); }
+
+.gf-win-tile-art {
+  position: relative;
+  display: grid; place-items: center;
+  width: 100%; overflow: hidden;
+  border-radius: var(--gf-radius-sm);
+}
+.gf-win-tile-art img { height: 100%; width: 100%; object-fit: cover; border-radius: var(--gf-radius-sm); }
+.gf-win-tile-glyph {
+  display: grid; place-items: center;
+  height: 56%; aspect-ratio: 1; min-height: 34px;
+  border-radius: var(--gf-radius-sm); background: var(--gf-blue-soft);
+}
+.gf-win-tile-glyph .gf-win-glyph > svg { height: 26px; width: 26px; }
+.gf-win-tile-glyph.gf-skeleton { background: var(--gf-blue-soft); }
+.gf-win-tile[aria-selected="true"] .gf-win-tile-glyph { background: color-mix(in srgb, var(--gf-white) 20%, transparent); }
+.gf-win-tile-flag {
+  position: absolute; right: 4px; top: 4px;
+  display: inline-flex; align-items: center; gap: 3px;
+  border-radius: 999px; background: var(--gf-blue-ink); color: var(--gf-white);
+  padding: 1px 6px; font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.gf-win-tile-name {
+  max-width: 100%;
+  font-size: 12.5px; line-height: 1.3; font-weight: 500;
+  overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.gf-win-tile-meta { font-size: 11px; color: var(--gf-ink-faint); font-variant-numeric: tabular-nums; }
+
+.gf-win-size-slider {
+  display: flex; align-items: center; gap: 6px;
+  flex: none; padding-inline: 4px;
+}
+.gf-win-size-slider input { width: 84px; accent-color: var(--gf-blue-ink); }
+
+/* Columns view ------------------------------------------------------------ */
+
+.gf-win-columns { display: flex; height: 100%; min-height: 320px; overflow-x: auto; }
+.gf-win-column {
+  flex: none; width: 232px; min-width: 0; overflow-y: auto;
+  border-right: 1px solid var(--gf-line);
+}
+.gf-win-column-row {
+  display: flex; align-items: center; gap: 7px;
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 13px; cursor: default;
+}
+.gf-win-column-row:hover { background: var(--gf-blue-wash); }
+.gf-win-column-row[aria-selected="true"] { background: var(--gf-blue-ink); color: var(--gf-white); }
+.gf-win-column-row[aria-selected="true"] .gf-win-glyph { color: var(--gf-white); }
+.gf-win-column-row[aria-selected="true"] .gf-win-glyph-tint { background: color-mix(in srgb, var(--gf-white) 22%, transparent); }
+.gf-win-column-row[aria-selected="true"] .gf-win-flag { border-color: var(--gf-white); color: var(--gf-white); }
+.gf-win-column-detail { flex: 1 1 380px; min-width: 300px; overflow: auto; }
+/* On a phone a column browser is one column at a time, which is what the
+   address already describes — so the trailing columns are dropped and the
+   path bar is the way back out. */
+@media (max-width: 767px) {
+  .gf-win-columns > .gf-win-column:not(:last-of-type) { display: none; }
+  .gf-win-column { width: 100%; flex: 1; border-right: 0; }
+  .gf-win-column-detail { display: none; }
+  .gf-win-columns:has(.gf-win-column-detail > *) > .gf-win-column { display: none; }
+  .gf-win-columns:has(.gf-win-column-detail > *) > .gf-win-column-detail { display: block; }
+}
+
+/* Gallery view ------------------------------------------------------------ */
+
+.gf-win-gallery { display: flex; height: 100%; min-height: 360px; flex-direction: column; }
+.gf-win-gallery-stage {
+  display: flex; flex: 1; min-height: 0; overflow: auto;
+  background: var(--gf-surface-sunken);
+}
+.gf-win-gallery-stage > * { min-width: 0; flex: 1; }
+.gf-win-gallery-foot { flex: none; border-top: 1px solid var(--gf-line); background: var(--gf-surface); }
+.gf-win-gallery-caption {
+  padding: 7px 12px 0;
+  font-size: 12.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gf-win-filmstrip {
+  display: flex; gap: 6px;
+  overflow-x: auto;
+  padding: 8px 12px 12px;
+}
+.gf-win-frame {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  flex: none; width: 92px;
+  border: 1px solid transparent; border-radius: var(--gf-radius-sm);
+  padding: 4px;
+  cursor: default;
+}
+.gf-win-frame:hover { background: var(--gf-blue-wash); }
+.gf-win-frame[aria-selected="true"] { border-color: var(--gf-blue-ink); background: var(--gf-blue-soft); }
+.gf-win-frame-art {
+  display: grid; place-items: center;
+  height: 62px; width: 100%; overflow: hidden;
+  border: 1px solid var(--gf-line); border-radius: 7px; background: var(--gf-surface-sunken);
+}
+.gf-win-frame-art img { height: 100%; width: 100%; object-fit: cover; }
+.gf-win-frame-name {
+  max-width: 100%;
+  font-size: 10.5px; line-height: 1.25; color: var(--gf-ink-soft);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* Path bar and status bar -------------------------------------------------- */
 
 .gf-win-foot { flex: none; border-top: 1px solid var(--gf-line); background: var(--gf-surface-sunken); }
@@ -917,6 +1053,7 @@ img, svg { max-width: 100%; }
   .gf-win-title { flex-basis: auto; }
 }
 @media (pointer: coarse) {
+  .gf-win-column-row { min-height: 44px; }
   .gf-win-row > td { height: 44px; }
   .gf-win-table thead button { min-height: 40px; }
   .gf-win-side-link { min-height: 44px; }

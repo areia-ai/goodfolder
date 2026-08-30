@@ -13,17 +13,21 @@ import { formatBytes } from "@/lib/preview";
 import {
   ROOT_SCOPE_LABEL, baseName, breadcrumb, descendantFiles, filterNodes, filterRoot,
   flattenRows, folderChildren, groupNodes, locationKey, locationOf, parentLocation,
-  rootChildren, sortNodes, type ListRow, type Location, type SortKey, type VfsNode,
+  rootChildren, sortNodes, type Decoration, type ListRow, type Location, type SortKey,
+  type TreeIndex, type VfsNode,
 } from "@/lib/vfs";
 import {
   preferenceFor, readPrefs, togglePinned, withExpanded, withPreference,
-  withSidebarCollapsed, writePrefs, DEFAULT_STATE, expandedIn,
-  type ViewPreference, type ViewPrefsState,
+  withSidebarCollapsed, withView, writePrefs, DEFAULT_STATE, VIEW_MODES, expandedIn,
+  type ViewMode, type ViewPreference, type ViewPrefsState,
 } from "@/lib/view-prefs";
 import { Sidebar } from "@/components/finder/sidebar";
 import { Toolbar } from "@/components/finder/toolbar";
 import { PathBar, StatusBar } from "@/components/finder/foot";
 import { FOLDER_COLUMNS, ListView, ROOT_COLUMNS } from "@/components/finder/view-list";
+import { IconsView } from "@/components/finder/view-icons";
+import { ColumnsView } from "@/components/finder/view-columns";
+import { GalleryView } from "@/components/finder/view-gallery";
 import { Inspector, type InspectorTab } from "@/components/finder/inspector";
 import { useNavigation } from "@/components/finder/use-navigation";
 import { useFolderData, LISTING_LIMIT } from "@/components/finder/use-folder-data";
@@ -128,16 +132,18 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
 
   const searching = search.trim().length > 0;
 
+  const everyFolder = useMemo(() => rootChildren(folders ?? []), [folders]);
+
   const nodes = useMemo<VfsNode[]>(() => {
     if (!location.folderId) {
-      return filterNodes(filterRoot(rootChildren(folders ?? []), location.scope), search);
+      return filterNodes(filterRoot(everyFolder, location.scope), search);
     }
     if (!data || data.status !== "ready") return [];
     if (searching) {
       return filterNodes(descendantFiles(data.tree, location.folderId, location.dir, decoration), search);
     }
     return folderChildren(data.tree, location.folderId, location.dir, decoration);
-  }, [folders, location.folderId, location.scope, location.dir, data, search, searching, decoration]);
+  }, [everyFolder, location.folderId, location.scope, location.dir, data, search, searching, decoration]);
 
   const expanded = useMemo(() => new Set(expandedIn(prefs, placeKey)), [prefs, placeKey]);
 
@@ -168,6 +174,14 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   );
 
   const selection = useSelection(ordered, `${placeKey}|${search}|${preference.group}`);
+
+  const focused = useMemo<VfsNode | null>(() => {
+    if (location.file) {
+      const found = ordered.find((node) => node.kind === "file" && node.path === location.file);
+      if (found) return found;
+    }
+    return selection.nodes[0] ?? null;
+  }, [location.file, ordered, selection.nodes]);
 
   /* --------------------------------------------------------- Opening one */
 
@@ -202,12 +216,19 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
 
   const go = nav.go;
 
+  const inlineDetail = prefs.view === "columns" || prefs.view === "gallery";
+
   const open = useCallback(
     (node: VfsNode) => {
       setNotice(null);
-      go(locationOf(node));
+      const next = locationOf(node);
+      // In a view that shows the file beside the listing, moving along a
+      // filmstrip or down a column is looking, not travelling. Filling the
+      // history with every glance would make Back useless.
+      if (node.kind === "file" && inlineDetail) nav.replace(next);
+      else go(next);
     },
-    [go],
+    [go, nav, inlineDetail],
   );
 
   const toggleRow = useCallback(
@@ -302,7 +323,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       if (!modifier) return;
       if (event.key >= "1" && event.key <= "4") {
         event.preventDefault();
-        setPreference({ view: (["icons", "list", "columns", "gallery"] as const)[Number(event.key) - 1] });
+        setPrefs((current) => withView(current, VIEW_MODES[Number(event.key) - 1]!));
         return;
       }
       if (event.key.toLowerCase() === "f") {
@@ -367,7 +388,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   /* ---------------------------------------------------------- Assembling */
 
   const crumbs = breadcrumb(location, folder?.name ?? null);
-  const readingFile = Boolean(location.file);
+  const readingFile = Boolean(location.file) && !inlineDetail;
   const title = location.file
     ? baseName(location.file)
     : location.folderId
@@ -383,6 +404,29 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
         ? "Some dates are older than the timeline reaches"
         : null
     : null;
+
+  const fileSurface = (
+    <FileSurface
+      opened={opened}
+      folder={folder}
+      data={data}
+      onClose={() => {
+        const up = parentLocation(location);
+        if (up) go(up);
+      }}
+      onSaved={(head) => {
+        if (location.folderId) {
+          store.setHead(location.folderId, head);
+          void store.refresh(location.folderId);
+        }
+      }}
+      onRefreshProposals={async () => {
+        if (location.folderId) await store.refreshProposals(location.folderId);
+      }}
+      onReviewProposal={reviewFromWindow}
+      onNotice={setNotice}
+    />
+  );
 
   return (
     <div className={`gf-win ${prefs.sidebarCollapsed ? "gf-win-collapsed" : ""}`}>
@@ -425,6 +469,8 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       <div className="gf-win-main">
         <Toolbar
           title={title}
+          view={prefs.view}
+          onView={(next) => setPrefs((current) => withView(current, next))}
           preference={preference}
           onPreference={setPreference}
           canGoBack={nav.canGoBack}
@@ -465,7 +511,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
           <div
             id="listing"
             ref={listing}
-            className="gf-win-listing"
+            className={`gf-win-listing ${inlineDetail && !notice ? "gf-win-listing-fill" : ""}`}
             tabIndex={-1}
             onKeyDown={onListKey}
             onClick={(event) => {
@@ -489,26 +535,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             )}
 
             {readingFile ? (
-              <FileSurface
-                opened={opened}
-                folder={folder}
-                data={data}
-                onClose={() => {
-                  const up = parentLocation(location);
-                  if (up) go(up);
-                }}
-                onSaved={(head) => {
-                  if (location.folderId) {
-                    store.setHead(location.folderId, head);
-                    void store.refresh(location.folderId);
-                  }
-                }}
-                onRefreshProposals={async () => {
-                  if (location.folderId) await store.refreshProposals(location.folderId);
-                }}
-                onReviewProposal={reviewFromWindow}
-                onNotice={setNotice}
-              />
+              fileSurface
             ) : (
               <Listing
                 loading={Boolean(location.folderId) && data?.status === "loading"}
@@ -523,12 +550,18 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
                 rows={rows}
                 groups={groups}
                 preference={preference}
+                view={prefs.view}
                 onSort={onSort}
                 selection={selection}
                 searching={searching}
                 datesPartial={Boolean(data?.changed.partial)}
                 onOpen={open}
                 onToggle={toggleRow}
+                everyFolder={everyFolder}
+                tree={data?.tree ?? null}
+                decoration={decoration}
+                focused={focused}
+                detail={location.file ? fileSurface : null}
               />
             )}
           </div>
@@ -586,12 +619,18 @@ function Listing(props: {
   rows: ListRow[];
   groups: Array<{ id: string; label: string; rows: ListRow[] }> | null;
   preference: ViewPreference;
+  view: ViewMode;
   onSort: (key: SortKey) => void;
   selection: ReturnType<typeof useSelection>;
   searching: boolean;
   datesPartial: boolean;
   onOpen: (node: VfsNode) => void;
   onToggle: (node: VfsNode) => void;
+  everyFolder: VfsNode[];
+  tree: TreeIndex | null;
+  decoration: Decoration;
+  focused: VfsNode | null;
+  detail: React.ReactNode;
 }) {
   if (props.loading || (!props.location.folderId && props.folders === null)) {
     return (
@@ -622,8 +661,65 @@ function Listing(props: {
     );
   }
 
-  if (props.nodes.length === 0) {
+  const view = props.view;
+  const select = (node: VfsNode, modifiers: ClickModifiers) => props.selection.select(node.id, modifiers);
+
+  // Columns keeps working with nothing in the current directory — its other
+  // columns are still the way around. The rest have nothing left to draw.
+  if (props.nodes.length === 0 && view !== "columns") {
     return <EmptyListing location={props.location} search={props.search} onClearSearch={props.onClearSearch} />;
+  }
+
+  if (view === "columns") {
+    return (
+      <ColumnsView
+        rootNodes={props.everyFolder}
+        location={props.location}
+        tree={props.tree}
+        decoration={props.decoration}
+        sort={props.preference.sort}
+        direction={props.preference.direction}
+        isSelected={props.selection.isSelected}
+        cursor={props.selection.cursor}
+        onSelect={select}
+        onOpen={props.onOpen}
+        detail={props.detail}
+      />
+    );
+  }
+
+  if (view === "gallery") {
+    return (
+      <GalleryView
+        nodes={props.groups ? props.groups.flatMap((group) => group.rows.map((row) => row.node)) : props.nodes}
+        focused={props.focused}
+        isSelected={props.selection.isSelected}
+        cursor={props.selection.cursor}
+        onSelect={(node, modifiers) => {
+          select(node, modifiers);
+          if (node.kind === "file") props.onOpen(node);
+        }}
+        onOpen={props.onOpen}
+        detail={props.detail}
+      />
+    );
+  }
+
+  if (view === "icons") {
+    return (
+      <IconsView
+        nodes={props.nodes}
+        groups={props.groups ? props.groups.map((group) => ({
+          id: group.id, label: group.label, nodes: group.rows.map((row) => row.node),
+        })) : null}
+        size={props.preference.iconSize}
+        isSelected={props.selection.isSelected}
+        cursor={props.selection.cursor}
+        onSelect={select}
+        onOpen={props.onOpen}
+        showPath={props.searching}
+      />
+    );
   }
 
   return (
@@ -636,7 +732,7 @@ function Listing(props: {
       onSort={props.onSort}
       isSelected={props.selection.isSelected}
       cursor={props.selection.cursor}
-      onSelect={(node: VfsNode, modifiers: ClickModifiers) => props.selection.select(node.id, modifiers)}
+      onSelect={select}
       onOpen={props.onOpen}
       onToggle={props.onToggle}
       onContext={() => {}}

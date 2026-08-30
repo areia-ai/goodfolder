@@ -19,6 +19,7 @@ import {
   withExpanded,
   withPreference,
   withSidebarCollapsed,
+  withView,
   writePrefs,
   type StorageLike,
   type ViewPrefsState,
@@ -58,12 +59,12 @@ function refusingStorage(): StorageLike {
 test("normalizePreference fills in whatever is missing", () => {
   assert.deepEqual(normalizePreference(undefined), DEFAULT_PREFERENCE);
   assert.deepEqual(normalizePreference({}), DEFAULT_PREFERENCE);
-  assert.equal(normalizePreference({ view: "gallery" }).view, "gallery");
-  assert.equal(normalizePreference({ view: "gallery" }).sort, DEFAULT_PREFERENCE.sort);
+  assert.equal(normalizePreference({ group: "kind" }).group, "kind");
+  assert.equal(normalizePreference({ group: "kind" }).sort, DEFAULT_PREFERENCE.sort);
 });
 
 test("normalizePreference refuses a value it does not recognise", () => {
-  const preference = normalizePreference({ view: "spreadsheet", sort: "colour", direction: "sideways", group: 7 });
+  const preference = normalizePreference({ sort: "colour", direction: "sideways", group: 7 });
   assert.deepEqual(preference, DEFAULT_PREFERENCE);
 });
 
@@ -85,14 +86,15 @@ test("migrateState turns anything unusable into the defaults", () => {
 test("migrateState keeps a record this build understands", () => {
   const state = migrateState({
     version: PREFS_VERSION,
-    defaults: { view: "columns" },
-    places: { "f1:figures": { view: "gallery" } },
+    view: "columns",
+    defaults: { sort: "kind" },
+    places: { "f1:figures": { sort: "size", direction: "desc" } },
     expanded: { f1: ["figures", "figures"] },
     pinned: ["f1", "f1", "f2"],
     sidebarCollapsed: true,
   });
-  assert.equal(state.defaults.view, "columns");
-  assert.equal(preferenceFor(state, "f1:figures").view, "gallery");
+  assert.equal(state.view, "columns");
+  assert.equal(preferenceFor(state, "f1:figures").sort, "size");
   assert.deepEqual(state.expanded.f1, ["figures"], "duplicates are dropped");
   assert.deepEqual(state.pinned, ["f1", "f2"]);
   assert.equal(state.sidebarCollapsed, true);
@@ -101,18 +103,28 @@ test("migrateState keeps a record this build understands", () => {
 test("migrateState fills a half-written place record from the defaults", () => {
   const state = migrateState({
     version: PREFS_VERSION,
-    defaults: { view: "columns", sort: "changed" },
-    places: { f1: { view: "icons" } },
+    defaults: { sort: "changed", group: "kind" },
+    places: { f1: { sort: "size" } },
   });
-  assert.equal(preferenceFor(state, "f1").view, "icons");
-  assert.equal(preferenceFor(state, "f1").sort, "changed", "the rest comes from the defaults");
+  assert.equal(preferenceFor(state, "f1").sort, "size");
+  assert.equal(preferenceFor(state, "f1").group, "kind", "the rest comes from the defaults");
+});
+
+test("the view belongs to the window, not to a place", () => {
+  // Finder remembers the view per folder, and that is precisely how clicking
+  // a file one level up flips the whole window into another view.
+  let state = withView(DEFAULT_STATE, "columns");
+  state = withPreference(state, "photos", { sort: "changed" });
+  assert.equal(state.view, "columns");
+  assert.equal(withView(state, "not-a-view" as never).view, "columns", "an unknown view is refused");
+  assert.equal(Object.keys(preferenceFor(state, "photos")).includes("view"), false);
 });
 
 /* --------------------------------------------------------- Read and write */
 
 test("readPrefs and writePrefs round-trip through storage", () => {
   const storage = fakeStorage();
-  const state = withPreference(DEFAULT_STATE, "f1", { view: "icons", iconSize: 160 });
+  const state = withPreference(withView(DEFAULT_STATE, "icons"), "f1", { iconSize: 160 });
   writePrefs(state, storage);
   assert.ok(storage.value?.includes(STORAGE_KEY) === false, "the key is the address, not the payload");
   assert.deepEqual(readPrefs(storage), state);
@@ -139,25 +151,25 @@ test("a place with no memory follows the defaults", () => {
 });
 
 test("changing a place also becomes the default for places never visited", () => {
-  const state = withPreference(DEFAULT_STATE, "f1", { view: "icons" });
-  assert.equal(preferenceFor(state, "f1").view, "icons");
-  assert.equal(preferenceFor(state, "never-opened").view, "icons");
+  const state = withPreference(DEFAULT_STATE, "f1", { sort: "size" });
+  assert.equal(preferenceFor(state, "f1").sort, "size");
+  assert.equal(preferenceFor(state, "never-opened").sort, "size");
 });
 
-test("a place that was set on purpose keeps its own view when the default moves", () => {
-  let state = withPreference(DEFAULT_STATE, "photos", { view: "icons" });
-  state = withPreference(state, "reports", { view: "list" });
-  assert.equal(preferenceFor(state, "photos").view, "icons", "the photo folder was told to use icons");
-  assert.equal(preferenceFor(state, "reports").view, "list");
-  assert.equal(preferenceFor(state, "never-opened").view, "list");
+test("a place that was sorted on purpose keeps that order when the default moves", () => {
+  let state = withPreference(DEFAULT_STATE, "photos", { sort: "changed" });
+  state = withPreference(state, "reports", { sort: "name" });
+  assert.equal(preferenceFor(state, "photos").sort, "changed", "the photo folder was sorted by date");
+  assert.equal(preferenceFor(state, "reports").sort, "name");
+  assert.equal(preferenceFor(state, "never-opened").sort, "name");
 });
 
-test("a place set back to today's default still holds that view when the default moves on", () => {
-  let state = withPreference(DEFAULT_STATE, "photos", { view: "icons" });
-  state = withPreference(state, "photos", { view: "list" });
-  state = withPreference(state, "reports", { view: "gallery" });
-  assert.equal(preferenceFor(state, "photos").view, "list", "photos was told 'list' on purpose");
-  assert.equal(preferenceFor(state, "never-opened").view, "gallery");
+test("a place set back to today's default still holds it when the default moves on", () => {
+  let state = withPreference(DEFAULT_STATE, "photos", { sort: "changed" });
+  state = withPreference(state, "photos", { sort: "name" });
+  state = withPreference(state, "reports", { sort: "size" });
+  assert.equal(preferenceFor(state, "photos").sort, "name", "photos was sorted by name on purpose");
+  assert.equal(preferenceFor(state, "never-opened").sort, "size");
 });
 
 test("sort, grouping and the preview panel are remembered per place too", () => {
@@ -175,11 +187,11 @@ test("sort, grouping and the preview panel are remembered per place too", () => 
 });
 
 test("forgetPlace sends a place back to following the defaults", () => {
-  let state = withPreference(DEFAULT_STATE, "photos", { view: "icons" });
-  state = withPreference(state, "reports", { view: "list" });
+  let state = withPreference(DEFAULT_STATE, "photos", { sort: "changed" });
+  state = withPreference(state, "reports", { sort: "kind" });
   state = withExpanded(state, "photos", ["a"]);
   state = forgetPlace(state, "photos");
-  assert.equal(preferenceFor(state, "photos").view, "list");
+  assert.equal(preferenceFor(state, "photos").sort, "kind");
   assert.deepEqual(expandedIn(state, "photos"), []);
   assert.equal(forgetPlace(state, "never-known"), state, "forgetting nothing changes nothing");
 });
@@ -207,7 +219,7 @@ test("the sidebar remembers being closed", () => {
 test("only the newest places are remembered", () => {
   let state: ViewPrefsState = DEFAULT_STATE;
   for (let i = 0; i < 200; i += 1) {
-    state = withPreference(state, `place-${i}`, { view: i % 2 === 0 ? "icons" : "list" });
+    state = withPreference(state, `place-${i}`, { sort: i % 2 === 0 ? "size" : "kind" });
   }
   assert.equal(Object.keys(state.places).length, 60);
   assert.equal(state.places["place-0"], undefined, "the oldest place was let go");

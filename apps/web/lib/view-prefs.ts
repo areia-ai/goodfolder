@@ -19,8 +19,17 @@ export type ViewMode = "icons" | "list" | "columns" | "gallery";
 
 export const VIEW_MODES: readonly ViewMode[] = ["icons", "list", "columns", "gallery"];
 
+/**
+ * How one place is shown — everything except which view it is in.
+ *
+ * The view deliberately belongs to the window, not to the place. Remembering
+ * it per folder is what Finder does, and it is the thing about Finder people
+ * complain about: clicking a file that happens to live one level up flips the
+ * whole window into a different view for no reason the person can see. Sorting
+ * a folder of photographs by date and having that stick is useful; the view
+ * changing under you is not.
+ */
 export interface ViewPreference {
-  view: ViewMode;
   sort: SortKey;
   direction: SortDirection;
   group: GroupKey;
@@ -32,6 +41,8 @@ export interface ViewPreference {
 
 export interface ViewPrefsState {
   version: number;
+  /** One view for the whole window, wherever you are in it. */
+  view: ViewMode;
   /** Used wherever a place has no memory of its own. */
   defaults: ViewPreference;
   /**
@@ -59,8 +70,9 @@ export const MAX_ICON_SIZE = 208;
  * List, because it is what Finder, Drive, Dropbox and SharePoint all open
  * with, and because it is the only view that shows every column at once.
  */
+export const DEFAULT_VIEW: ViewMode = "list";
+
 export const DEFAULT_PREFERENCE: ViewPreference = {
-  view: "list",
   sort: "name",
   direction: "asc",
   group: "none",
@@ -70,6 +82,7 @@ export const DEFAULT_PREFERENCE: ViewPreference = {
 
 export const DEFAULT_STATE: ViewPrefsState = {
   version: PREFS_VERSION,
+  view: DEFAULT_VIEW,
   defaults: DEFAULT_PREFERENCE,
   places: {},
   expanded: {},
@@ -116,7 +129,6 @@ const GROUP_KEYS: readonly GroupKey[] = ["none", "kind", "changed"];
 export function normalizePreference(value: unknown, base: ViewPreference = DEFAULT_PREFERENCE): ViewPreference {
   const raw = (value ?? {}) as Partial<ViewPreference>;
   return {
-    view: oneOf(raw.view, VIEW_MODES, base.view),
     sort: oneOf(raw.sort, SORT_KEYS, base.sort),
     direction: oneOf(raw.direction, DIRECTIONS, base.direction),
     group: oneOf(raw.group, GROUP_KEYS, base.group),
@@ -165,6 +177,7 @@ export function migrateState(raw: unknown): ViewPrefsState {
 
   return {
     version: PREFS_VERSION,
+    view: oneOf((raw as { view?: unknown }).view, VIEW_MODES, DEFAULT_VIEW),
     defaults,
     places,
     expanded,
@@ -268,6 +281,11 @@ export function togglePinned(state: ViewPrefsState, folderId: string): ViewPrefs
     ? state.pinned.filter((id) => id !== folderId)
     : [...state.pinned, folderId].slice(-40);
   return { ...state, pinned };
+}
+
+/** Change the window's view. It applies everywhere, immediately. */
+export function withView(state: ViewPrefsState, view: ViewMode): ViewPrefsState {
+  return { ...state, view: oneOf(view, VIEW_MODES, state.view) };
 }
 
 export function withSidebarCollapsed(state: ViewPrefsState, collapsed: boolean): ViewPrefsState {

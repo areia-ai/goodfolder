@@ -6,6 +6,7 @@ import {
   ViewColumnsIcon, ViewGalleryIcon, ViewIconsIcon, ViewListIcon,
 } from "@/components/icons";
 import { Menu, type MenuItem } from "@/components/finder/menu";
+import { MAX_ICON_SIZE, MIN_ICON_SIZE } from "@/lib/view-prefs";
 import type {
   GroupKey, SortDirection, SortKey, ViewMode, ViewPreference,
 } from "@/components/finder/types";
@@ -33,6 +34,8 @@ const GROUPS: Array<{ id: GroupKey; label: string }> = [
 
 export interface ToolbarProps {
   title: string;
+  view: ViewMode;
+  onView: (view: ViewMode) => void;
   preference: ViewPreference;
   onPreference: (patch: Partial<ViewPreference>) => void;
   canGoBack: boolean;
@@ -160,10 +163,10 @@ export function Toolbar(props: ToolbarProps) {
           <button
             key={view.id}
             type="button"
-            aria-pressed={preference.view === view.id}
+            aria-pressed={props.view === view.id}
             aria-label={`${view.label} view`}
             title={`${view.label} (⌘${view.hint})`}
-            onClick={() => onPreference({ view: view.id })}
+            onClick={() => props.onView(view.id)}
           >
             <view.Glyph />
           </button>
@@ -172,6 +175,21 @@ export function Toolbar(props: ToolbarProps) {
       )}
 
       {!props.reading && <Menu label="Sort and group" trigger={<SortIcon />} items={sortItems} />}
+
+      {!props.reading && props.view === "icons" && (
+        <label className="gf-win-size-slider hidden md:flex">
+          <span className="sr-only">Tile size</span>
+          <ViewIconsIcon className="h-3 w-3 text-[var(--gf-ink-faint)]" />
+          <input
+            type="range"
+            min={MIN_ICON_SIZE}
+            max={MAX_ICON_SIZE}
+            step={8}
+            value={preference.iconSize}
+            onChange={(event) => onPreference({ iconSize: Number(event.target.value) })}
+          />
+        </label>
+      )}
 
       {props.folderActions?.canShare && (
         <button
