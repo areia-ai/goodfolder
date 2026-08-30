@@ -1,9 +1,8 @@
 /**
  * GoodFolder shared domain types — v0.
  *
- * Everything here reflects decisions already settled in
- * TECHNICAL_PROPOSAL.md / LOG.md. Git vocabulary never appears in any type
- * that reaches the user-facing surface.
+ * Everything here reflects settled GoodFolder protocol decisions. Git
+ * vocabulary never appears in any type that reaches the user-facing surface.
  */
 
 export const GF_PROTOCOL_VERSION = 1;
@@ -33,8 +32,8 @@ export interface RoutingDecision {
 }
 
 /**
- * First-cut classification lists (open item in LOG.md; tighten from real
- * corpora). ZIP containers (.docx/.xlsx/.pdf) behave like media.
+ * First-cut classification lists; tighten them using real corpora. ZIP
+ * containers (.docx/.xlsx/.pdf) behave like media.
  */
 const INCOMPRESSIBLE_EXTENSIONS = new Set([
   // images

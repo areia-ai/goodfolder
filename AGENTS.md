@@ -89,8 +89,17 @@ and a cleanup plan.
 - Do not deploy, apply a production migration, publish a package, or perform a
   destructive cleanup without action-time authorization.
 - Keep `README.md` and `SELF_HOSTING.md` accurate when behavior changes.
-- Append substantive decisions and shipped work to `LOG.md`; do not rewrite
-  earlier entries.
+
+## Local working records
+
+`LOG.md`, `LOCAL_PRICING_DECISIONS.md`, and
+`LOCAL_HOSTED_PRICING_ACCESS_PLAN.md` are private working files. Git ignores
+them deliberately. Never add them with `--force`, quote their contents in a
+public commit, or publish them elsewhere. A fresh clone may not contain them.
+
+When a local `LOG.md` exists, read it for local context and append substantive
+decisions, completed work, tests, and remaining work. Do not rewrite earlier
+entries. Its absence in a fresh clone is expected and must not block work.
 
 ## End of session
 
@@ -98,5 +107,5 @@ Before handing work back:
 
 1. Run the relevant tests and `pnpm gate`.
 2. Recheck `origin` and the effective author identity.
-3. Append the result, tests, and remaining work to `LOG.md`.
+3. If a local `LOG.md` exists, append the result, tests, and remaining work.
 4. Commit only intended files. Push only when the user authorized it.

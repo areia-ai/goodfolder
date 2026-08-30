@@ -11,6 +11,12 @@ coverage/
 openrouter_key.rtf
 *.rtf
 
+# Private working records. Keep these on Carlos's machine, never in the public
+# repository or its history.
+LOG.md
+LOCAL_PRICING_DECISIONS.md
+LOCAL_HOSTED_PRICING_ACCESS_PLAN.md
+
 # Self-host stack state (docker compose volumes). Never commit these.
 data/
 
