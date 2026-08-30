@@ -266,3 +266,89 @@ test("bounded read tools expose line ranges, table cells, and grid selection", a
     else Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
   }
 });
+
+/** Drive propose_file_change against a stubbed folder listing. */
+async function proposeAgainst(
+  files: Array<Record<string, unknown>>,
+  args: Record<string, unknown>,
+): Promise<any> {
+  const previousDocument = (globalThis as { document?: unknown }).document;
+  const previousWindow = (globalThis as { window?: unknown }).window;
+  const previousFetch = globalThis.fetch;
+  const tools: Array<Record<string, any>> = [];
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { modelContext: { registerTool: async (t: Record<string, unknown>) => tools.push(t) }, body: { dataset: {} } },
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      location: { search: "?folder=qa-folder" },
+      dispatchEvent: () => true,
+      getSelection: () => ({ toString: () => "" }),
+    },
+  });
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/api/projects")) return new Response(JSON.stringify([{ id: "qa-folder", name: "QA" }]));
+    if (url.endsWith("/api/projects/qa-folder/files")) return new Response(JSON.stringify({ role: "owner", head: "h", files }));
+    if (url.endsWith("/api/projects/qa-folder/proposals")) return new Response(JSON.stringify({ ok: true, proposalId: "p1", title: "t", suggestionCount: 1, url: "https://trygoodfolder.com/dashboard" }));
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  try {
+    await registerDashboardTools();
+    return await tools.find((t) => t.name === "propose_file_change")!.execute(args);
+  } finally {
+    await unregisterDashboardTools();
+    globalThis.fetch = previousFetch;
+    if (previousDocument === undefined) delete (globalThis as { document?: unknown }).document;
+    else Object.defineProperty(globalThis, "document", { configurable: true, value: previousDocument });
+    if (previousWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+  }
+}
+
+const textEdit = (document: string) => ({
+  document,
+  operation: "text_replace",
+  originalText: "def old():",
+  replacementText: "def new():",
+  explanation: "Rename the function",
+  title: "Rename",
+});
+
+test("a source file can be proposed against even though it cannot be typed into", async () => {
+  const result = await proposeAgainst(
+    [{ path: "api/server.py", size: 20, sha: "s", editable: false, proposable: true, previewable: true }],
+    textEdit("api/server.py"),
+  );
+  assert.equal(result.error, undefined);
+  assert.equal(result.changedDocument, false);
+  assert.equal(result.reviewRequired, true, "still only the owner can accept it");
+});
+
+test("a file with no readable text is still refused", async () => {
+  const result = await proposeAgainst(
+    [{ path: "photos/cat.png", size: 20, sha: "s", editable: false, proposable: false, previewable: true }],
+    textEdit("photos/cat.png"),
+  );
+  assert.match(String(result.error), /read as text/);
+});
+
+test("an older server that reports no proposable field refuses source files rather than guessing", async () => {
+  // The browser deploys on push and the server does not, so there is a window
+  // where this field is missing. Falling back to `editable` keeps the browser
+  // and the server saying the same thing instead of promising a write the
+  // server would then reject.
+  const result = await proposeAgainst(
+    [{ path: "api/server.py", size: 20, sha: "s", editable: false, previewable: true }],
+    textEdit("api/server.py"),
+  );
+  assert.match(String(result.error), /read as text/);
+
+  const stillFine = await proposeAgainst(
+    [{ path: "notes.md", size: 20, sha: "s", editable: true, previewable: true }],
+    textEdit("notes.md"),
+  );
+  assert.equal(stillFine.error, undefined, "documents keep working against an older server");
+});

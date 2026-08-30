@@ -22,7 +22,10 @@ export interface FolderFile {
   path: string;
   size: number;
   sha: string;
+  /** May be typed into here, in the browser: notes and simple tables. */
   editable: boolean;
+  /** May be the subject of a Change Proposal: anything readable as text. */
+  proposable?: boolean;
   previewable: boolean;
   previewKind?: PreviewKind | null;
 }
@@ -40,6 +43,7 @@ export interface FileContent {
   role: "owner" | "contributor";
   previewable: boolean;
   editable?: boolean;
+  proposable?: boolean;
   content?: string;
   mimeType?: string;
   contentBase64?: string;
@@ -60,6 +64,7 @@ export interface OpenedFile {
   size: number;
   kind: PreviewKind | null;
   editable?: boolean;
+  proposable?: boolean;
   content?: string;
   blob?: Blob | null;
   mimeType?: string | null;
@@ -268,6 +273,7 @@ export async function openFile(
       size: details.size,
       kind: "text",
       editable: details.editable,
+      proposable: details.proposable,
       content: details.content,
       storedForDevice: details.storedForDevice ?? false,
     };

@@ -991,16 +991,26 @@ async function projectAccess(projectId: string, accountId: string): Promise<Proj
   return role === "owner" || role === "contributor" ? role : null;
 }
 
-const EDITABLE_DOCUMENT = /\.(md|markdown|txt|csv|tsv)$/i;
 /**
- * Which files come back as readable text.
+ * What a person may type into directly, here in the browser.
  *
- * This was a third hand-kept copy of the text extension list, and it is the
- * one that actually decides — a type could be listed as text by both copies
- * of `previewKindFor` and still be refused here. Asking `previewKindFor`
- * directly is the same question, answered once.
+ * Deliberately narrower than what can be *proposed* below. A plain text box
+ * is a fine way to fix a sentence or a cell and a poor way to write code —
+ * no highlighting, no indentation, nothing that makes source readable. So
+ * source files are read here and changed by proposal, not by hand.
  */
-function isPreviewableDocument(path: string): boolean {
+const EDITABLE_DOCUMENT = /\.(md|markdown|txt|csv|tsv)$/i;
+
+/**
+ * What can be read as text, and therefore what a Change Proposal can anchor
+ * into. A proposal replaces an exact passage with another, which works the
+ * same on a paragraph and on a function.
+ *
+ * One predicate rather than a list: this used to be a third hand-kept copy of
+ * the text extension list, and it is the one that actually decides, so a type
+ * both copies of `previewKindFor` called text could still be refused here.
+ */
+function isTextDocument(path: string): boolean {
   return previewKindFor(path) === "text";
 }
 
@@ -1061,6 +1071,7 @@ app.get("/api/projects/:id/files", async (c) => {
       size: item.size,
       sha: item.sha,
       editable: EDITABLE_DOCUMENT.test(item.path),
+      proposable: isTextDocument(item.path),
       previewable: previewKindFor(item.path) !== null,
       previewKind: previewKindFor(item.path),
     })),
@@ -1096,13 +1107,13 @@ app.get("/api/projects/:id/file", async (c) => {
   const binaryMime = previewMime(path);
   if (binaryMime) {
     if (file.size > 5_000_000) return c.json({ error: { code: "too-large", message: "This preview is too large for the browser." } }, 413);
-    return c.json({ path, size: file.size, sha: file.sha, role, previewable: true, editable: false, previewKind: kind, mimeType: binaryMime, contentBase64: file.content.toString("base64") });
+    return c.json({ path, size: file.size, sha: file.sha, role, previewable: true, editable: false, proposable: false, previewKind: kind, mimeType: binaryMime, contentBase64: file.content.toString("base64") });
   }
   if (file.size > 1_000_000) return c.json({ error: { code: "too-large", message: "This file is too large to preview here." } }, 413);
-  if (!isPreviewableDocument(path)) {
-    return c.json({ path, size: file.size, sha: file.sha, role, previewable: false, previewKind: null, storedForDevice: false });
+  if (!isTextDocument(path)) {
+    return c.json({ path, size: file.size, sha: file.sha, role, previewable: false, editable: false, proposable: false, previewKind: null, storedForDevice: false });
   }
-  return c.json({ path, size: file.size, sha: file.sha, role, previewable: true, editable: EDITABLE_DOCUMENT.test(path), previewKind: kind, content: file.content.toString("utf8") });
+  return c.json({ path, size: file.size, sha: file.sha, role, previewable: true, editable: EDITABLE_DOCUMENT.test(path), proposable: isTextDocument(path), previewKind: kind, content: file.content.toString("utf8") });
 });
 
 // Raw preview bytes for everything the browser can render itself. Text kinds
@@ -1365,7 +1376,9 @@ app.post("/api/projects/:id/proposals", async (c) => {
     if (!previewKindFor(path)) return c.json({ error: { code: "suggestion", message: "Choose a previewable file for a temporary uploaded replacement." } }, 400);
     return c.json({ error: { code: "unsupported-operation", message: "Binary replacement proposals are not available yet. The file has not changed." } }, 501);
   }
-  if (!EDITABLE_DOCUMENT.test(path)) return c.json({ error: { code: "suggestion", message: "Choose a Markdown, text, CSV, or TSV file." } }, 400);
+  // Proposals reach further than hand-editing: anything readable as text can
+  // be anchored into, source files included. Typing into it here still cannot.
+  if (!isTextDocument(path)) return c.json({ error: { code: "suggestion", message: "Choose a file that can be read as text." } }, 400);
   if (clean.some((item) => item.kind === "table_update" && !/\.(csv|tsv)$/i.test(path))) {
     return c.json({ error: { code: "suggestion", message: "Table updates only apply to CSV and TSV files." } }, 400);
   }

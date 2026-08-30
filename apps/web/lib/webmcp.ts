@@ -425,7 +425,11 @@ async function proposeFileChange(args: ProposeFileChangeArgs): Promise<unknown> 
     const files = await listFiles(folder.id);
     const file = files.files.find((item) => item.path === documentPath);
     if (!file) return { error: "Choose a file from the currently open GoodFolder." };
-    if (operation !== "asset_replace" && !file.editable) return { error: "Choose an editable Markdown, text, CSV, or TSV file." };
+    // A proposal anchors an exact passage, which works on prose and on source
+    // alike — so this is wider than what the browser lets anyone type into.
+    if (operation !== "asset_replace" && !(file.proposable ?? file.editable)) {
+      return { error: "Choose a file that can be read as text." };
+    }
     if (operation === "asset_replace" && !file.previewable) return { error: "Choose a previewable file for a temporary uploaded replacement." };
     if (operation === "text_replace") {
       if (typeof originalText !== "string" || typeof replacementText !== "string" || originalText.length > 20_000 || replacementText.length > 20_000) {
@@ -606,7 +610,7 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
         const folder = await folderFromPage();
         if (!folder) return { error: "Open a folder in the dashboard first." };
         const result = await listFiles(folder.id);
-        return { folder: folder.name, total: result.files.length, files: result.files.map((f) => ({ path: f.path, size: f.size, readableHere: f.previewable, editableHere: f.editable })) };
+        return { folder: folder.name, total: result.files.length, files: result.files.map((f) => ({ path: f.path, size: f.size, readableHere: f.previewable, editableHere: f.editable, proposableHere: f.proposable ?? f.editable })) };
       } catch (e) { return { error: (e as Error).message }; }
     },
   });
@@ -719,7 +723,7 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
 
   await mc.registerTool({
     name: "propose_file_change",
-    description: "Create a reviewable one-file suggestion. Use text_replace for text, table_update for exact CSV/TSV cells, or asset_replace for a staged binary later. This never changes the file; only the folder owner can accept it.",
+    description: "Create a reviewable one-file suggestion. text_replace works on any file readable as text, source files included; table_update takes exact CSV/TSV cells; asset_replace stages a binary for later. This never changes the file; only the folder owner can accept it.",
     inputSchema: objSchema({
       document: { type: "string", description: "Exact file path in the current GoodFolder." },
       operation: { type: "string", enum: ["text_replace", "table_update", "asset_replace"], description: "The kind of reviewable change." },
