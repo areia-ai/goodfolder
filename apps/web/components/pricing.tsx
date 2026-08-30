@@ -93,7 +93,7 @@ export function PricingTiers({ selfHostUrl }: { selfHostUrl: string }) {
               </ul>
               <Link
                 href="/dashboard"
-                className={tier.highlight ? "gf-button-primary mt-7" : "gf-button-secondary mt-7"}
+                className="gf-button-secondary mt-7"
               >
                 {tier.highlight ? <>Start the 7-day trial <ArrowRightIcon /></> : "Start the 7-day trial"}
               </Link>

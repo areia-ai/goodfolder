@@ -497,7 +497,10 @@ img, svg { max-width: 100%; }
 }
 /* Second clause of a two-beat headline, stepped back rather than shrunk.
    Large text, so --gf-ink-faint clears its 3:1 requirement comfortably. */
-.gf-display-xl i { font-style: normal; color: var(--gf-ink-faint); }
+.gf-display-xl i {
+  font-style: normal;
+  color: color-mix(in srgb, var(--gf-blue) 87%, var(--gf-white));
+}
 
 /* Sections are bands, not stacked cards. Tint and ink alternate the rhythm. */
 .gf-band { padding-block: var(--gf-section-y); }

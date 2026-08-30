@@ -83,10 +83,21 @@ test("computeRestorePreview reports nothing-to-do and bad numbers", () => {
 });
 
 test("site tools expose suggestions but never human review powers", () => {
+  const reviewTools = [
+    "propose_file_change",
+    "propose_document_change",
+    "comment_on_change_proposal",
+    "comment_on_document",
+  ];
+  const toolNames = Object.keys(DASHBOARD_TOOL_NAMES);
+
+  assert.equal(toolNames.length, 18);
+  assert.equal(reviewTools.length, 4);
+  assert.equal(toolNames.filter((name) => !reviewTools.includes(name)).length, 14);
   assert.equal(DASHBOARD_TOOL_NAMES.propose_document_change, true);
   assert.equal(DASHBOARD_TOOL_NAMES.comment_on_document, true);
   assert.equal(DASHBOARD_TOOL_NAMES.comment_on_change_proposal, true);
-  const names = Object.keys(DASHBOARD_TOOL_NAMES).join(" ");
+  const names = toolNames.join(" ");
   assert.doesNotMatch(names, /accept|reject|invite|permission|delete|save_document/);
 });
 

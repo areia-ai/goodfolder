@@ -24,6 +24,10 @@ PRODUCT_DIFFERENTIATION.md
 TECHNICAL_PROPOSAL.md
 goodfolder-investor-pitch.md
 brand/
+!apps/web/public/brand/
+apps/web/public/brand/*
+!apps/web/public/brand/mascot/
+!apps/web/public/brand/mascot/*.png
 infra/migration/
 
 # Self-host stack state (docker compose volumes). Never commit these.
