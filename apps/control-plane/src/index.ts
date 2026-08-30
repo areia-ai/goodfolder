@@ -111,72 +111,6 @@ function clientIp(headers: Headers): string {
 }
 
 // ---------------------------------------------------------------------------
-// Waitlist rate limiting — unauthenticated marketing endpoint writing to
-// Postgres. Two windows: per-IP burst cap and a global daily ceiling so even
-// distributed floods bound the damage. In-memory on purpose (single
-// container); restarts reset, which is acceptable for a stopgap.
-//   WAITLIST_DAILY_CAP is env-tunable (default 200) for launch-day spikes.
-// ---------------------------------------------------------------------------
-
-const WAITLIST_PER_IP_PER_HOUR = 5;
-const WAITLIST_DAILY_CAP = Math.max(
-  1,
-  Number(process.env.WAITLIST_DAILY_CAP ?? 200) || 200,
-);
-const HOUR_MS = 3_600_000;
-
-const waitlistPerIp = new Map<string, number[]>();
-let waitlistDayKey = "";
-let waitlistDayCount = 0;
-
-function pruneWaitlistPerIp(now: number): void {
-  if (waitlistPerIp.size < 5000) return;
-  for (const [ip, hits] of waitlistPerIp) {
-    const alive = hits.filter((t) => now - t < HOUR_MS);
-    if (alive.length === 0) waitlistPerIp.delete(ip);
-    else waitlistPerIp.set(ip, alive);
-  }
-}
-
-app.use("/api/waitlist", async (c, next) => {
-  const now = Date.now();
-  const dayKey = new Date(now).toISOString().slice(0, 10);
-  if (dayKey !== waitlistDayKey) {
-    waitlistDayKey = dayKey;
-    waitlistDayCount = 0;
-  }
-
-  if (waitlistDayCount >= WAITLIST_DAILY_CAP) {
-    console.warn(
-      `waitlist limited: scope=daily count=${waitlistDayCount} ip=${clientIp(c.req.raw.headers)}`,
-    );
-    return c.json({ error: "too many requests" }, 429);
-  }
-
-  const ip = clientIp(c.req.raw.headers);
-  const hits = (waitlistPerIp.get(ip) ?? []).filter((t) => now - t < HOUR_MS);
-  if (hits.length >= WAITLIST_PER_IP_PER_HOUR) {
-    console.warn(`waitlist limited: scope=per-ip ip=${ip} count=${hits.length}`);
-    return c.json({ error: "too many requests" }, 429);
-  }
-
-  await next();
-
-  // Count only requests the endpoint actually accepted.
-  if (c.res.status === 200) {
-    hits.push(now);
-    waitlistPerIp.set(ip, hits);
-    waitlistDayCount += 1;
-    pruneWaitlistPerIp(now);
-  }
-});
-
-
-// ---------------------------------------------------------------------------
-// Waitlist — public marketing endpoint. Deliberately above the auth
-// middleware; rate-limited by the middleware registered earlier.
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
 // Magic-link auth + browser pairing (2026-08-25).
 //
 // Two-layer credentials:
@@ -1704,24 +1638,6 @@ app.post("/api/invitations/accept", async (c) => {
   return c.json({ ok: true, projectId: invite.projectId });
 });
 
-
-// ---------------------------------------------------------------------------
-// Waitlist — public marketing endpoint for the landing page. Registered
-// above the bearer middleware on purpose; rate-limited by the middleware
-// near the top of this file.
-// ---------------------------------------------------------------------------
-
-app.post("/api/waitlist", async (c) => {
-  const b = await c.req.json<{ email?: string }>().catch(() => ({}) as { email?: string });
-  const email = b.email?.trim().toLowerCase();
-  if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
-    return c.json({ error: "valid email required" }, 400);
-  }
-  await sql`
-    INSERT INTO waitlist (id, email) VALUES (${crypto.randomUUID()}, ${email})
-    ON CONFLICT (email) DO NOTHING`;
-  return c.json({ ok: true });
-});
 
 // ---------------------------------------------------------------------------
 // Bearer auth middleware for /api/* — resolves EITHER a folder transport

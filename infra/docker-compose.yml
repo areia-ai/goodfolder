@@ -109,7 +109,6 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-GoodFolder <contact@trygoodfolder.com>}
       DEV_API_KEY: ${DEV_API_KEY}
-      WAITLIST_DAILY_CAP: ${WAITLIST_DAILY_CAP:-200}
       BILLING_MODE: ${BILLING_MODE:-disabled}
       BILLING_ENFORCEMENT: ${BILLING_ENFORCEMENT:-observe}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-}
