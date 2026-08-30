@@ -175,6 +175,19 @@ export function DeviceIcon(props: IconProps) {
   return <Icon {...props}><rect x="2.5" y="5" width="14" height="10" rx="1.8" /><path d="M2.5 18.5h11" /><rect x="16.5" y="10.5" width="5" height="9" rx="1.4" /></Icon>;
 }
 
+/* The one exception to the stroke-only rule above. GitHub's mark is a filled
+   logo and redrawing it as strokes would make it unrecognisable, which defeats
+   the point of using it. Still monochrome and still inherits currentColor, so
+   it behaves like the rest on every surface. Do not add more exceptions
+   without the same kind of reason. */
+export function GitHubIcon({ className = "" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.09.68-.22.68-.5l-.01-1.72c-2.78.62-3.37-1.37-3.37-1.37-.45-1.19-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.05 1.53 1.05.89 1.57 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.82c0 .28.18.6.69.5A10.06 10.06 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z" />
+    </svg>
+  );
+}
+
 export function NoteIcon(props: IconProps) {
   return <Icon {...props}><path d="M5 4.5h9.5L19 9v10.5H5z" /><path d="M8.5 9.5h5M8.5 13h6M8.5 16.5h3.5" /></Icon>;
 }

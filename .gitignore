@@ -11,19 +11,25 @@ coverage/
 openrouter_key.rtf
 *.rtf
 
-# Private working records. Keep these on Carlos's machine, never in the public
-# repository or its history.
+# Private working records and internal material. Keep these on Carlos's
+# machine, never in this repository or its history.
 LOG.md
 LOCAL_PRICING_DECISIONS.md
 LOCAL_HOSTED_PRICING_ACCESS_PLAN.md
+AGENTS.local.md
+CLAUDE.md
+BUILD_PLAN.md
+CARLOS_TODO.md
+PRODUCT_DIFFERENTIATION.md
+TECHNICAL_PROPOSAL.md
+goodfolder-investor-pitch.md
+brand/
+infra/migration/
 
 # Self-host stack state (docker compose volumes). Never commit these.
 data/
 
-# Build output. Never commit these: they churn on every build. This repo already
-# tracks apps/web/.next and apps/web/out from before the rule existed; untracking
-# them is a separate job. The rule stops anything NEW being swept in, and keeps
-# the public repository clean, which shares this file.
+# Build output. Never commit these: they churn on every build.
 .next/
 out/
 *.tsbuildinfo

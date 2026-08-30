@@ -12,6 +12,7 @@ import {
   CrossCircleIcon,
   DocumentIcon,
   FolderIcon,
+  GitHubIcon,
   ImageIcon,
   LockIcon,
   NoteIcon,
@@ -19,6 +20,7 @@ import {
   RestoreIcon,
   SaveIcon,
   SheetIcon,
+  ShieldIcon,
   SlidesIcon,
   SparklesIcon,
   SyncIcon,
@@ -26,6 +28,9 @@ import {
   TimelineIcon,
   VideoIcon,
 } from "@/components/icons";
+
+/** The AGPL obliges us to offer this to anyone using the hosted service. */
+const SOURCE_URL = "https://github.com/areia-ai/goodfolder";
 
 const NAV = [
   { href: "#files", label: "Your files" },
@@ -137,7 +142,18 @@ const ONLY_YOU_CAN = [
 ];
 
 /** The facts a serious visitor needs before handing over a real folder. */
-const DETAILS = [
+const DETAILS: {
+  Glyph: (props: { className?: string }) => React.JSX.Element;
+  term: string;
+  body: string;
+  link?: { href: string; label: string };
+}[] = [
+  {
+    Glyph: ShieldIcon,
+    term: "You can read it",
+    body: "GoodFolder is open source, all of it, under the AGPL: the part that touches your files, the dashboard, and the server behind them. You don\u2019t have to take our word for what it does, and if you\u2019d rather run the whole thing yourself, you can.",
+    link: { href: SOURCE_URL, label: "See the code" },
+  },
   {
     Glyph: ComputerIcon,
     term: "What you need",
@@ -225,16 +241,32 @@ export default function Landing() {
             <BrandMark size={36} className="min-[360px]:hidden" title="GoodFolder" />
             <BrandLockup size={36} className="hidden min-[360px]:inline-flex" />
           </Link>
-          <nav aria-label="Sections" className="hidden items-center gap-1 md:flex">
+          {/* Not md: the right side now holds GitHub and Dashboard, so the row
+              needs 172 + 392 + 208 plus gaps and padding, about 860px. 900 is
+              that plus a margin. Re-measure if either label changes. */}
+          <nav aria-label="Sections" className="hidden items-center gap-1 min-[900px]:flex">
             {NAV.map((item) => (
               <a key={item.href} href={item.href} className="gf-button-ghost">
                 {item.label}
               </a>
             ))}
           </nav>
-          <Link href="/dashboard" className="gf-button-secondary">
-            Dashboard
-          </Link>
+          <div className="flex items-center gap-1.5">
+            {/* Ghost, not a button: the page has one primary action and this is
+                not it. No star count either, which would read as a scoreboard
+                rather than an invitation. */}
+            <a
+              href={SOURCE_URL}
+              className="gf-button-ghost hidden sm:inline-flex"
+              aria-label="GoodFolder source code on GitHub"
+            >
+              <GitHubIcon className="h-[17px] w-[17px]" />
+              GitHub
+            </a>
+            <Link href="/dashboard" className="gf-button-secondary">
+              Dashboard
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -260,6 +292,13 @@ export default function Landing() {
               </div>
               <p className="gf-faint mt-6 text-[13px]">
                 A one-time sign-in link by email. No password, and nothing to install to look around.
+              </p>
+              <p className="gf-faint mt-2.5 text-[13px]">
+                Open source, all of it, under the AGPL.{" "}
+                <a href={SOURCE_URL} className="gf-accent underline underline-offset-2">
+                  Read the code
+                </a>{" "}
+                that touches your files, or run the whole thing yourself.
               </p>
             </div>
           </div>
@@ -486,7 +525,11 @@ export default function Landing() {
               <p className="gf-lead mt-5">
                 A browser assistant can read the folder and prepare useful work, but GoodFolder won’t let it accept
                 its own proposal or change who has access. That boundary is in the product, not in a setting you have
-                to remember to switch on.
+                to remember to switch on, and you don’t have to believe us about it:{" "}
+                <a href={SOURCE_URL} className="gf-accent underline underline-offset-2">
+                  the code is public
+                </a>
+                .
               </p>
             </div>
 
@@ -571,13 +614,24 @@ export default function Landing() {
               <h2 className="gf-h2 mt-4">What you need, and where this is today.</h2>
             </div>
             <div className="mt-9 max-w-4xl">
-              {DETAILS.map(({ Glyph, term, body }) => (
+              {DETAILS.map(({ Glyph, term, body, link }) => (
                 <div key={term} className="gf-verb">
                   <h3 className="gf-verb-name">
                     <Glyph />
                     {term}
                   </h3>
-                  <p className="gf-body text-[14.5px]">{body}</p>
+                  <p className="gf-body text-[14.5px]">
+                    {body}
+                    {link && (
+                      <>
+                        {" "}
+                        <a href={link.href} className="gf-accent underline underline-offset-2">
+                          {link.label}
+                        </a>
+                        .
+                      </>
+                    )}
+                  </p>
                 </div>
               ))}
             </div>
@@ -618,7 +672,10 @@ export default function Landing() {
         <div className="gf-wrap flex flex-col items-start justify-between gap-5 py-10 sm:flex-row sm:items-center">
           <BrandLockup size={30} />
           <p className="gf-faint text-[13px]">
-            Your folder, with a history you can read. © {new Date().getFullYear()} GoodFolder
+            <a href={SOURCE_URL} className="underline underline-offset-2 hover:text-black">
+              Source on GitHub
+            </a>{" "}
+            · AGPL-3.0 · © {new Date().getFullYear()} GoodFolder
           </p>
         </div>
       </footer>
