@@ -494,8 +494,8 @@ export default function Landing() {
                 ))}
               </div>
               <p className="gf-faint mt-6 max-w-xl text-[13px] leading-relaxed">
-                These four actions run on the computer that holds the folder. The dashboard shows what happened and
-                tells you which computer to use when an action needs the original files.
+                Sync and Restore happen on the computer that holds the folder. The dashboard shows what happened,
+                and tells you which computer to use when an action needs the original files.
               </p>
             </div>
             <div>

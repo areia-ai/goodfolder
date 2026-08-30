@@ -443,6 +443,128 @@ img, svg { max-width: 100%; }
 .gf-preview-body { padding: 14px; }
 .gf-preview-caption { margin-top: 10px; font-size: 12px; color: var(--gf-ink-faint); }
 
+/* --- Landing: the window, drawn ------------------------------------------ */
+/* The same shape the dashboard actually has — places down the left, a toolbar
+   across the top, a panel about what is selected, a path and a count at the
+   foot. Drawn from the product's own tokens so the two cannot drift apart in
+   look, and kept flat and unfocusable because it is a picture. */
+
+.gf-mock {
+  min-width: 0; overflow: hidden;
+  border: 1px solid var(--gf-line-heavy); border-radius: var(--gf-radius-lg);
+  background: var(--gf-surface);
+  box-shadow: var(--gf-shadow-lg);
+}
+.gf-mock-bar {
+  display: flex; align-items: center; gap: 7px;
+  border-bottom: 1px solid var(--gf-line);
+  background: color-mix(in srgb, var(--gf-white) 94%, var(--gf-blue));
+  padding: 8px 11px;
+}
+.gf-mock-bar svg { height: 13px; width: 13px; flex: none; color: var(--gf-ink-faint); }
+.gf-mock-title { min-width: 0; flex: 1; font-size: 12.5px; font-weight: 700; letter-spacing: -.01em; }
+.gf-mock-views {
+  display: inline-flex; flex: none; gap: 2px;
+  border: 1px solid var(--gf-line-strong); border-radius: var(--gf-radius-sm);
+  background: var(--gf-white); padding: 2px;
+}
+.gf-mock-views span {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 19px; width: 23px; border-radius: 5px;
+}
+.gf-mock-views svg { height: 12px; width: 12px; color: var(--gf-ink-faint); }
+.gf-mock-views .on { background: var(--gf-blue-ink); }
+.gf-mock-views .on svg { color: var(--gf-white); }
+
+.gf-mock-body { display: grid; grid-template-columns: 118px minmax(0, 1fr); }
+.gf-mock-side {
+  display: grid; align-content: start; gap: 1px;
+  border-right: 1px solid var(--gf-line);
+  background: var(--gf-surface-sunken);
+  padding: 8px 6px;
+}
+.gf-mock-place {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid transparent; border-radius: 7px;
+  padding: 4px 6px;
+  font-size: 11px; color: var(--gf-ink-soft);
+}
+.gf-mock-place svg { height: 12px; width: 12px; flex: none; color: var(--gf-blue-ink); }
+.gf-mock-place b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.gf-mock-place.on {
+  background: var(--gf-blue-soft); border-color: var(--gf-blue-line-soft);
+  color: var(--gf-black);
+}
+.gf-mock-place.on b { font-weight: 700; }
+.gf-mock-count {
+  margin-left: auto; flex: none;
+  border-radius: 999px; background: var(--gf-blue-ink); color: var(--gf-white);
+  padding: 0 5px; font-size: 9.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.gf-mock-heading {
+  padding: 8px 6px 3px;
+  font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--gf-ink-faint);
+}
+
+.gf-mock-panel { min-width: 0; padding: 9px 11px 11px; }
+.gf-mock-tabs {
+  display: flex; gap: 12px;
+  border-bottom: 1px solid var(--gf-line);
+  padding-bottom: 6px;
+  font-size: 11px; color: var(--gf-ink-faint);
+}
+.gf-mock-tabs .on {
+  position: relative; color: var(--gf-black); font-weight: 700;
+}
+.gf-mock-tabs .on::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -7px;
+  height: 2px; border-radius: 2px; background: var(--gf-blue-ink);
+}
+.gf-mock-save {
+  border: 1px solid var(--gf-line); border-radius: var(--gf-radius-sm);
+  background: var(--gf-white);
+  padding: 8px 10px;
+  box-shadow: var(--gf-shadow-sm);
+}
+/* Wrapping rather than squeezing: a device name is as long as someone's
+   computer is called, and the name losing to the timestamp reads worse than
+   the timestamp dropping to its own line. */
+.gf-mock-save-head { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; font-size: 11px; }
+.gf-mock-seq {
+  flex: none; border-radius: 999px;
+  border: 1px solid var(--gf-blue-line); background: var(--gf-blue-soft);
+  padding: 0 6px;
+  font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gf-blue-ink);
+}
+.gf-mock-actor { font-weight: 700; color: var(--gf-black); }
+.gf-mock-when { margin-left: auto; flex: none; color: var(--gf-ink-faint); font-size: 10px; }
+.gf-mock-back {
+  flex: none; border-radius: 999px;
+  background: var(--gf-blue-ink); color: var(--gf-white);
+  padding: 0 6px; font-size: 9.5px; font-weight: 700;
+}
+.gf-mock-label { margin-top: 5px; font-size: 12px; font-weight: 500; line-height: 1.35; color: var(--gf-black); }
+.gf-mock-counts {
+  margin-top: 4px; font-size: 10px; color: var(--gf-ink-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gf-mock-foot {
+  display: flex; align-items: center; gap: 6px;
+  border-top: 1px solid var(--gf-line);
+  background: var(--gf-surface-sunken);
+  padding: 5px 11px;
+  font-size: 10px; color: var(--gf-ink-faint);
+}
+.gf-mock-foot svg { height: 9px; width: 9px; flex: none; }
+.gf-mock-foot b { color: var(--gf-ink-soft); font-weight: 650; }
+.gf-mock-foot .now { color: var(--gf-black); font-weight: 700; }
+
+@media (max-width: 420px) {
+  .gf-mock-body { grid-template-columns: minmax(0, 1fr); }
+  .gf-mock-side { display: none; }
+}
+
 /* Real tool names, shown as code without shouting. */
 .gf-tool-chip {
   border: 1px solid var(--gf-blue-line-soft);

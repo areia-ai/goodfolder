@@ -4,6 +4,19 @@
    an API — the content is example content, labelled as such.
 -------------------------------------------------------------------------- */
 
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ChevronRightIcon,
+  ClockIcon,
+  FolderIcon,
+  ProposalIcon,
+  ViewColumnsIcon,
+  ViewGalleryIcon,
+  ViewIconsIcon,
+  ViewListIcon,
+} from "@/components/icons";
+
 function Chrome({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="gf-preview" aria-hidden="true">
@@ -46,28 +59,84 @@ const SAVES = [
   },
 ];
 
+/**
+ * The window, as the dashboard actually draws it.
+ *
+ * This used to be a plain browser frame labelled "Q3 report · Timeline", which
+ * described a destination the dashboard no longer has — the timeline moved
+ * into the panel beside the listing when the dashboard became a file browser.
+ * The shape here now matches the real one: places down the left, a toolbar
+ * with the view switcher, the panel about what is selected, and a path with a
+ * count at the foot.
+ *
+ * One picture carries all four verbs: two Saves, one of them made on another
+ * computer, and a third that went back.
+ */
 export function TimelinePreview() {
   return (
     <figure className="m-0">
-      <Chrome label="Q3 report · Timeline">
-        <ol className="grid gap-2">
-          {SAVES.map((s) => (
-            <li key={s.seq} className="gf-card min-w-0 p-3.5">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="gf-badge gf-badge-quiet gf-num">#{s.seq}</span>
-                <span className="text-[12.5px] font-semibold">{s.actor}</span>
-                {s.restore && <span className="gf-badge gf-badge-open">Went back</span>}
-                <span className="gf-faint ml-auto text-[11.5px]">{s.when}</span>
-              </div>
-              <p className="mt-1.5 text-[13.5px] font-medium leading-snug">{s.label}</p>
-              <p className="gf-faint mt-1.5 truncate text-[11.5px]">
-                {s.counts} · {s.paths}
-              </p>
-            </li>
-          ))}
-        </ol>
-      </Chrome>
-      <figcaption className="gf-preview-caption">Sample timeline. No real files or activity shown.</figcaption>
+      <div className="gf-mock" aria-hidden="true">
+        <div className="gf-mock-bar">
+          <span className="gf-preview-dot" />
+          <span className="gf-preview-dot" />
+          <span className="gf-preview-dot" />
+          <ArrowLeftIcon />
+          <ArrowRightIcon />
+          <span className="gf-mock-title">Q3 Report</span>
+          <span className="gf-mock-views">
+            <span><ViewIconsIcon /></span>
+            <span className="on"><ViewListIcon /></span>
+            <span><ViewColumnsIcon /></span>
+            <span><ViewGalleryIcon /></span>
+          </span>
+        </div>
+
+        <div className="gf-mock-body">
+          <div className="gf-mock-side">
+            <p className="gf-mock-heading">Locations</p>
+            <span className="gf-mock-place"><FolderIcon /><b>All folders</b></span>
+            <p className="gf-mock-heading">Smart</p>
+            <span className="gf-mock-place">
+              <ProposalIcon /><b>Review</b>
+              <span className="gf-mock-count">2</span>
+            </span>
+            <span className="gf-mock-place"><ClockIcon /><b>Recent</b></span>
+            <p className="gf-mock-heading">To hand</p>
+            <span className="gf-mock-place on"><FolderIcon /><b>Q3 Report</b></span>
+          </div>
+
+          <div className="gf-mock-panel">
+            <div className="gf-mock-tabs">
+              <span>Info</span>
+              <span>Review</span>
+              <span className="on">History</span>
+              <span>People</span>
+            </div>
+            <ol className="mt-3.5 grid gap-2">
+              {SAVES.map((s) => (
+                <li key={s.seq} className="gf-mock-save">
+                  <div className="gf-mock-save-head">
+                    <span className="gf-mock-seq">#{s.seq}</span>
+                    <span className="gf-mock-actor">{s.actor}</span>
+                    {s.restore && <span className="gf-mock-back">Went back</span>}
+                    <span className="gf-mock-when">{s.when}</span>
+                  </div>
+                  <p className="gf-mock-label">{s.label}</p>
+                  <p className="gf-mock-counts">{s.counts} · {s.paths}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+
+        <div className="gf-mock-foot">
+          <span>GoodFolder</span>
+          <ChevronRightIcon />
+          <span className="now">Q3 Report</span>
+          <span className="ml-auto"><b>7 items</b> · 4.4 MB</span>
+        </div>
+      </div>
+      <figcaption className="gf-preview-caption">Example content. No real files or activity shown.</figcaption>
     </figure>
   );
 }
