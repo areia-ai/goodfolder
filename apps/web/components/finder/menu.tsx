@@ -28,12 +28,15 @@ export function Menu({
   trigger,
   items,
   align = "right",
+  /** Upwards for a control at the foot of a panel, where down goes off-screen. */
+  direction = "down",
   className = "gf-win-tool",
 }: {
   label: string;
   trigger: ReactNode;
   items: MenuItem[];
   align?: "left" | "right";
+  direction?: "down" | "up";
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -92,7 +95,7 @@ export function Menu({
           id={menuId}
           role="menu"
           aria-label={label}
-          className="gf-menu"
+          className={`gf-menu ${direction === "up" ? "gf-menu-up" : ""}`}
           style={align === "left" ? { right: "auto", left: 0 } : undefined}
         >
           {items.map((item) => (

@@ -10,17 +10,7 @@ import {
   type Folder,
   type OpenedFile,
 } from "@/lib/gf-api";
-import {
-  ImagePreview,
-  AudioPreview,
-  PdfPreview,
-  QuickLookPreview,
-  SheetPreview,
-  SlidesPreview,
-  UnsupportedView,
-  VideoPreview,
-  WordPreview,
-} from "@/components/file-viewers";
+import { FilePreview } from "@/components/file-preview";
 import { DelimitedTableEditor, type DelimitedTableChange } from "@/components/delimited-table-editor";
 import type { TableEdit } from "@/lib/table";
 import { ArrowLeftIcon, ChevronDownIcon, CommentIcon, DownloadIcon } from "@/components/icons";
@@ -700,29 +690,7 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
       ) : (
         <div className={reviewOpen ? "grid xl:grid-cols-[minmax(0,1fr)_320px]" : ""}>
           <div className="min-w-0">
-            {props.file.kind === "image" && props.file.blob ? (
-              <ImagePreview path={props.file.path} blob={props.file.blob} />
-            ) : props.file.kind === "pdf" && props.file.blob ? (
-              <PdfPreview path={props.file.path} blob={props.file.blob} />
-            ) : props.file.kind === "word" && props.file.blob ? (
-              <WordPreview path={props.file.path} blob={props.file.blob} />
-            ) : props.file.kind === "sheet" && props.file.blob ? (
-              <SheetPreview path={props.file.path} blob={props.file.blob} onSelect={setSelection} />
-            ) : props.file.kind === "slides" && props.file.blob ? (
-              <SlidesPreview path={props.file.path} blob={props.file.blob} />
-            ) : props.file.kind === "video" && props.file.blob ? (
-              <VideoPreview path={props.file.path} blob={props.file.blob} />
-            ) : props.file.kind === "audio" && props.file.blob ? (
-              <AudioPreview path={props.file.path} blob={props.file.blob} />
-            ) : props.file.kind === "quicklook" && props.file.blob ? (
-              <QuickLookPreview path={props.file.path} blob={props.file.blob} />
-            ) : props.file.kind === "text" && props.file.content !== undefined ? (
-              <pre className="max-h-[640px] overflow-auto whitespace-pre-wrap break-words p-6 text-[13px] leading-relaxed">
-                {props.file.content}
-              </pre>
-            ) : (
-              <UnsupportedView file={props.file} />
-            )}
+            <FilePreview file={props.file} onSelect={setSelection} />
           </div>
           {reviewPanel(props.file.kind === "sheet" ? "Select a cell before commenting to keep the note attached to that part of the sheet." : "Add a note about this file for the people you work with.")}
         </div>

@@ -1,14 +1,15 @@
 "use client";
 
-import { CloseIcon, DownloadIcon, ProposalIcon } from "@/components/icons";
+import { ClockIcon, CloseIcon, DownloadIcon, ProposalIcon } from "@/components/icons";
 import { Badge } from "@/components/ui";
 import { Timeline } from "@/components/timeline";
 import { ProposalList, PeopleView } from "@/components/folder-panels";
 import { NodeGlyph } from "@/components/finder/node-glyph";
+import { useThumbnail } from "@/components/finder/use-thumbnail";
 import { formatBytes, previewKindLabel } from "@/lib/preview";
 import { directoryName, kindLabel } from "@/lib/vfs";
 import type { FolderData } from "@/components/finder/use-folder-data";
-import type { Folder, VfsNode } from "@/components/finder/types";
+import type { Folder, SaveRow, VfsNode } from "@/components/finder/types";
 import type { NoticeMessage } from "@/components/ui";
 
 export type InspectorTab = "info" | "review" | "history" | "people";
@@ -27,6 +28,52 @@ function whenLine(at: string | null | undefined): string {
   return date.toLocaleString(undefined, {
     day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
   });
+}
+
+/** The picture itself, where there is one small enough to have been read. */
+function Portrait({ node }: { node: VfsNode }) {
+  const { ref, url } = useThumbnail(node, true);
+  return (
+    <div ref={ref as React.Ref<HTMLDivElement>} className="gf-win-portrait">
+      {url ? <img src={url} alt="" /> : <NodeGlyph node={node} />}
+    </div>
+  );
+}
+
+/**
+ * The Saves that touched this file, newest first.
+ *
+ * This is the answer GoodFolder exists to give, and putting it under Get Info
+ * is where a person already looks for "what happened to this".
+ */
+function FileHistory({ path, saves, partial }: { path: string; saves: SaveRow[]; partial: boolean }) {
+  const touched = saves
+    .filter((save) => (save.changedPaths ?? save.topPaths ?? []).includes(path))
+    .slice(0, 5);
+  if (touched.length === 0) {
+    return (
+      <p className="gf-faint mt-3 text-[12px] leading-relaxed">
+        {partial
+          ? "Nothing in the timeline we can see here has changed this file."
+          : "This file has not changed since it was first saved."}
+      </p>
+    );
+  }
+  return (
+    <ol className="mt-2 grid gap-2">
+      {touched.map((save) => (
+        <li key={save.seq} className="rounded-[var(--gf-radius-sm)] border border-[var(--gf-line)] bg-white p-2.5">
+          <p className="gf-faint flex items-center gap-1.5 text-[11px]">
+            <ClockIcon className="h-3 w-3" />
+            <span className="gf-num">#{save.seq}</span>
+            <span>·</span>
+            {whenLine(save.createdAt)}
+          </p>
+          <p className="mt-1 text-[12.5px] leading-snug">{save.label}</p>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 function Fact({ term, children }: { term: string; children: React.ReactNode }) {
@@ -105,7 +152,7 @@ export function Inspector({
             {only ? (
               <>
                 <div className="flex items-start gap-2.5">
-                  <NodeGlyph node={only} />
+                  <Portrait node={only} />
                   <div className="min-w-0">
                     <p className="break-words text-[14px] font-bold">{only.name}</p>
                     <p className="gf-faint text-[12px]">{kindLabel(only)}</p>
@@ -143,6 +190,12 @@ export function Inspector({
                     <DownloadIcon />
                     Download a copy
                   </button>
+                )}
+                {only.kind === "file" && data && (
+                  <div className="mt-4 border-t border-[var(--gf-line)] pt-3">
+                    <h4 className="gf-h3 text-[13px]">What has happened to it</h4>
+                    <FileHistory path={only.path} saves={data.saves} partial={data.changed.partial} />
+                  </div>
                 )}
                 <p className="gf-faint mt-4 border-t border-[var(--gf-line)] pt-3 text-[12px] leading-relaxed">
                   Renaming, moving and deleting happen on the computer where this folder lives. The next Save brings

@@ -390,6 +390,7 @@ img, svg { max-width: 100%; }
   background: var(--gf-white); padding: 5px;
   box-shadow: var(--gf-shadow-lg);
 }
+.gf-menu-up { top: auto; bottom: calc(100% + 4px); }
 .gf-menu-item {
   display: block; width: 100%; min-height: 36px;
   border-radius: 7px; padding: 8px 10px;
@@ -665,6 +666,7 @@ img, svg { max-width: 100%; }
   box-shadow: var(--gf-shadow-lg);
 }
 .gf-win-sidebar {
+  position: relative; z-index: 15;
   display: flex; flex-direction: column; gap: 2px;
   height: 100%; min-height: 0; overflow-y: auto;
   border-right: 1px solid var(--gf-line);
@@ -708,6 +710,10 @@ img, svg { max-width: 100%; }
 /* Toolbar ----------------------------------------------------------------- */
 
 .gf-win-toolbar {
+  /* An explicit place in the stack. The blur below makes this element its own
+     stacking context, so without a z-index its menus are trapped underneath a
+     listing that comes later in the document — including the sticky header. */
+  position: relative; z-index: 20;
   display: flex; align-items: center; gap: 8px; flex: none; flex-wrap: wrap;
   border-bottom: 1px solid var(--gf-line);
   background: color-mix(in srgb, var(--gf-white) 94%, var(--gf-blue));
@@ -790,6 +796,13 @@ img, svg { max-width: 100%; }
   background: var(--gf-surface-sunken);
   padding: 8px 10px;
 }
+.gf-win-portrait {
+  display: grid; place-items: center;
+  height: 52px; width: 52px; flex: none; overflow: hidden;
+  border: 1px solid var(--gf-line); border-radius: var(--gf-radius-sm);
+  background: var(--gf-surface);
+}
+.gf-win-portrait img { height: 100%; width: 100%; object-fit: cover; }
 .gf-win-fact {
   display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 8px;
   padding: 6px 0;
@@ -1005,6 +1018,30 @@ img, svg { max-width: 100%; }
   font-size: 10.5px; line-height: 1.25; color: var(--gf-ink-soft);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* A glance ---------------------------------------------------------------- */
+
+.gf-win-glance-scrim {
+  position: fixed; inset: 0; z-index: 70;
+  display: grid; place-items: center;
+  padding: 3vh 3vw;
+  background: color-mix(in srgb, var(--gf-black) 42%, transparent);
+}
+.gf-win-glance {
+  display: flex; flex-direction: column;
+  width: min(1040px, 100%); max-height: 94vh; min-height: 0;
+  overflow: hidden;
+  border-radius: var(--gf-radius-lg);
+  background: var(--gf-surface);
+  box-shadow: var(--gf-shadow-lg);
+}
+.gf-win-glance-head {
+  display: flex; align-items: center; gap: 4px; flex: none;
+  border-bottom: 1px solid var(--gf-line);
+  background: color-mix(in srgb, var(--gf-white) 94%, var(--gf-blue));
+  padding: 8px 10px;
+}
+.gf-win-glance-body { flex: 1; min-height: 0; overflow: auto; }
 
 /* Path bar and status bar -------------------------------------------------- */
 

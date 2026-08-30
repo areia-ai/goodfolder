@@ -123,6 +123,7 @@ export function Sidebar({
           label={`Account: ${email}`}
           className="gf-win-side-link"
           align="left"
+          direction="up"
           trigger={
             <>
               <span className="gf-win-initial" aria-hidden="true">

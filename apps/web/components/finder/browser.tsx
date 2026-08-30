@@ -5,6 +5,8 @@ import {
   acceptInvitation, getAccountPlan, listFolders, openFile as openFolderFile,
   reviewProposal, type AccountPlan, type ChangeProposal, type Folder, type OpenedFile,
 } from "@/lib/gf-api";
+import { QuickLook } from "@/components/finder/quick-look";
+import { useOpenedFile } from "@/components/finder/use-opened-file";
 import { AlertIcon, FolderIcon, SearchIcon, SparklesIcon } from "@/components/icons";
 import { EmptyState, Notice, Skeleton, done, problem, type NoticeMessage } from "@/components/ui";
 import { DocumentSurface } from "@/components/document-surface";
@@ -52,7 +54,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   const [search, setSearch] = useState("");
   const [sidebarSheet, setSidebarSheet] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("info");
-  const [opened, setOpened] = useState<OpenedFile | null>(null);
+  const [glanceId, setGlanceId] = useState<string | null>(null);
 
   const listing = useRef<HTMLDivElement>(null);
   const typed = useRef({ buffer: "", at: 0 });
@@ -185,32 +187,14 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
 
   /* --------------------------------------------------------- Opening one */
 
-  const openedPath = location.file;
+  const openedFile = useMemo(
+    () => (location.file && data?.status === "ready" ? (data.tree.byPath.get(location.file) ?? null) : null),
+    [location.file, data],
+  );
+  const { opened, error: openError } = useOpenedFile(location.folderId, openedFile);
   useEffect(() => {
-    if (!openedPath || !location.folderId) {
-      setOpened(null);
-      return;
-    }
-    if (!data || data.status !== "ready") return;
-    const file = data.tree.byPath.get(openedPath);
-    if (!file) {
-      setOpened(null);
-      setNotice(problem("That file is not in this folder any more."));
-      return;
-    }
-    let cancelled = false;
-    setOpened(null);
-    openFolderFile(location.folderId, file)
-      .then((result) => {
-        if (!cancelled) setOpened(result);
-      })
-      .catch((error) => {
-        if (!cancelled) setNotice(problem((error as Error).message));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [openedPath, location.folderId, data]);
+    if (openError) setNotice(problem(openError));
+  }, [openError]);
 
   /* ------------------------------------------------------------- Actions */
 
@@ -335,8 +319,27 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     return () => document.removeEventListener("keydown", onKey);
   }, [setPreference]);
 
-  function onListKey(event: React.KeyboardEvent) {
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+  /**
+   * The listing's keys, listened for on the page rather than on one element.
+   *
+   * A file browser is expected to answer the arrow keys after you have
+   * clicked a row, and a clicked row is not a focusable thing. Anywhere a
+   * person is actually typing — a box, a document, the panel over the top —
+   * hands the keys back.
+   */
+  const onListKey = useCallback((event: KeyboardEvent) => {
+    // The target is not always an element — with nothing focused it can be the
+    // document itself, which has no `closest`.
+    const target = event.target instanceof Element ? event.target : null;
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      (target instanceof HTMLElement && target.isContentEditable) ||
+      target?.closest('[role="dialog"], [role="menu"], .gf-win-aside')
+    ) return;
+    // A glance is over the top and owns the keyboard while it is open.
+    if (glanceId) return;
     const modifier = event.metaKey || event.ctrlKey;
 
     if (modifier && event.key.toLowerCase() === "a") {
@@ -370,12 +373,20 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       if (up) go(up);
       return;
     }
+    if (event.key === " ") {
+      const node = ordered.find((entry) => entry.id === selection.cursor);
+      if (!node) return;
+      event.preventDefault();
+      if (node.kind === "file") setGlanceId(node.id);
+      else open(node);
+      return;
+    }
     if (event.key === "Escape") {
       if (search) setSearch("");
       else selection.clear();
       return;
     }
-    if (event.key.length === 1 && !modifier && !event.altKey) {
+    if (event.key.length === 1 && event.key !== " " && !modifier && !event.altKey) {
       // Type-ahead: letters typed quickly build one prefix, as in every file
       // list anyone has used.
       const now = Date.now();
@@ -383,7 +394,12 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       typed.current.at = now;
       selection.typeAhead(typed.current.buffer);
     }
-  }
+  }, [ordered, selection, searching, preference.group, toggleRow, open, location, go, search, glanceId]);
+
+  useEffect(() => {
+    document.addEventListener("keydown", onListKey);
+    return () => document.removeEventListener("keydown", onListKey);
+  }, [onListKey]);
 
   /* ---------------------------------------------------------- Assembling */
 
@@ -404,6 +420,24 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
         ? "Some dates are older than the timeline reaches"
         : null
     : null;
+
+  const glance = useMemo<VfsNode | null>(
+    () => (glanceId ? (ordered.find((node) => node.id === glanceId) ?? null) : null),
+    [glanceId, ordered],
+  );
+
+  const stepGlance = useCallback(
+    (delta: number) => {
+      const files = ordered.filter((node) => node.kind === "file");
+      if (files.length === 0) return;
+      const at = files.findIndex((node) => node.id === glanceId);
+      const next = files[(at + delta + files.length) % files.length];
+      if (!next) return;
+      setGlanceId(next.id);
+      selection.selectOnly(next.id);
+    },
+    [ordered, glanceId, selection],
+  );
 
   const fileSurface = (
     <FileSurface
@@ -513,7 +547,6 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             ref={listing}
             className={`gf-win-listing ${inlineDetail && !notice ? "gf-win-listing-fill" : ""}`}
             tabIndex={-1}
-            onKeyDown={onListKey}
             onClick={(event) => {
               if (event.target === event.currentTarget) selection.clear();
             }}
@@ -587,6 +620,20 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             </>
           )}
         </div>
+
+        {glance && glance.kind === "file" && location.folderId && (
+          <QuickLook
+            node={glance}
+            folderId={location.folderId}
+            onClose={() => setGlanceId(null)}
+            onStep={stepGlance}
+            onOpen={(node) => {
+              setGlanceId(null);
+              open(node);
+            }}
+            onDownload={(node) => void download(node)}
+          />
+        )}
 
         <div className="gf-win-foot">
           <PathBar crumbs={crumbs} onGo={go} />
