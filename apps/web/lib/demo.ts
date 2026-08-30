@@ -274,6 +274,23 @@ function makeFolders(): DemoFolder[] {
       people: [{ email: "carlos@trygoodfolder.com", role: "owner" }],
     },
     {
+      // A folder big enough to be worth measuring against: the transport caps
+      // one answer at a thousand entries, and this sits just under it.
+      folder: {
+        id: "demo-big", name: "Big Project", createdAt: daysAgo(300),
+        lastSeq: 140, lastSaveAt: daysAgo(1), role: "owner",
+        contributorCount: 0, openProposalCount: 0,
+      },
+      files: Array.from({ length: 960 }, (_, index) => {
+        const area = ["src", "src/components", "src/lib", "tests", "docs", "assets"][index % 6]!;
+        const extension = ["ts", "tsx", "md", "json", "css", "png"][index % 6]!;
+        return { path: `${area}/file-${String(index).padStart(4, "0")}.${extension}`, size: 400 + index * 7 };
+      }),
+      saves: [save(140, daysAgo(1), "Reworked the components", ["src/components/file-0001.tsx"])],
+      proposals: [],
+      people: [{ email: "carlos@trygoodfolder.com", role: "owner" }],
+    },
+    {
       folder: {
         id: "demo-recipes", name: "Recipe Book", createdAt: daysAgo(220),
         lastSeq: 0, lastSaveAt: null, role: "contributor",

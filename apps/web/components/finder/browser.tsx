@@ -521,6 +521,14 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     [location.folderId, preference.previewPane, setPreference, open, prefs.pinned, openInspector, download],
   );
 
+  const selectNode = useCallback(
+    (node: VfsNode, modifiers: ClickModifiers) => selection.select(node.id, modifiers),
+    // `select` is stable; the selection object around it is not, and depending
+    // on that would hand every row a fresh callback on every render and undo
+    // the memoisation.
+    [selection.select],
+  );
+
   const onContext = useCallback(
     (node: VfsNode | null, at: { x: number; y: number }) =>
       setContextMenu({ x: at.x, y: at.y, items: contextItemsFor(node) }),
@@ -634,8 +642,9 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
           <div
             id="listing"
             ref={listing}
+            aria-label={location.folderId ? `Inside ${title}` : title}
             className={`gf-win-listing ${inlineDetail && !notice ? "gf-win-listing-fill" : ""}`}
-            tabIndex={-1}
+            tabIndex={0}
             onClick={(event) => {
               if (event.target === event.currentTarget) selection.clear();
             }}
@@ -686,6 +695,8 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
                 onOpen={open}
                 onToggle={toggleRow}
                 onContext={onContext}
+                onSelectNode={selectNode}
+                scroller={listing}
                 everyFolder={everyFolder}
                 tree={data?.tree ?? null}
                 decoration={decoration}
@@ -773,6 +784,8 @@ function Listing(props: {
   onOpen: (node: VfsNode) => void;
   onToggle: (node: VfsNode) => void;
   onContext: (node: VfsNode, at: { x: number; y: number }) => void;
+  onSelectNode: (node: VfsNode, modifiers: ClickModifiers) => void;
+  scroller: React.RefObject<HTMLDivElement | null>;
   everyFolder: VfsNode[];
   tree: TreeIndex | null;
   decoration: Decoration;
@@ -809,7 +822,7 @@ function Listing(props: {
   }
 
   const view = props.view;
-  const select = (node: VfsNode, modifiers: ClickModifiers) => props.selection.select(node.id, modifiers);
+  const select = props.onSelectNode;
 
   // Columns keeps working with nothing in the current directory — its other
   // columns are still the way around. The rest have nothing left to draw.
@@ -885,6 +898,7 @@ function Listing(props: {
       onContext={props.onContext}
       showPath={props.searching}
       datesPartial={props.datesPartial}
+      scroller={props.scroller}
     />
   );
 }

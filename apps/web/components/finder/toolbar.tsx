@@ -5,6 +5,7 @@ import {
   PeopleIcon, PlusIcon, SearchIcon, SidebarIcon, SortIcon, StarIcon, TimelineIcon,
   ViewColumnsIcon, ViewGalleryIcon, ViewIconsIcon, ViewListIcon,
 } from "@/components/icons";
+import { useState } from "react";
 import { Menu, type MenuItem } from "@/components/finder/menu";
 import { MAX_ICON_SIZE, MIN_ICON_SIZE } from "@/lib/view-prefs";
 import type {
@@ -66,6 +67,10 @@ export interface ToolbarProps {
 
 export function Toolbar(props: ToolbarProps) {
   const { preference, onPreference } = props;
+  // On a phone the search box is a whole row of chrome for something used
+  // occasionally, so it waits behind its own glyph until it is wanted.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const showSearch = searchOpen || props.search.length > 0;
 
   const sortItems: MenuItem[] = [
     ...SORTS.map((sort) => ({
@@ -148,7 +153,7 @@ export function Toolbar(props: ToolbarProps) {
         </button>
         <button
           type="button"
-          className="gf-win-tool"
+          className="gf-win-tool gf-win-up"
           aria-label="Up one level"
           disabled={!props.canGoUp}
           onClick={props.onUp}
@@ -233,7 +238,24 @@ export function Toolbar(props: ToolbarProps) {
 
       <Menu label="More actions" trigger={<GearIcon />} items={actionItems} />
 
-      <label className="gf-win-search">
+      {!showSearch && (
+        <button
+          type="button"
+          className="gf-win-tool sm:hidden"
+          aria-label={props.searchLabel}
+          aria-expanded={false}
+          onClick={() => {
+            setSearchOpen(true);
+            window.requestAnimationFrame(() =>
+              document.querySelector<HTMLInputElement>('[data-window-search="true"]')?.focus(),
+            );
+          }}
+        >
+          <SearchIcon />
+        </button>
+      )}
+
+      <label className={`gf-win-search ${showSearch ? "" : "hidden sm:flex"}`}>
         <SearchIcon />
         <span className="sr-only">{props.searchLabel}</span>
         <input
@@ -241,6 +263,9 @@ export function Toolbar(props: ToolbarProps) {
           value={props.search}
           placeholder={props.searchLabel}
           onChange={(event) => props.onSearch(event.target.value)}
+          onBlur={() => {
+            if (!props.search) setSearchOpen(false);
+          }}
           data-window-search="true"
         />
         {props.search && (
