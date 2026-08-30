@@ -19,7 +19,8 @@ apps/mcp            Model Context Protocol server, so agents drive the same verb
 apps/control-plane  accounts, folders, saves, permissions, the transport proxy
 apps/lfs            large-file transfers against S3-compatible storage
 apps/web            landing page and dashboard
-packages/shared     domain types, the routing rule, the case-collision finder
+packages/shared     domain types, the routing rule, the case-collision finder,
+                    the rules for what a save leaves out
 packages/serverlib  database, credentials, object storage, transport adapter
 infra/              schema, migrations, the production compose file
 tools/              the gates CI runs: vocabulary, brand SVG, contrast
@@ -128,12 +129,17 @@ session.
 
 ## Pull requests
 
-Hold off for now. There is no contributor licence agreement yet, and merging
-outside code without one would permanently rule out ever dual-licensing
-GoodFolder, because the project would no longer hold the rights to all of its
-own code. `CONTRIBUTING.md` has the detail. Bugs go in issues, direction and
-questions go in Discussions, and anything that could be used against a running
-instance goes to the address in `SECURITY.md` rather than a public issue.
+Open. Before anything is merged you'll be asked to sign a contributor licence
+agreement: `ICLA.md` for yourself, `CCLA.md` if you're contributing for an
+employer. Opening a pull request triggers a bot that takes the signature as a
+comment, so there's no form and no extra account. Signing isn't a promise to
+merge; each pull request is still read on its own merits. `CONTRIBUTING.md`
+has the reasoning and what the agreement actually says.
+
+Bugs and self-hosting trouble go in issues, which have a form each. Direction,
+questions and anything you built go in Discussions. Anything that could be used
+against a running instance goes to the address in `SECURITY.md` rather than a
+public issue.
 
 ## Before you hand work back
 
