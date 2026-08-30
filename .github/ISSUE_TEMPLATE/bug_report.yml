@@ -1,0 +1,74 @@
+name: Bug
+description: Something behaves differently from how it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, and what GoodFolder did back.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. goodfolder connect ~/notes
+        2. edit a file, goodfolder save
+        3. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      options:
+        - CLI (the goodfolder command)
+        - Dashboard or landing page
+        - MCP server
+        - Control plane / API
+        - Large files
+        - The self-hosted stack coming up
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: env
+    attributes:
+      label: Where you hit it
+      options:
+        - Hosted (trygoodfolder.com)
+        - Self-hosted
+        - Local development checkout
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: "`goodfolder --version`, or the commit you built from."
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.5 / Windows 11 / Ubuntu 24.04
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, if any
+      description: CLI output, or `docker compose logs` for a self-hosted problem. Strip anything secret first.
+      render: shell

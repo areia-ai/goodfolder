@@ -1,0 +1,24 @@
+name: Idea or direction
+description: Something GoodFolder should do, or an argument about where it is headed
+labels: [idea]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are running into. The situation, not the fix.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you think should change
+    validations:
+      required: true
+
+  - type: textarea
+    id: who
+    attributes:
+      label: Who else this affects
+      description: Just you, one kind of user, or everyone.

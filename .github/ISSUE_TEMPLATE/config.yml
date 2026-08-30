@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security problem
+    url: https://github.com/areia-ai/goodfolder/blob/main/SECURITY.md
+    about: Anything that could be turned against a running instance. Email it, do not open a public issue.
+  - name: Self-hosting reference
+    url: https://github.com/areia-ai/goodfolder/blob/main/SELF_HOSTING.md
+    about: Setup, signing in without an email provider, putting it behind a domain.

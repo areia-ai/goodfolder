@@ -1,0 +1,46 @@
+name: Self-hosting help
+description: You are running GoodFolder yourself and something will not work
+labels: [self-hosting]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        SELF_HOSTING.md covers the usual snags first: magic-link sign-in without
+        an email provider, the bound-to-localhost ports, putting it behind a
+        domain. If that did not sort it, fill this in.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What you are trying to do, and where it stops
+    validations:
+      required: true
+
+  - type: textarea
+    id: ps
+    attributes:
+      label: docker compose ps
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs from the service that is failing
+      description: "`docker compose logs goodfolder-api`, or whichever container. Remove keys and passwords."
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup
+      description: Reverse proxy in front? MinIO, or another S3 provider? Email provider configured? Anything unusual about the host.
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Your .env with every secret removed
+      render: shell
