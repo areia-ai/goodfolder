@@ -403,7 +403,7 @@ export default function Landing() {
                 width={1672}
                 height={941}
                 alt="A graphical GoodFolder browser showing a document, spreadsheet, presentation, photo, video, and audio file"
-                className="gf-shot gf-shot-plain"
+                className="gf-shot"
                 sizes="(max-width: 1120px) calc(100vw - 40px), 1000px"
               />
             </figure>
@@ -467,9 +467,6 @@ export default function Landing() {
             </div>
             <div>
               <Shot id="agent-connect" />
-              <p className="gf-shot-caption">
-                The same folder, in the same place, with the same files in it. That is the whole change.
-              </p>
             </div>
           </div>
         </section>

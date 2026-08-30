@@ -531,25 +531,24 @@ img, svg { max-width: 100%; }
 
 /* --- Picture slots -------------------------------------------------------- */
 
+/* No frame. Every picture on the page is a flat illustration that brings its
+   own field of colour, so a border and a shadow were drawing a window around
+   something that is not a window. The placeholder below keeps a border,
+   because there it is the point. */
 .gf-shot {
   display: block;
   width: 100%;
   height: auto;
-  border: 1px solid var(--gf-line-strong);
   border-radius: var(--gf-radius-lg);
-  background: var(--gf-white);
-  box-shadow: var(--gf-shadow-lg);
   object-fit: cover;
 }
-.gf-shot-plain { box-shadow: var(--gf-shadow); }
 /* Until the picture exists the slot holds its exact space and states the
    brief, so the layout is finished before the artwork is. */
 .gf-shot-pending {
   display: grid;
   place-items: center;
   padding: 22px;
-  border-style: dashed;
-  border-color: var(--gf-blue-line);
+  border: 1px dashed var(--gf-blue-line);
   box-shadow: none;
   background:
     repeating-linear-gradient(135deg,
@@ -568,7 +567,6 @@ img, svg { max-width: 100%; }
   color: var(--gf-blue-ink);
 }
 .gf-shot-meta { display: block; margin-top: 10px; font-size: 11.5px; color: var(--gf-ink-faint); }
-.gf-shot-caption { margin-top: 12px; font-size: 12.5px; line-height: 1.5; color: var(--gf-ink-faint); }
 
 /* --- Landing: file kinds -------------------------------------------------- */
 
