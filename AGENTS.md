@@ -57,7 +57,14 @@ tools/              the gates CI runs: vocabulary, brand SVG, contrast
 9. GoodFolder's transport entry is named `goodfolder`, never the default name.
    A folder holding code usually already points somewhere the person chose,
    and taking that name would silently redirect their existing setup at us.
-10. A folder inside the folder that carries its own separate history has its
+10. Exactly one file may name the engine in front of a reader:
+    `apps/web/components/for-engineers.tsx`, a block near the foot of the
+    landing page written for someone evaluating GoodFolder on behalf of
+    colleagues who will never read it. Rule 1's wall protects the *product* —
+    labels, screens, errors, CLI output — and that block is not the product.
+    The vocabulary gate excuses two words in that one file and nothing else;
+    a third word, or a second file, is a positioning decision, not an edit.
+11. A folder inside the folder that carries its own separate history has its
     files taken as ordinary files. The engine's default is a bookmark, which
     saves nothing and restores an empty folder. Those paths go through
     routing and the case gate exactly like any other, and the other tool's

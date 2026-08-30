@@ -6,6 +6,12 @@ When a piece of work is finished, GoodFolder records what changed, who changed
 it, and a version you can return to. Your files stay where they are and keep
 their formats: documents, spreadsheets, decks, PDFs, photos, video, audio.
 
+Source files too, if the folder happens to hold an app. It saves, syncs and
+restores like any other folder, and the packages a project downloads, the
+output its tools rebuild, and anything shaped like a credential stay out of a
+save by default. It is not a replacement for the tools an engineering team
+already uses, and it deploys nothing.
+
 It exists because AI agents now edit real files on real computers, and an
 ordinary folder cannot tell you what one of them did. GoodFolder gives you a
 plain record and a way back.

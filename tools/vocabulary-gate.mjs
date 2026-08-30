@@ -55,6 +55,9 @@ const BANNED = [
 ];
 
 // Accepted exceptions. Every entry needs a human reason, and should name the
+// `terms` it excuses and, where the exception belongs to one surface, the
+// `files` it applies to. Both narrow the hole: an entry with neither is a
+// blanket pass, which is what this list must not quietly become.
 // `terms` it excuses: an exception written for one word used to wave through
 // every other banned word in the same string, which is how "checkpoint" sat
 // in the CLI's own help text under an entry about `clone`. Omitting `terms`
@@ -72,6 +75,19 @@ const ALLOWED = [
   {
     why: "Git-transport boundary errors are answered to git CREDENTIAL FAILURES over /git/* — read by git clients while auth fails, never part of the person-facing journey.",
     matches: (s) => s.includes("token not valid for this project") || s.includes("malformed git path"),
+  },
+  {
+    why:
+      "ONE section of the landing page is addressed to engineers evaluating GoodFolder for colleagues who will never " +
+      "read it: the buyer and the user are different people, and the buyer needs to hear that the engine is the boring, " +
+      "proven one. Hard rule 5 protects the PRODUCT surface — labels, screens, errors, CLI output — from vocabulary a " +
+      "person would have to learn. It is not a ban on telling an engineer what is underneath, in a block written for " +
+      "them, below the fold, that the product itself never shows. Scoped to that one file and those two words on " +
+      "purpose: if a third word or a second file needs excusing, that is a positioning change and it needs a decision, " +
+      "not an edit here.",
+    files: ["apps/web/components/for-engineers.tsx"],
+    terms: ["git", "repository"],
+    matches: () => true,
   },
 ];
 
@@ -229,7 +245,15 @@ for (const file of targetFiles()) {
     for (const m of textNodes) {
       const value = m[1];
       if (!isProse(value)) continue;
-      const hits = findBanned(value);
+      const hits = findBanned(value).filter(
+        (term) =>
+          !ALLOWED.some(
+            (a) =>
+              (!a.files || a.files.includes(rel)) &&
+              (!a.terms || a.terms.includes(term)) &&
+              a.matches(value),
+          ),
+      );
       if (!hits.length) continue;
       const line = src.slice(0, m.index).split("\n").length;
       violations.push({ file: rel, line, terms: hits.join(", "), text: value.trim().replace(/\s+/g, " ").slice(0, 140), note: "JSX/HTML text node" });
@@ -242,7 +266,13 @@ function judge(rel, line, value, into) {
   const hits = findBanned(value);
   if (!hits.length) return;
   const remaining = hits.filter(
-    (term) => !ALLOWED.some((a) => a.matches(value) && (!a.terms || a.terms.includes(term))),
+    (term) =>
+      !ALLOWED.some(
+        (a) =>
+          (!a.files || a.files.includes(rel)) &&
+          (!a.terms || a.terms.includes(term)) &&
+          a.matches(value),
+      ),
   );
   if (remaining.length === 0) return;
   into.push({ file: rel, line, terms: remaining.join(", "), text: value.trim().slice(0, 140) });

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BrandLockup, BrandMark } from "@/components/brand";
 import { Faq, type FaqItem } from "@/components/faq";
+import { ForEngineers } from "@/components/for-engineers";
 import { PricingTiers } from "@/components/pricing";
 import { AgentPreview, TimelinePreview } from "@/components/product-preview";
 import { Shot } from "@/components/shot";
@@ -56,7 +57,15 @@ const GAPS = [
   },
 ];
 
-/** The families the dashboard opens today. Kept in step with lib/preview.ts. */
+/**
+ * The families the dashboard opens today.
+ *
+ * Source files also open now, and are deliberately NOT listed here. This row
+ * sits two screens under an eyebrow that says what GoodFolder is for, and
+ * adding "Code" to it would argue with that line rather than extend it. The
+ * technical block near the foot of the page covers it, for the reader who came
+ * looking. Keep this list in step with lib/preview.ts for the kinds it names.
+ */
 const FILE_KINDS = [
   { Glyph: DocumentIcon, name: "Documents", note: "Word" },
   { Glyph: SheetIcon, name: "Spreadsheets", note: "Excel" },
@@ -213,6 +222,14 @@ const QUESTIONS: FaqItem[] = [
       "Yes, in two places. On your computer, GoodFolder uses the Model Context Protocol, so Codex, Claude Code, and other compatible agents can protect a folder, Save, Sync, and Restore.",
       "The dashboard also gives a browser assistant eighteen WebMCP tools. Fourteen only read; the other four can add a comment or prepare a Change Proposal, but a person still has to accept it.",
       "WebMCP comes from the W3C Web Machine Learning Community Group and is still a draft. If your browser doesn’t support it, the dashboard works normally without those tools.",
+    ],
+  },
+  {
+    question: "Can I keep code in a GoodFolder?",
+    answer: [
+      "Yes. A folder with an app in it saves, syncs and restores like any other, source files open in the browser, and an assistant can send you a Change Proposal for one.",
+      "Some things are left out of a Save on purpose: the packages a project downloads, the output its own tools rebuild, and anything shaped like a password or a key. Nothing you would want to keep is dropped silently, and you can ask for any of it back.",
+      "It is not a replacement for the tools an engineering team already uses, and it does not deploy anything. If you use one of those, keep it. This sits beside it.",
     ],
   },
   {
@@ -660,6 +677,12 @@ export default function Landing() {
             </div>
           </div>
         </section>
+
+        {/* --------------------------------------------------- What it is underneath */}
+        {/* Deliberately this far down, and deliberately the only block that
+            names the engine. The reader here is the person a colleague has to
+            convince, not the person who will use it. See the component. */}
+        <ForEngineers sourceUrl={SOURCE_URL} />
 
         {/* -------------------------------------------------------------------- FAQ */}
         <section id="questions" className="gf-band gf-band-tint scroll-mt-16">

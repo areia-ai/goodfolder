@@ -19,18 +19,18 @@ interface Tier {
 const TIERS: Tier[] = [
   {
     code: "starter", name: "Starter", monthly: 15, annual: 144, includedGb: 25, overageCents: 10,
-    blurb: "For a folder of documents and photos — light history, low churn.",
+    blurb: "For a folder of documents and photos. Light history, low churn.",
     features: ["25 GB of protected data", "Unlimited folders and contributors", "Extra capacity at $0.10 per GB-month"],
   },
   {
     code: "plus", name: "Plus", monthly: 29, annual: 278, includedGb: 100, overageCents: 10,
-    blurb: "The one most people want — room for photos, video, and an active agent.",
+    blurb: "The one most people want. Room for photos, video, and an active agent.",
     features: ["100 GB of protected data", "Unlimited folders and contributors", "Extra capacity at $0.10 per GB-month", "No arbitrary history expiry"],
     highlight: true,
   },
   {
     code: "studio", name: "Studio", monthly: 79, annual: 758, includedGb: 300, overageCents: 8,
-    blurb: "For heavy churn — a lot of generated media, replaced often.",
+    blurb: "For heavy churn. A lot of generated media, replaced often.",
     features: ["300 GB of protected data", "Unlimited folders and contributors", "Extra capacity at $0.08 per GB-month", "Priority support"],
   },
 ];
@@ -53,7 +53,7 @@ export function PricingTiers({ selfHostUrl }: { selfHostUrl: string }) {
                 interval === value ? "bg-[var(--gf-ink)] text-white" : "text-[var(--gf-ink-soft)]"
               }`}
             >
-              {value === "month" ? "Monthly" : "Annual — save 20%"}
+              {value === "month" ? "Monthly" : "Annual, save 20%"}
             </button>
           ))}
         </div>
