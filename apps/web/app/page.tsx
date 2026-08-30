@@ -392,6 +392,11 @@ export default function Landing() {
               ))}
             </ul>
 
+            {/* No caption: the row of file kinds above already names what is
+                in the picture, and saying it twice was the section explaining
+                its own illustration. The read-only reassurance that used to
+                sit under it is an objection, and it is answered where
+                objections are answered — in the questions near the foot. */}
             <figure className="mx-auto mt-10 max-w-5xl">
               <Image
                 src="/shots/file-previews-illustrated.png"
@@ -401,20 +406,7 @@ export default function Landing() {
                 className="gf-shot gf-shot-plain"
                 sizes="(max-width: 1120px) calc(100vw - 40px), 1000px"
               />
-              <figcaption className="gf-shot-caption">
-                Six kinds of file, six real previews — so checking what changed doesn’t mean opening six
-                applications.
-              </figcaption>
             </figure>
-
-            <div className="gf-notice gf-notice-quiet mt-8">
-              <LockIcon />
-              <span>
-                <b>Read here. Keep editing in the usual app.</b> Word, Excel and PowerPoint files stay read-only in
-                the browser, so a preview can’t rewrite the original. Notes, plain text and simple tables can be
-                edited here. Every file can take a comment or a Change Proposal, whatever its format.
-              </span>
-            </div>
           </div>
         </section>
 
