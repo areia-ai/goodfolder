@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  acceptInvitation, getAccountPlan, listFolders, openFile as openFolderFile,
+  acceptInvitation, createFolder, getAccountPlan, listFolders, openFile as openFolderFile,
   reviewProposal, type AccountPlan, type ChangeProposal, type Folder, type OpenedFile,
 } from "@/lib/gf-api";
 import { QuickLook } from "@/components/finder/quick-look";
+import { ContextMenu, type ContextMenuState } from "@/components/finder/context-menu";
+import type { MenuItem } from "@/components/finder/menu";
 import { useOpenedFile } from "@/components/finder/use-opened-file";
 import { AlertIcon, FolderIcon, SearchIcon, SparklesIcon } from "@/components/icons";
 import { EmptyState, Notice, Skeleton, done, problem, type NoticeMessage } from "@/components/ui";
@@ -55,6 +57,8 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   const [sidebarSheet, setSidebarSheet] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("info");
   const [glanceId, setGlanceId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [naming, setNaming] = useState(false);
 
   const listing = useRef<HTMLDivElement>(null);
   const typed = useRef({ buffer: "", at: 0 });
@@ -266,6 +270,26 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     [location.folderId],
   );
 
+  const makeFolder = useCallback(
+    async (name: string) => {
+      const clean = name.replace(/\s+/g, " ").trim().slice(0, 80);
+      if (!clean) return;
+      setNaming(false);
+      try {
+        await createFolder(clean);
+        await loadFolders();
+        setNotice(
+          done(
+            `“${clean}” is ready. On the computer where it should live, run goodfolder clone "${clean}" to bring it down.`,
+          ),
+        );
+      } catch (error) {
+        setNotice(problem((error as Error).message));
+      }
+    },
+    [loadFolders],
+  );
+
   const refresh = useCallback(async () => {
     if (location.folderId) await store.refresh(location.folderId);
     await loadFolders();
@@ -439,6 +463,70 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     [ordered, glanceId, selection],
   );
 
+  /**
+   * What the right mouse button offers.
+   *
+   * Rename, move and delete are named and explained rather than left out.
+   * People will look for them here, and "not there" reads as broken while
+   * "here is where that happens" reads as a rule.
+   */
+  const elsewhere: MenuItem = {
+    id: "elsewhere",
+    label: "Rename, move or delete",
+    disabled: true,
+    dividerBefore: true,
+    note: "On the computer where this folder lives. The next Save brings the change here.",
+  };
+
+  const contextItemsFor = useCallback(
+    (node: VfsNode | null): MenuItem[] => {
+      if (!node) {
+        return [
+          ...(location.folderId
+            ? []
+            : [{ id: "new", label: "New Folder…", onSelect: () => setNaming(true) }]),
+          {
+            id: "panel",
+            label: preference.previewPane ? "Hide the panel" : "Show the panel",
+            onSelect: () => setPreference({ previewPane: !preference.previewPane }),
+          },
+        ];
+      }
+      if (node.kind === "folder") {
+        return [
+          { id: "open", label: "Open", onSelect: () => open(node) },
+          {
+            id: "pin",
+            label: prefs.pinned.includes(node.folderId) ? "Stop keeping this to hand" : "Keep this folder to hand",
+            onSelect: () => setPrefs((current) => togglePinned(current, node.folderId)),
+          },
+          elsewhere,
+        ];
+      }
+      if (node.kind === "directory") {
+        return [
+          { id: "open", label: "Open", onSelect: () => open(node) },
+          { id: "info", label: "Get info", onSelect: () => openInspector("info") },
+          elsewhere,
+        ];
+      }
+      return [
+        { id: "open", label: "Open", onSelect: () => open(node) },
+        { id: "glance", label: "Take a look", onSelect: () => setGlanceId(node.id) },
+        { id: "download", label: "Download a copy", onSelect: () => void download(node) },
+        { id: "info", label: "What has happened to it", onSelect: () => openInspector("info") },
+        elsewhere,
+      ];
+    },
+    [location.folderId, preference.previewPane, setPreference, open, prefs.pinned, openInspector, download],
+  );
+
+  const onContext = useCallback(
+    (node: VfsNode | null, at: { x: number; y: number }) =>
+      setContextMenu({ x: at.x, y: at.y, items: contextItemsFor(node) }),
+    [contextItemsFor],
+  );
+
   const fileSurface = (
     <FileSurface
       opened={opened}
@@ -528,6 +616,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
           onSearch={setSearch}
           searchLabel={location.folderId ? `Search ${folder?.name ?? "this folder"}` : "Search your folders"}
           reading={readingFile}
+          onNewFolder={location.folderId ? undefined : () => setNaming(true)}
           folderActions={
             folder
               ? {
@@ -549,6 +638,12 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             tabIndex={-1}
             onClick={(event) => {
               if (event.target === event.currentTarget) selection.clear();
+            }}
+            onContextMenu={(event) => {
+              if (event.target !== event.currentTarget) return;
+              event.preventDefault();
+              selection.clear();
+              onContext(null, { x: event.clientX, y: event.clientY });
             }}
           >
             {notice && (
@@ -590,6 +685,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
                 datesPartial={Boolean(data?.changed.partial)}
                 onOpen={open}
                 onToggle={toggleRow}
+                onContext={onContext}
                 everyFolder={everyFolder}
                 tree={data?.tree ?? null}
                 decoration={decoration}
@@ -635,6 +731,9 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
           />
         )}
 
+        {contextMenu && <ContextMenu state={contextMenu} onClose={() => setContextMenu(null)} />}
+        {naming && <NameFolder onCancel={() => setNaming(false)} onName={(name) => void makeFolder(name)} />}
+
         <div className="gf-win-foot">
           <PathBar crumbs={crumbs} onGo={go} />
           <StatusBar
@@ -673,6 +772,7 @@ function Listing(props: {
   datesPartial: boolean;
   onOpen: (node: VfsNode) => void;
   onToggle: (node: VfsNode) => void;
+  onContext: (node: VfsNode, at: { x: number; y: number }) => void;
   everyFolder: VfsNode[];
   tree: TreeIndex | null;
   decoration: Decoration;
@@ -782,7 +882,7 @@ function Listing(props: {
       onSelect={select}
       onOpen={props.onOpen}
       onToggle={props.onToggle}
-      onContext={() => {}}
+      onContext={props.onContext}
       showPath={props.searching}
       datesPartial={props.datesPartial}
     />
@@ -871,5 +971,68 @@ function FileSurface({
       onReviewProposal={onReviewProposal}
       onNotice={onNotice}
     />
+  );
+}
+
+/* ------------------------------------------------------------- New folder */
+
+/**
+ * Naming a new GoodFolder.
+ *
+ * The dashboard could never make one before, which made the emptiest possible
+ * first screen — no folders, and nothing to do about it. What comes back from
+ * the server includes a credential for a computer; it is not read here and
+ * never shown. The person is told the one command that brings the folder down
+ * to the machine it should live on.
+ */
+function NameFolder({ onCancel, onName }: { onCancel: () => void; onName: (name: string) => void }) {
+  const [name, setName] = useState("");
+  const field = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    field.current?.focus();
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onCancel();
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [onCancel]);
+
+  return (
+    <div className="gf-win-glance-scrim" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onCancel();
+    }}>
+      <form
+        className="gf-card gf-card-lg w-full max-w-[24rem] p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-label="New folder"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onName(name);
+        }}
+      >
+        <h2 className="text-[17px] font-bold tracking-[-.02em]">New folder</h2>
+        <p className="gf-body mt-1.5 text-[13px]">
+          It is made here, and comes down to a computer when you ask for it there.
+        </p>
+        <label htmlFor="gf-new-folder" className="gf-label mt-4">Name</label>
+        <input
+          id="gf-new-folder"
+          ref={field}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Q3 Report"
+          className="gf-input"
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" className="gf-button-secondary" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="gf-button-primary" disabled={!name.trim()}>Create</button>
+        </div>
+      </form>
+    </div>
   );
 }

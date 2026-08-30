@@ -391,6 +391,7 @@ img, svg { max-width: 100%; }
   box-shadow: var(--gf-shadow-lg);
 }
 .gf-menu-up { top: auto; bottom: calc(100% + 4px); }
+.gf-menu-context { position: fixed; right: auto; z-index: 80; max-width: 268px; }
 .gf-menu-item {
   display: block; width: 100%; min-height: 36px;
   border-radius: 7px; padding: 8px 10px;

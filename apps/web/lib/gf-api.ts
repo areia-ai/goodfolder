@@ -195,6 +195,18 @@ export const me = () => get<{ id: string; email: string }>("/api/me");
 
 export const listFolders = () => get<Folder[]>("/api/projects");
 
+/**
+ * Make a new GoodFolder.
+ *
+ * The server also answers with the credential a computer would use. It is
+ * deliberately not in this type: nothing in the browser needs it, and a value
+ * that cannot be read cannot be put on a screen by accident. Connecting a
+ * computer happens on that computer.
+ */
+export const createFolder = (name: string) =>
+  send<{ projectId: string }>("/api/projects", { name, deviceName: "Made in the browser" })
+    .then((result) => ({ projectId: result.projectId }));
+
 export const listSaves = (folderId: string, full = false) =>
   get<SaveRow[]>(`/api/projects/${folderId}/saves${full ? "?paths=full" : ""}`);
 

@@ -2,7 +2,7 @@
 
 import {
   ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, CloseIcon, GearIcon,
-  PeopleIcon, SearchIcon, SidebarIcon, SortIcon, StarIcon, TimelineIcon,
+  PeopleIcon, PlusIcon, SearchIcon, SidebarIcon, SortIcon, StarIcon, TimelineIcon,
   ViewColumnsIcon, ViewGalleryIcon, ViewIconsIcon, ViewListIcon,
 } from "@/components/icons";
 import { Menu, type MenuItem } from "@/components/finder/menu";
@@ -51,6 +51,8 @@ export interface ToolbarProps {
   searchLabel: string;
   /** True while a file fills the window: the view controls have no listing to act on. */
   reading?: boolean;
+  /** Only at the root, where a new folder is a thing that can be made. */
+  onNewFolder?: () => void;
   /** Folder-only actions; absent at the root. */
   folderActions?: {
     isPinned: boolean;
@@ -220,6 +222,12 @@ export function Toolbar(props: ToolbarProps) {
           onClick={props.folderActions.onTogglePin}
         >
           <StarIcon />
+        </button>
+      )}
+
+      {props.onNewFolder && !props.reading && (
+        <button type="button" className="gf-win-tool" aria-label="New folder" onClick={props.onNewFolder}>
+          <PlusIcon />
         </button>
       )}
 
