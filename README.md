@@ -100,8 +100,8 @@ your own instance freely; do not call it GoodFolder.
 
 ## Contributing
 
-Pull requests are paused until there is a contributor licence agreement;
-[CONTRIBUTING.md](CONTRIBUTING.md) explains why. In the meantime, bugs and
+Pull requests are open; [CONTRIBUTING.md](CONTRIBUTING.md) covers the
+contributor licence agreement you'll be asked to sign along the way. Bugs and
 self-hosting trouble go in issues, everything else goes in
 [Discussions](https://github.com/areia-ai/goodfolder/discussions), and security
 reports go to the address in [SECURITY.md](SECURITY.md). If you are running an

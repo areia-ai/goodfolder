@@ -1,18 +1,10 @@
-<!--
-Pull requests are paused until GoodFolder has a contributor licence agreement.
-See CONTRIBUTING.md for why. Issues and design discussion are open in the
-meantime, and security reports go to the address in SECURITY.md.
-
-If you are the maintainer, or PRs have reopened and this template was not
-updated, carry on.
--->
-
 ## What this changes
 
 ## Why
 
 ## Checklist
 
+- [ ] I've signed the [ICLA](../ICLA.md) (or [CCLA](../CCLA.md) if contributing on behalf of an employer) — a bot will prompt for this automatically
 - [ ] `pnpm gate` passes
 - [ ] `node tools/validate-brand.mjs` and `node tools/check-contrast.mjs` pass (if `apps/web` changed)
 - [ ] Tests near the change run and pass

@@ -4,29 +4,24 @@ Thanks for looking. GoodFolder is open in full — the CLI, the agent server, th
 dashboard, the control plane, the large-file service, and the infrastructure to
 run the lot. The intent is for it to stay that way.
 
-## Pull requests are paused
+## Pull requests are open
 
-Not because outside code isn't wanted. There is no contributor licence
-agreement in place yet, and once one pull request lands without one, GoodFolder
-can never be dual-licensed, because the project would no longer hold the rights
-to all of its own code. Postiz ran into the same wall and solved it with a
-Fiduciary Licence Agreement acting as both an individual and a corporate CLA.
+Merging one without a contributor licence agreement in place would permanently
+close the door on dual-licensing, because the project would no longer hold the
+rights to all of its own code — so before anything gets merged, you'll need to
+sign one. [ICLA.md](ICLA.md) covers individuals, [CCLA.md](CCLA.md) covers
+contributing on behalf of an employer. Both are built on the same
+[ContributorAgreements.org](https://contributoragreements.org/) template
+Postiz used, adapted for GoodFolder. In short: you keep a full right to reuse
+your own contribution; GoodFolder gets the exclusive right to decide how the
+project as a whole is licensed going forward (including, potentially, offering
+it under other terms alongside the AGPL); and your contribution itself is
+guaranteed to always remain available at least under whatever license
+GoodFolder is using on the day you submit it — currently the AGPL-3.0.
 
-A draft agreement now exists — [ICLA.md](ICLA.md) for individuals,
-[CCLA.md](CCLA.md) if you're contributing on behalf of an employer — built on
-the same [ContributorAgreements.org](https://contributoragreements.org/)
-template Postiz used, adapted for GoodFolder. In short: you keep a full right
-to reuse your own contribution; GoodFolder gets the exclusive right to decide
-how the project as a whole is licensed going forward (including, potentially,
-offering it under other terms alongside the AGPL); and your contribution
-itself is guaranteed to always remain available at least under whatever
-license GoodFolder is using on the day you submit it — currently the AGPL-3.0.
-**This draft has not yet had a legal review, so pull requests stay paused
-until it does.** When it's ready, signing will happen automatically the first
-time you open a pull request, via a bot that asks you to confirm in a comment
-— no separate form or account needed.
-
-Until then:
+Opening a pull request triggers a bot that asks you to sign by posting a
+comment — no separate form or account needed. Signing doesn't mean your PR
+gets merged; every pull request is still read and decided on its own merits.
 
 - **Issues** are for bugs and self-hosting trouble. There's a form for each.
 - **Discussions** are for everything else — how a feature should behave, where
@@ -49,7 +44,8 @@ change must not break, and how to run the gates. Read it first.
 `docker compose up -d --build`. For working on the code, `pnpm install` then
 `pnpm gate`.
 
-## When pull requests open
+## About the agreement
 
-This file will change to say so, and there will be a template that walks
-through the licence agreement. Watch the repository if you want to know when.
+ICLA.md and CCLA.md are a first draft, not a document that's had a formal
+legal review. If something in them needs fixing, open a Discussion rather
+than assuming it's settled.
