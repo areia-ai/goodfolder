@@ -366,11 +366,19 @@ export default function Landing() {
         <section id="files" className="gf-band scroll-mt-16">
           <div className="gf-wrap">
             <div className="gf-head">
-              <p className="gf-eyebrow">See it before you trust it with anything</p>
-              <h2 className="gf-h2 mt-4">Open the folder in a browser. The files are just there.</h2>
+              {/* The belief this block has to create is "my kind of work is
+                  handled properly here". Everything a reader has been told so
+                  far — a readable history, a way back, an agent changing files
+                  — describes a thing they have only ever seen built for code,
+                  so the objection forming right here is "that isn't my work".
+                  The answer is the breadth, and the browser view is the
+                  evidence for it rather than the point of it. */}
+              <p className="gf-eyebrow">Most of a real folder isn’t text</p>
+              <h2 className="gf-h2 mt-4">Every kind of file gets the same history. Not just the ones made of words.</h2>
               <p className="gf-lead mt-5">
-                Read the headings and tables in a Word file, look at the formula behind a cell, move through a deck
-                slide by slide, open a photo at full size, play the video, listen to the recording.
+                A Word file, a spreadsheet, a slide deck, a photograph, a video, a voice note — each one keeps its own
+                format, and each one gets the same readable history. Open any of them here when you want to see what
+                an agent did, then carry on in the app you already use.
               </p>
             </div>
 
@@ -394,7 +402,8 @@ export default function Landing() {
                 sizes="(max-width: 1120px) calc(100vw - 40px), 1000px"
               />
               <figcaption className="gf-shot-caption">
-                Documents, spreadsheets, slides, photos, video, and audio all open in the same browser view.
+                Six kinds of file, six real previews — so checking what changed doesn’t mean opening six
+                applications.
               </figcaption>
             </figure>
 
@@ -402,8 +411,8 @@ export default function Landing() {
               <LockIcon />
               <span>
                 <b>Read here. Keep editing in the usual app.</b> Word, Excel and PowerPoint files stay read-only in
-                the browser, so a preview can’t rewrite the original. You can edit notes, plain text, and simple
-                tables here. Every file can receive comments and Change Proposals.
+                the browser, so a preview can’t rewrite the original. Notes, plain text and simple tables can be
+                edited here. Every file can take a comment or a Change Proposal, whatever its format.
               </span>
             </div>
           </div>
