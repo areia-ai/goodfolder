@@ -44,6 +44,24 @@ tools/              the gates CI runs: vocabulary, brand SVG, contrast
    provider, no billing provider, no AI key. Any change to the server keeps
    that true.
 7. Never commit a real `.env`, a key, or a token.
+8. A Save deliberately leaves some things out: downloaded packages, output the
+   project's own tools rebuild, operating-system litter, and files shaped like
+   credentials. The rules are data in `packages/shared`, and the engine does
+   the matching — never re-implement a path matcher, or what a Save omits and
+   what GoodFolder says it omitted will drift apart. When adding a rule, the
+   principle is **when in doubt, protect**: a wrong skip loses someone's work
+   silently, a wrong protect only costs space. Anything whose name could
+   belong to a human-made folder (`dist`, `build`, `out`, `target`) needs
+   evidence on disk before its rule applies. `*.key` is a Keynote deck, not a
+   private key.
+9. GoodFolder's transport entry is named `goodfolder`, never the default name.
+   A folder holding code usually already points somewhere the person chose,
+   and taking that name would silently redirect their existing setup at us.
+10. A folder inside the folder that carries its own separate history has its
+    files taken as ordinary files. The engine's default is a bookmark, which
+    saves nothing and restores an empty folder. Those paths go through
+    routing and the case gate exactly like any other, and the other tool's
+    own history is never touched.
 
 ## Working on it
 
@@ -70,7 +88,9 @@ node --experimental-transform-types --test apps/web/lib/webmcp.test.ts
 ```
 
 Run the ones near what you changed (`apps/control-plane/src/*.test.ts`,
-`apps/web/lib/*.test.ts`, `apps/cli/src/undo.test.ts`). CI runs the webmcp one.
+`apps/web/lib/*.test.ts`, `apps/cli/src/undo.test.ts`, and
+`apps/cli/src/{skip,nested}.test.ts`, which build real folders in a temporary
+directory and clean up after themselves). CI runs the webmcp one.
 `apps/mcp/flow-test.mts` and `test-mcp.mts` hit a live server and create real
 folders and storage rows, so only run them against a server you control, with a
 plan to clean up after.

@@ -30,6 +30,13 @@ const PREVIEW_EXTENSIONS: Record<PreviewKind, ReadonlySet<string>> = {
   text: new Set([
     "md", "markdown", "txt", "json", "csv", "tsv", "html", "css", "js", "jsx", "ts",
     "tsx", "yaml", "yml",
+    // A folder someone is building an app in is still a folder. These read
+    // as plain text like everything else here — shown, never run.
+    "mjs", "cjs", "mts", "cts", "scss", "sass", "less", "vue", "svelte", "astro",
+    "py", "rb", "go", "rs", "java", "kt", "swift", "c", "h", "cpp", "hpp", "cc",
+    "cs", "php", "sh", "bash", "zsh", "fish", "sql", "toml", "ini", "cfg", "conf",
+    "xml", "graphql", "gql", "prisma", "lua", "dart", "ex", "exs", "tf", "proto",
+    "jsonl", "ndjson", "log", "patch", "lock", "gradle", "properties", "editorconfig",
   ]),
   image: new Set([
     "png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "bmp", "ico", "heic",

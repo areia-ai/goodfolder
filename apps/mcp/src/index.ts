@@ -114,7 +114,7 @@ server.tool(
 
 server.tool(
   "goodfolder_save",
-  "Save everything currently in the folder — safe to run anytime, nothing is ever lost. If the caller has seen what changed, pass a short plain-language label describing it (max ~10 words); otherwise one is generated automatically.",
+  "Save the folder's work — safe to run anytime, nothing already protected is ever lost. Downloaded packages, rebuilt output and files that look like they hold passwords or keys are left out by default; the reply names what stayed out. If the caller has seen what changed, pass a short plain-language label describing it (max ~10 words); otherwise one is generated automatically.",
   {
     folder: z.string().describe("Absolute path to the connected folder"),
     label: z

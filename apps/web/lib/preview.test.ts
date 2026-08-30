@@ -42,3 +42,13 @@ test("formatBytes stays honest at every scale", () => {
   assert.equal(formatBytes(3.5 * 1024 * 1024), "3.5 MB");
   assert.equal(formatBytes(-1), "");
 });
+
+test("a folder someone is building an app in reads as text", () => {
+  for (const path of ["api/server.py", "cmd/main.go", "src/lib.rs", "deploy.sh",
+                      "schema.sql", "Cargo.toml", "app/Model.java", "web/App.vue"]) {
+    assert.equal(previewKindFor(path), "text", path);
+  }
+  // Still nothing the browser cannot honestly show.
+  assert.equal(previewKindFor("app.wasm"), null);
+  assert.equal(previewKindFor("Dockerfile"), null); // no extension, as before
+});

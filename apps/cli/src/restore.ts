@@ -2,6 +2,7 @@ import { CliError } from "./cli-error.ts";
 import { requireConnection } from "./connect.ts";
 import { git, gitOk } from "./git.ts";
 import { listSaves, recordSave } from "./api.ts";
+import { GF_REMOTE } from "./repo-setup.ts";
 
 export async function cmdRestore(
   folder: string,
@@ -26,7 +27,7 @@ export async function cmdRestore(
   const haveObjects = gitOk(folder, ["cat-file", "-e", `${target.commit_sha}^{commit}`]);
   if (!haveObjects) {
     console.log("That save lives deeper than this device keeps copies — downloading its contents…");
-    const fetchRes = git(folder, ["fetch", "origin"]);
+    const fetchRes = git(folder, ["fetch", GF_REMOTE]);
     if (fetchRes.code !== 0 || !gitOk(folder, ["cat-file", "-e", `${target.commit_sha}^{commit}`])) {
       throw new CliError("✗ Could not download that save's contents. Check your connection.", 1);
 
@@ -51,7 +52,7 @@ export async function cmdRestore(
     return;
   }
   const sha = git(folder, ["rev-parse", "HEAD"]).stdout.trim();
-  const push = git(folder, ["push", "origin", "main"]);
+  const push = git(folder, ["push", GF_REMOTE, "main"]);
   if (push.code !== 0) {
     throw new CliError("✗ Restored locally but could not upload. Run: goodfolder sync", 1);
 

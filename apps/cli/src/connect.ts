@@ -4,7 +4,7 @@ import {
   loadConfig,
   type FolderConfig,
 } from "./config.ts";
-import { bindRepo } from "./repo-setup.ts";
+import { bindRepo, ensureRemote } from "./repo-setup.ts";
 import { CliError } from "./cli-error.ts";
 import { findGitDir, git, gitOk } from "./git.ts";
 import { ensureAccount, friendlyDeviceName } from "./auth.ts";
@@ -12,20 +12,37 @@ import { createProject } from "./api.ts";
 
 export function requireConnection(folder: string): { gitDir: string; cfg: FolderConfig } {
   const gitDir = findGitDir(folder);
-  if (!gitDir) {
+  const cfg = gitDir ? loadConfig(gitDir) : null;
+  if (!gitDir || !cfg) {
     throw new CliError(
       "✗ This folder isn't connected to GoodFolder yet. Run:\n    goodfolder connect",
     );
 
   }
-  const cfg = loadConfig(gitDir);
-  if (!cfg) {
-    throw new CliError(
-      "✗ This folder already carries history from another tool.\n    GoodFolder connects folders it sets up itself — try a fresh copy.",
-    );
-
-  }
+  // Folders set up before GoodFolder used its own transport name heal here,
+  // on the first command that needs it, rather than failing.
+  ensureRemote(folder, cfg);
   return { gitDir, cfg };
+}
+
+
+/**
+ * Whether this folder sits inside a bigger folder that another tool already
+ * manages. Returns that outer folder, or null.
+ *
+ * This matters because the engine resolves upward: pointed at a folder inside
+ * one it already tracks, it answers with the outer one. Binding that would
+ * protect a folder nobody asked about — someone's whole home directory, in
+ * the worst case — and every save afterwards would carry it.
+ */
+export function enclosingManagedFolder(folder: string): string | null {
+  const prefix = git(folder, ["rev-parse", "--show-prefix"]);
+  if (prefix.code !== 0) return null; // nothing manages this folder at all
+  // An empty prefix means the resolved root IS this folder. Anything else
+  // means the root is somewhere above it.
+  if (prefix.stdout.trim() === "") return null;
+  const root = git(folder, ["rev-parse", "--show-toplevel"]).stdout.trim();
+  return root || null;
 }
 
 export async function cmdConnect(
@@ -35,6 +52,16 @@ export async function cmdConnect(
   if (!existsSync(folder)) {
     throw new CliError(`✗ No such folder: ${folder}`, 1);
 
+  }
+
+  const enclosing = enclosingManagedFolder(folder);
+  if (enclosing !== null) {
+    throw new CliError(
+      `✗ This folder sits inside "${enclosing}", which another tool already looks after.\n` +
+        `    Connecting it here would protect that whole outer folder instead of this one.\n` +
+        `    Connect the outer folder instead, or move this one somewhere of its own.`,
+      1,
+    );
   }
 
   let gitDir = findGitDir(folder);

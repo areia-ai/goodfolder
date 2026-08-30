@@ -10,17 +10,20 @@ import { cmdLog } from "./log.ts";
 import { cmdCreate } from "./create.ts";
 import { cmdClone } from "./clone.ts";
 import { cmdLogin } from "./auth.ts";
+import { cmdProtect, cmdSkipped } from "./protect.ts";
 
 const HELP = `goodfolder — keep your folder safe
 
   goodfolder create <name>        Start a brand-new GoodFolder on this machine
   goodfolder clone <name>         Download an existing GoodFolder to here
   goodfolder connect [folder]     Connect an existing folder (first time)
-  goodfolder save [-m note]       Save a checkpoint of everything in it
+  goodfolder save [-m note]       Save a point you can come back to
   goodfolder sync                 Bring in changes from your other devices
   goodfolder log                  Show the timeline
   goodfolder undo                 Undo the last save (shows what changes first)
   goodfolder restore <number>     Go back to an earlier save
+  goodfolder skipped              Show what isn't being protected, and why
+  goodfolder protect <name>       Protect something that is being left out
   goodfolder login                Approve this computer (one-time setup)
 
 Set GF_API_URL to use a GoodFolder server you run yourself. Folders remember
@@ -63,6 +66,12 @@ async function main() {
       // was dropped and the current directory used instead, so following the
       // documented usage silently connected the wrong folder.
       await cmdConnect(resolve(positional[0] ?? folder), opts(flags));
+      break;
+    case "skipped":
+      cmdSkipped(folder);
+      break;
+    case "protect":
+      cmdProtect(folder, positional);
       break;
     case "login":
       await cmdLogin();

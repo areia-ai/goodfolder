@@ -24,6 +24,16 @@ test("previewKindFor covers the document and image kinds", () => {
   assert.equal(previewKindFor("Plan.numbers"), "quicklook");
 });
 
+test("a folder someone is building an app in reads as text", () => {
+  for (const path of ["api/server.py", "cmd/main.go", "src/lib.rs", "deploy.sh",
+                      "schema.sql", "Cargo.toml", "app/Model.java", "web/App.vue"]) {
+    assert.equal(previewKindFor(path), "text", path);
+  }
+  // Still nothing the browser cannot honestly show.
+  assert.equal(previewKindFor("app.wasm"), null);
+  assert.equal(previewKindFor("Dockerfile"), null); // no extension, as before
+});
+
 test("previewKindFor refuses anything the browser cannot show", () => {
   // legacy office formats
   assert.equal(previewKindFor("old-report.doc"), null);

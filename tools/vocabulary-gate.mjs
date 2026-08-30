@@ -28,6 +28,9 @@ const TARGETS = [
   "apps/web/app",
   "apps/web/components",
   "apps/web/lib",
+  // Shared holds copy too now: the skip-category labels a person reads when a
+  // save tells them what it left out.
+  "packages/shared/src",
 ];
 
 // The wall between the engine and the person. Word-bounded, case-insensitive.
@@ -51,10 +54,15 @@ const BANNED = [
   [/\bversion control\b/i, "version control"],
 ];
 
-// Accepted exceptions. Every entry needs a human reason.
+// Accepted exceptions. Every entry needs a human reason, and should name the
+// `terms` it excuses: an exception written for one word used to wave through
+// every other banned word in the same string, which is how "checkpoint" sat
+// in the CLI's own help text under an entry about `clone`. Omitting `terms`
+// still excuses the whole string, for the two entries that genuinely need it.
 const ALLOWED = [
   {
     why: "The CLI verb itself is still `goodfolder clone`; renaming verbs is a tracked follow-up, not a copy fix.",
+    terms: ["clone"],
     matches: (s) => s.includes("goodfolder clone"),
   },
   {
@@ -233,8 +241,11 @@ function judge(rel, line, value, into) {
   if (!isProse(value)) return;
   const hits = findBanned(value);
   if (!hits.length) return;
-  if (ALLOWED.find((a) => a.matches(value))) return;
-  into.push({ file: rel, line, terms: hits.join(", "), text: value.trim().slice(0, 140) });
+  const remaining = hits.filter(
+    (term) => !ALLOWED.some((a) => a.matches(value) && (!a.terms || a.terms.includes(term))),
+  );
+  if (remaining.length === 0) return;
+  into.push({ file: rel, line, terms: remaining.join(", "), text: value.trim().slice(0, 140) });
 }
 
 if (violations.length > 0) {

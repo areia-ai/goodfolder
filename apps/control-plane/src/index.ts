@@ -992,7 +992,17 @@ async function projectAccess(projectId: string, accountId: string): Promise<Proj
 }
 
 const EDITABLE_DOCUMENT = /\.(md|markdown|txt|csv|tsv)$/i;
-const PREVIEWABLE_DOCUMENT = /\.(md|markdown|txt|json|csv|tsv|html|css|js|jsx|ts|tsx|yaml|yml)$/i;
+/**
+ * Which files come back as readable text.
+ *
+ * This was a third hand-kept copy of the text extension list, and it is the
+ * one that actually decides — a type could be listed as text by both copies
+ * of `previewKindFor` and still be refused here. Asking `previewKindFor`
+ * directly is the same question, answered once.
+ */
+function isPreviewableDocument(path: string): boolean {
+  return previewKindFor(path) === "text";
+}
 
 function previewMime(path: string): string | null {
   const ext = path.split(".").pop()?.toLowerCase();
@@ -1089,7 +1099,7 @@ app.get("/api/projects/:id/file", async (c) => {
     return c.json({ path, size: file.size, sha: file.sha, role, previewable: true, editable: false, previewKind: kind, mimeType: binaryMime, contentBase64: file.content.toString("base64") });
   }
   if (file.size > 1_000_000) return c.json({ error: { code: "too-large", message: "This file is too large to preview here." } }, 413);
-  if (!PREVIEWABLE_DOCUMENT.test(path)) {
+  if (!isPreviewableDocument(path)) {
     return c.json({ path, size: file.size, sha: file.sha, role, previewable: false, previewKind: null, storedForDevice: false });
   }
   return c.json({ path, size: file.size, sha: file.sha, role, previewable: true, editable: EDITABLE_DOCUMENT.test(path), previewKind: kind, content: file.content.toString("utf8") });

@@ -50,10 +50,16 @@ function finishCapture(cap: TempCapture): void {
 }
 
 /** Run a git command in a folder. Never throws; callers decide on failure. */
-export function git(cwd: string, args: string[]): GitResult {
+export function git(cwd: string, args: string[], input?: string): GitResult {
   const cap = tempCapture();
   try {
-    const r = spawnSync("git", args, { cwd, stdio: ["ignore", ...cap.fds] });
+    // Only commands fed on stdin open one; everything else keeps stdin shut,
+    // so a command that decides to prompt fails fast instead of hanging.
+    const r = spawnSync("git", args, {
+      cwd,
+      stdio: [input === undefined ? "ignore" : "pipe", ...cap.fds],
+      ...(input === undefined ? {} : { input }),
+    });
     const stdout = readFileSync(cap.paths[0], "utf8");
     let stderr = readFileSync(cap.paths[1], "utf8");
     if (r.error && !stderr) stderr = String(r.error.message ?? "spawn failed");

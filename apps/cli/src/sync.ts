@@ -2,6 +2,7 @@ import { CliError } from "./cli-error.ts";
 import { requireConnection } from "./connect.ts";
 import { git, gitOk } from "./git.ts";
 import { recordSave } from "./api.ts";
+import { GF_REMOTE } from "./repo-setup.ts";
 
 export async function cmdSync(
   folder: string,
@@ -9,14 +10,14 @@ export async function cmdSync(
 ): Promise<void> {
   const { cfg } = requireConnection(folder);
 
-  const fetchRes = git(folder, ["fetch", "origin"]);
+  const fetchRes = git(folder, ["fetch", GF_REMOTE]);
   if (fetchRes.code !== 0) {
     throw new CliError(`✗ Could not reach GoodFolder: ${fetchRes.stderr.trim()}`, 1);
 
   }
 
-  // A brand-new project has no origin branch yet — nothing to compare.
-  if (!gitOk(folder, ["rev-parse", "-q", "--verify", "origin/main"])) {
+  // A brand-new project has nothing on the server yet — nothing to compare.
+  if (!gitOk(folder, ["rev-parse", "-q", "--verify", `${GF_REMOTE}/main`])) {
     console.log("Everything is already up to date.");
     return;
   }
@@ -24,7 +25,7 @@ export async function cmdSync(
     "rev-list",
     "--left-right",
     "--count",
-    "HEAD...origin/main",
+    `HEAD...${GF_REMOTE}/main`,
   ]);
   const [ahead, behind] = count.stdout.trim().split(/\s+/).map(Number);
   if (ahead === undefined || behind === undefined) {
@@ -40,7 +41,7 @@ export async function cmdSync(
   if (ahead > 0 && behind > 0) {
     // Both sides moved. Merge; conflicts stay in plain language.
     console.log("You and another device both made changes — combining them…");
-    const merge = git(folder, ["merge", "origin/main", "-m", "Sync changes"]);
+    const merge = git(folder, ["merge", `${GF_REMOTE}/main`, "-m", "Sync changes"]);
     if (merge.code !== 0) {
       const conflicted = git(folder, ["diff", "--name-only", "--diff-filter=U"])
         .stdout.split("\n")
@@ -53,7 +54,7 @@ export async function cmdSync(
       );
     }
     const sha = git(folder, ["rev-parse", "HEAD"]).stdout.trim();
-    const push = git(folder, ["push", "origin", "main"]);
+    const push = git(folder, ["push", GF_REMOTE, "main"]);
     if (push.code !== 0) {
       throw new CliError("✗ Combined locally but could not upload. Try again.", 1);
 
@@ -76,7 +77,7 @@ export async function cmdSync(
   }
 
   if (behind > 0) {
-    const ff = git(folder, ["merge", "--ff-only", "origin/main"]);
+    const ff = git(folder, ["merge", "--ff-only", `${GF_REMOTE}/main`]);
     if (ff.code !== 0) {
       throw new CliError("✗ Update failed mid-way — your work is untouched.", 1);
 

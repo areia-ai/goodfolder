@@ -83,6 +83,122 @@ export function routeFile(path: string, sizeBytes: number): RoutingDecision {
 }
 
 // ---------------------------------------------------------------------------
+// What a folder holds that isn't the person's work
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a path is left out of a save. Every category is either something the
+ * person's own tools rebuild in seconds, or something that should never be
+ * handed to a server at all.
+ */
+export type SkipCategory = "installed" | "rebuildable" | "credentials" | "noise";
+
+/** Plain language for each category — this is what a person actually reads. */
+export const SKIP_CATEGORY_LABEL: Record<SkipCategory, string> = {
+  installed: "packages the project downloaded",
+  rebuildable: "files the project's own tools rebuild",
+  credentials: "files that look like they hold passwords or keys",
+  noise: "files the computer writes on its own",
+};
+
+export interface SkipRule {
+  /**
+   * An ignore-file pattern. The engine does the matching — this rule set is
+   * never re-implemented as a path matcher here, so what a save leaves out
+   * and what GoodFolder reports it left out can never disagree.
+   */
+  pattern: string;
+  category: SkipCategory;
+  /**
+   * Applied only when this path exists in the folder. `dist`, `build`, `out`
+   * and `target` are throwaway output in one folder and someone's real work
+   * in another, so evidence on disk decides, never the name alone. A rule
+   * with no `needs` is one whose name is unmistakable on its own.
+   */
+  needs?: string;
+}
+
+/**
+ * The default skip rules, in the order they are written.
+ *
+ * The governing principle when adding to this list: **when in doubt,
+ * protect**. Skipping something by mistake loses a person's work silently;
+ * protecting something by mistake only costs a little space. Anything whose
+ * name could plausibly belong to a human-made folder needs a `needs` clause.
+ */
+export const SKIP_RULES: readonly SkipRule[] = [
+  // Downloaded packages — restored by re-running the project's own installer.
+  { pattern: "node_modules/", category: "installed" },
+  { pattern: "bower_components/", category: "installed" },
+  { pattern: ".pnpm-store/", category: "installed" },
+  { pattern: ".yarn/cache/", category: "installed" },
+  { pattern: ".venv/", category: "installed" },
+  { pattern: "venv/", category: "installed", needs: "venv/pyvenv.cfg" },
+
+  // Build output and tool caches.
+  { pattern: ".next/", category: "rebuildable" },
+  { pattern: ".nuxt/", category: "rebuildable" },
+  { pattern: ".svelte-kit/", category: "rebuildable" },
+  { pattern: ".astro/", category: "rebuildable" },
+  { pattern: ".turbo/", category: "rebuildable" },
+  { pattern: ".parcel-cache/", category: "rebuildable" },
+  { pattern: ".vite/", category: "rebuildable" },
+  { pattern: ".gradle/", category: "rebuildable" },
+  { pattern: ".terraform/", category: "rebuildable" },
+  { pattern: "__pycache__/", category: "rebuildable" },
+  { pattern: "*.pyc", category: "rebuildable" },
+  { pattern: "*.pyo", category: "rebuildable" },
+  { pattern: ".pytest_cache/", category: "rebuildable" },
+  { pattern: ".mypy_cache/", category: "rebuildable" },
+  { pattern: ".ruff_cache/", category: "rebuildable" },
+  { pattern: "dist/", category: "rebuildable", needs: "package.json" },
+  { pattern: "build/", category: "rebuildable", needs: "package.json" },
+  { pattern: "out/", category: "rebuildable", needs: "package.json" },
+  { pattern: "target/", category: "rebuildable", needs: "Cargo.toml" },
+
+  // Credentials. Never `*.key`: that is a Keynote presentation, and dropping
+  // someone's slides to catch a private key would be the worse trade.
+  { pattern: ".env", category: "credentials" },
+  { pattern: ".env.*", category: "credentials" },
+  { pattern: "*.pem", category: "credentials" },
+  { pattern: "id_rsa", category: "credentials" },
+  { pattern: "id_dsa", category: "credentials" },
+  { pattern: "id_ecdsa", category: "credentials" },
+  { pattern: "id_ed25519", category: "credentials" },
+  { pattern: ".npmrc", category: "credentials" },
+
+  // What the operating system leaves behind.
+  { pattern: ".DS_Store", category: "noise" },
+  { pattern: "Thumbs.db", category: "noise" },
+  { pattern: "desktop.ini", category: "noise" },
+  { pattern: "~$*", category: "noise" },
+  { pattern: "npm-debug.log*", category: "noise" },
+  { pattern: "yarn-error.log*", category: "noise" },
+];
+
+/**
+ * Written after every skip pattern, so these win. They match the credential
+ * shapes above but hold no secret — they are the template a person commits
+ * on purpose so the next person knows which values to fill in.
+ */
+export const KEEP_PATTERNS: readonly string[] = [
+  "!.env.example",
+  "!.env.sample",
+  "!.env.template",
+  "!.env.defaults",
+];
+
+/** Pathspecs that find credential-shaped files, for the save-time notice. */
+export const CREDENTIAL_PATHSPECS: readonly string[] = SKIP_RULES.filter(
+  (r) => r.category === "credentials",
+).map((r) => `:(glob)**/${r.pattern}`);
+
+/** Look up which category a pattern belongs to, for explaining a skipped path. */
+export function categoryOfPattern(pattern: string): SkipCategory | null {
+  return SKIP_RULES.find((r) => r.pattern === pattern)?.category ?? null;
+}
+
+// ---------------------------------------------------------------------------
 // Manifest
 // ---------------------------------------------------------------------------
 

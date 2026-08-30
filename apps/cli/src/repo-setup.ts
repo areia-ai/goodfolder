@@ -1,11 +1,23 @@
 import { DEFAULT_API_URL, saveConfig, withCredentials, type FolderConfig } from "./config.ts";
 import { git } from "./git.ts";
 import { configureRepo } from "./perf.ts";
+import { applySkipRules } from "./skip.ts";
 
 /**
- * Bind a folder to its project: remote URL, LFS endpoint, local config.
- * Every entry path (connect/create/clone) funnels through here so the
- * transport wiring can never drift between them.
+ * The name GoodFolder gives its own transport entry.
+ *
+ * It is deliberately not the default name. A folder holding code usually
+ * already has one of these pointing somewhere the person chose, and taking
+ * that name would silently redirect their existing setup at GoodFolder. Using
+ * our own name means both work side by side, and a folder GoodFolder set up
+ * itself leaves the default name free for whatever the person adds later.
+ */
+export const GF_REMOTE = "goodfolder";
+
+/**
+ * Bind a folder to its project: transport entry, large-file endpoint, local
+ * config, and the default list of what a save leaves out. Every entry path
+ * (connect/create/clone) funnels through here so none of it can drift apart.
  */
 export function bindRepo(
   folder: string,
@@ -14,18 +26,42 @@ export function bindRepo(
 ): void {
   const pid = cfg.projectId;
   saveConfig(gitDir, cfg);
-  const remote = `${withCredentials(cfg.apiUrl, cfg.token)}/git/${pid}`;
-  git(folder, ["remote", "remove", "origin"]);
-  git(folder, ["remote", "add", "origin", remote]);
-  // The stock derived LFS endpoint would point at the hidden forge; ours
-  // lives on the public API origin with the same project-scoped token.
+  ensureRemote(folder, cfg);
+  // The stock derived large-file endpoint would point at the hidden forge;
+  // ours lives on the public API origin with the same project-scoped grant.
   git(folder, [
     "config",
     "lfs.url",
     `${withCredentials(cfg.apiUrl, cfg.token)}/lfs/${pid}`,
   ]);
+  applySkipRules(folder, gitDir);
   // Large-folder performance: fsmonitor + untracked cache + index v4.
   configureRepo(folder);
+}
+
+/**
+ * Make sure this folder has GoodFolder's transport entry, and nothing of the
+ * person's is disturbed. Idempotent, and called on every command that needs
+ * the network, so a folder set up before this name existed heals itself on
+ * first use rather than failing.
+ */
+export function ensureRemote(folder: string, cfg: FolderConfig): void {
+  const url = `${withCredentials(cfg.apiUrl, cfg.token)}/git/${cfg.projectId}`;
+  const existing = git(folder, ["remote", "get-url", GF_REMOTE]);
+  if (existing.code === 0) {
+    if (existing.stdout.trim() !== url) {
+      git(folder, ["remote", "set-url", GF_REMOTE, url]);
+    }
+  } else {
+    git(folder, ["remote", "add", GF_REMOTE, url]);
+  }
+  // Folders set up before this name existed carry GoodFolder under the
+  // default name. Retire that entry, but only once it is proven to be ours
+  // for this exact project — anything else belongs to the person.
+  const legacy = git(folder, ["remote", "get-url", "origin"]);
+  if (legacy.code === 0 && legacy.stdout.includes(`/git/${cfg.projectId}`)) {
+    git(folder, ["remote", "remove", "origin"]);
+  }
 }
 
 export { DEFAULT_API_URL };

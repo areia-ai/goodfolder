@@ -4,6 +4,7 @@ import { CliError } from "./cli-error.ts";
 import { requireConnection } from "./connect.ts";
 import { git, gitOk } from "./git.ts";
 import { listSaves, recordSave, type TimelineEntry } from "./api.ts";
+import { GF_REMOTE } from "./repo-setup.ts";
 
 export interface UndoOptions {
   /** Skip the interactive preview and undo the single most recent save. */
@@ -146,7 +147,7 @@ function meaningfulUnsaved(folder: string): string[] {
 function ensureObjects(folder: string, sha: string): void {
   if (gitOk(folder, ["cat-file", "-e", `${sha}^{commit}`])) return;
   console.log("Getting that save's contents…");
-  git(folder, ["fetch", "origin"]);
+  git(folder, ["fetch", GF_REMOTE]);
   if (!gitOk(folder, ["cat-file", "-e", `${sha}^{commit}`])) {
     throw new CliError(
       "✗ Could not download that save's contents. Check your connection.",
@@ -280,7 +281,7 @@ export async function cmdUndo(folder: string, opts: UndoOptions = {}): Promise<v
   }
   const sha = git(folder, ["rev-parse", "HEAD"]).stdout.trim();
 
-  const push = git(folder, ["push", "origin", "main"]);
+  const push = git(folder, ["push", GF_REMOTE, "main"]);
   if (push.code !== 0) {
     if (/non-fast-forward|rejected/i.test(push.stderr)) {
       throw new CliError(

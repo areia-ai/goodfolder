@@ -14,6 +14,9 @@ import { git, gitOk, gitStream, gitAsync, findGitDir } from "./git.ts";
 import { trace, traceSync, renderTrace, snapshotMarks } from "./perf.ts";
 import type { GitResult } from "./git.ts";
 import { preflightSave } from "./api.ts";
+import { GF_REMOTE } from "./repo-setup.ts";
+import { absorbForeignHistories, foreignHistories, pathsInside } from "./nested.ts";
+import { credentialFilesLeftOut, skippedGroups } from "./skip.ts";
 
 interface ChangeSet {
   added: string[];
@@ -65,9 +68,12 @@ async function enforceCaseGate(
   folder: string,
   changes: ChangeSet,
   trackedPromise: Promise<GitResult>,
+  extraPaths: readonly string[] = [],
 ): Promise<void> {
   const tracked = (await trackedPromise).stdout.split("\n").filter(Boolean);
-  const collisions = findCaseCollisions([...new Set([...changes.all, ...tracked])]);
+  const collisions = findCaseCollisions([
+    ...new Set([...changes.all, ...tracked, ...extraPaths]),
+  ]);
   if (collisions.length === 0) return;
   console.error("✗ This save was refused.\n");
   console.error(
@@ -207,6 +213,42 @@ function renderImportProgress(fragment: string): void {
   process.stdout.write(`\r\x1b[2K${line}`);
 }
 
+/**
+ * What a save left behind, said out loud.
+ *
+ * A folder full of downloaded packages and rebuilt output would otherwise
+ * look like it was protected in full, and the person would find out on the
+ * day they needed one of those files back. The first save spells the whole
+ * list out, because that is the moment it is worth reading. Later saves say
+ * one line, and only about files that look like they hold secrets — those
+ * are the ones somebody might genuinely want protected after all.
+ */
+function reportWhatStayedOut(
+  folder: string,
+  alsoProtect: readonly string[],
+  wasImport: boolean,
+): void {
+  if (wasImport) {
+    const groups = skippedGroups(folder, alsoProtect);
+    if (groups.length === 0) return;
+    console.log("  Left out, because your own tools remake them or they hold secrets:");
+    for (const group of groups) {
+      const shown = group.paths.slice(0, 3).join(", ");
+      const rest = group.paths.length - 3;
+      const more = rest > 0 ? `, and ${fmt(rest)} more` : "";
+      console.log(`    • ${group.label}: ${shown}${more}`);
+    }
+    console.log("  To see the whole list, or protect one anyway: goodfolder skipped");
+    return;
+  }
+  const secrets = credentialFilesLeftOut(folder, alsoProtect);
+  if (secrets.length === 0) return;
+  const many = secrets.length === 1 ? "file that looks" : "files that look";
+  console.log(
+    `  ${secrets.length} ${many} like passwords or keys stayed out — goodfolder skipped`,
+  );
+}
+
 export interface SaveOutcome {
   sha: string;
   changedCount: number;
@@ -338,8 +380,53 @@ export async function runSavePipeline(
   });
   void staged;
 
+  // ---- folders carrying another tool's history ---------------------------
+  // Staging records these as a bookmark rather than files. Take the files
+  // instead, so the folder is not empty when it lands on another device.
+  // Reading the index is the whole cost here for the folders that have none
+  // of these, so it stays inside the trace where the budget can see it.
+  let dirsWithForeignHistory: string[] = [];
+  const absorbed = traceSync("nested", () => {
+    dirsWithForeignHistory = foreignHistories(folder);
+    const dirs = dirsWithForeignHistory;
+    if (dirs.length === 0) return [];
+    const inside = pathsInside(folder, dirs);
+    // Routing decides where each file's bytes live, and has to be settled
+    // before they are read — the same ordering the main path depends on.
+    applyRouting(folder, inside);
+    gitOk(folder, ["add", "-A", "--", ".gitattributes"]);
+    return absorbForeignHistories(folder, dirs);
+  });
+  if (absorbed.length > 0) {
+    // The scan saw one entry for the whole folder, because that is all the
+    // engine was willing to look at. Swap that single entry for the real
+    // files, so counts, receipts and the case gate all describe what was
+    // actually saved rather than one line standing in for many.
+    const placeholders = new Set(
+      dirsWithForeignHistory.flatMap((dir) => [dir, `${dir}/`]),
+    );
+    const drop = (list: string[]) => {
+      const kept = list.filter((p) => !placeholders.has(p));
+      list.length = 0;
+      list.push(...kept);
+    };
+    drop(changes.added);
+    drop(changes.modified);
+    drop(changes.all);
+    changes.added.push(...absorbed);
+    changes.all.push(...absorbed);
+  }
+
+  // ---- anything the person asked for despite the defaults ----------------
+  const alsoProtect = cfg.alsoProtect ?? [];
+  if (alsoProtect.length > 0) {
+    gitOk(folder, ["add", "-f", "--", ...alsoProtect]);
+  }
+
   // ---- gates + metadata ---------------------------------------------------
-  await trace("case-gate", () => enforceCaseGate(folder, changes, trackedPromise));
+  await trace("case-gate", () =>
+    enforceCaseGate(folder, changes, trackedPromise, absorbed),
+  );
 
   const ai =
     opts.recorder
@@ -358,7 +445,7 @@ export async function runSavePipeline(
   let pushSkipped = opts.skipPush ?? false;
   if (!pushSkipped) {
     await trace("push", async () => {
-      const push = git(folder, ["push", "origin", "main"]);
+      const push = git(folder, ["push", GF_REMOTE, "main"]);
       if (push.code !== 0) {
         if (/non-fast-forward|rejected/i.test(push.stderr)) {
           throw new CliError("✗ Another device saved first. Run: goodfolder sync");
@@ -415,6 +502,7 @@ export async function runSavePipeline(
   }
   console.log(`  ${label}`);
   if (truncated) console.log("  (large change — the label saw a partial preview)");
+  reportWhatStayedOut(folder, alsoProtect, wasImport);
   const timings: Record<string, number> = {};
   for (const [name, ms] of snapshotMarks()) {
     timings[name] = (timings[name] ?? 0) + ms;

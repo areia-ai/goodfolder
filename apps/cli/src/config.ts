@@ -11,6 +11,13 @@ export interface FolderConfig {
   apiUrl: string;
   token: string;
   connectedAt: string;
+  /**
+   * Paths the person asked GoodFolder to protect even though the default
+   * rules leave them out — set by `goodfolder protect <path>`. Kept here
+   * rather than as an exception in the exclusion list because a file inside
+   * an excluded folder cannot be brought back by an exception alone.
+   */
+  alsoProtect?: string[];
 }
 
 /**
