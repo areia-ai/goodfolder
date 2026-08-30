@@ -10,8 +10,6 @@
 # before merging this file to main.
 #
 # Before enabling for real, also:
-#   - Fill in `allowlist` below with your own GitHub username (and any bots,
-#     e.g. dependabot[bot]) so you don't have to sign your own PRs.
 #   - Confirm `main` isn't a protected branch, or the bot's signature commit
 #     will fail (see the action's README: "branch should not be protected").
 #   - Note: contributor-assistant/github-action was archived (no longer
@@ -47,7 +45,7 @@ jobs:
           # intro comment below) and say so when they sign.
           path-to-document: "https://github.com/areia-ai/goodfolder/blob/main/ICLA.md"
           branch: "main"
-          allowlist: replace-with-your-github-username,dependabot[bot]
+          allowlist: carlosmarcial,dependabot[bot]
           custom-notsigned-prcomment: >
             Thanks for the pull request. Before this can be reviewed, please
             read the [Individual Contributor License Agreement](https://github.com/areia-ai/goodfolder/blob/main/ICLA.md)
