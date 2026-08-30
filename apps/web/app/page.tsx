@@ -321,13 +321,6 @@ export default function Landing() {
                     Open your folders <ArrowRightIcon />
                   </Link>
                 </div>
-                <p className="mt-5 inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-[var(--gf-line)] bg-[var(--gf-surface-sunken)] px-4 py-2 text-[12.5px] lg:justify-start">
-                  <GitHubIcon className="h-4 w-4" />
-                  <span>Open source under the AGPL.</span>
-                  <a href={SOURCE_URL} className="gf-accent font-semibold underline underline-offset-2">
-                    Read every part or run it yourself.
-                  </a>
-                </p>
               </div>
               <MascotPose
                 pose="hero"
