@@ -7,11 +7,24 @@ run the lot. The intent is for it to stay that way.
 ## Pull requests are paused
 
 Not because outside code isn't wanted. There is no contributor licence
-agreement in place, and once one pull request lands without one, GoodFolder can
-never be dual-licensed, because the project would no longer hold the rights to
-all of its own code. Postiz ran into the same wall and solved it with a
-Fiduciary Licence Agreement acting as both an individual and a corporate CLA;
-GoodFolder will settle on something similar before opening pull requests.
+agreement in place yet, and once one pull request lands without one, GoodFolder
+can never be dual-licensed, because the project would no longer hold the rights
+to all of its own code. Postiz ran into the same wall and solved it with a
+Fiduciary Licence Agreement acting as both an individual and a corporate CLA.
+
+A draft agreement now exists — [ICLA.md](ICLA.md) for individuals,
+[CCLA.md](CCLA.md) if you're contributing on behalf of an employer — built on
+the same [ContributorAgreements.org](https://contributoragreements.org/)
+template Postiz used, adapted for GoodFolder. In short: you keep a full right
+to reuse your own contribution; GoodFolder gets the exclusive right to decide
+how the project as a whole is licensed going forward (including, potentially,
+offering it under other terms alongside the AGPL); and your contribution
+itself is guaranteed to always remain available at least under whatever
+license GoodFolder is using on the day you submit it — currently the AGPL-3.0.
+**This draft has not yet had a legal review, so pull requests stay paused
+until it does.** When it's ready, signing will happen automatically the first
+time you open a pull request, via a bot that asks you to confirm in a comment
+— no separate form or account needed.
 
 Until then:
 

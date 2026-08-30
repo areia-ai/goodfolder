@@ -1,0 +1,57 @@
+# Signs contributors up automatically via a PR comment, using
+# contributor-assistant/github-action (a free, no-account-needed CLA bot).
+#
+# NOT ENABLED YET. This file being present in the repo is enough to make it
+# run on the next pull request — there is no separate "on/off" switch beyond
+# whether this file exists on the default branch. CONTRIBUTING.md's "pull
+# requests are paused" note is a social contract, not a technical gate: if
+# someone opens a PR anyway before this is meant to go live, the bot will
+# still ask them to sign. Confirm ICLA.md/CCLA.md have had a legal review
+# before merging this file to main.
+#
+# Before enabling for real, also:
+#   - Fill in `allowlist` below with your own GitHub username (and any bots,
+#     e.g. dependabot[bot]) so you don't have to sign your own PRs.
+#   - Confirm `main` isn't a protected branch, or the bot's signature commit
+#     will fail (see the action's README: "branch should not be protected").
+#   - Note: contributor-assistant/github-action was archived (no longer
+#     actively maintained) as of March 2026. Existing releases still work,
+#     but there won't be future fixes unless someone forks it. Fine for now;
+#     worth revisiting before leaning on it long-term.
+name: "CLA Assistant"
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, closed, synchronize]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  CLAAssistant:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "CLA Assistant"
+        if: (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA') || github.event_name == 'pull_request_target'
+        uses: contributor-assistant/github-action@v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: "signatures/version1/cla.json"
+          # Individuals sign this by default. Someone contributing on behalf
+          # of an employer should read CCLA.md instead (linked from the
+          # intro comment below) and say so when they sign.
+          path-to-document: "https://github.com/areia-ai/goodfolder/blob/main/ICLA.md"
+          branch: "main"
+          allowlist: replace-with-your-github-username,dependabot[bot]
+          custom-notsigned-prcomment: >
+            Thanks for the pull request. Before this can be reviewed, please
+            read the [Individual Contributor License Agreement](https://github.com/areia-ai/goodfolder/blob/main/ICLA.md)
+            (or the [Entity Contributor License Agreement](https://github.com/areia-ai/goodfolder/blob/main/CCLA.md)
+            if you're contributing on behalf of an employer), then sign by
+            posting this exact comment:
+          custom-pr-sign-comment: "I have read the CLA Document and I hereby sign the CLA"
