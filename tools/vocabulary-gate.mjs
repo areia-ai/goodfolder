@@ -64,7 +64,7 @@ const BANNED = [
 // still excuses the whole string, for the two entries that genuinely need it.
 const ALLOWED = [
   {
-    why: "The CLI verb itself is still `goodfolder clone`; renaming verbs is a tracked follow-up, not a copy fix.",
+    why: "`goodfolder clone` keeps its name — decided 2026-08-31, not a pending follow-up. The word reads to the people who use this as the one GitHub already taught them, and it names a real command that has to be typed exactly. It stays excused wherever the literal command is written, including in the dashboard.",
     terms: ["clone"],
     matches: (s) => s.includes("goodfolder clone"),
   },
