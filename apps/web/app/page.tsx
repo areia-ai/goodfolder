@@ -508,18 +508,18 @@ export default function Landing() {
         <section className="gf-band">
           <div className="gf-wrap grid items-center gap-12 lg:grid-cols-[minmax(0,.92fr)_minmax(0,1fr)] lg:gap-16">
             <div>
-              <p className="gf-eyebrow">One folder, every computer</p>
-              <h2 className="gf-h2 mt-4">Pick up where you left off.</h2>
+              <p className="gf-eyebrow">One folder, every agent</p>
+              <h2 className="gf-h2 mt-4">Change agents without starting over.</h2>
               <p className="gf-lead mt-5">
-                Open the folder on your laptop or desktop and you’ll see the same Saves in the same order. If both
-                copies changed, GoodFolder keeps each version, explains the difference, and lets you choose what to
-                keep.
+                An agent remembers nothing about last week. The folder does — every Save in order, with the name of
+                whoever made it. Point the next one at the same folder and it reads what happened before it touches
+                anything.
               </p>
               <ul className="mt-6 grid gap-2.5">
                 {[
-                  "The same Saves, in the same order, on every computer you use",
-                  "No silent overwrite and no strange markers inside your files",
-                  "Keep your version, the other version, or both as clearly named files",
+                  "Codex finishes on your laptop. Tomorrow another agent carries on, already knowing what changed",
+                  "The drafts, the notes and the decisions live in the folder, not inside one agent’s memory",
+                  "Nothing is quietly overwritten, and no strange markers are left inside your files",
                 ].map((line) => (
                   <li key={line} className="flex gap-2.5">
                     <CheckIcon className="gf-check" />
@@ -528,39 +528,43 @@ export default function Landing() {
                 ))}
               </ul>
               <div className="mt-7 rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-[var(--gf-blue-wash)] p-5">
-                <b className="block text-[15px]">Your agents can meet here too.</b>
+                <b className="block text-[15px]">Wherever the agent runs.</b>
                 <p className="gf-body mt-2 text-[14px]">
-                  On a computer that has the folder, Codex, Claude Code, OpenClaw, or Hermes Agent can connect through
-                  MCP and use the same GoodFolder actions. One folder; one readable timeline.
+                  Codex, Claude Code, OpenClaw and Hermes Agent all speak MCP. Each one connects to GoodFolder on a
+                  computer that has the folder, and gets the same actions and the same timeline.
                 </p>
               </div>
-              <p className="gf-faint mt-4 max-w-xl text-[12.5px] leading-relaxed">
-                People you invite stay in the browser, where they can read, comment, and send Change Proposals.
-              </p>
             </div>
             <div>
-              <Shot id="devices" />
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <a
-                  href="https://openclaw.ai/"
-                  className="flex items-center gap-3 rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white p-3.5 transition-transform hover:-translate-y-0.5"
-                >
-                  <Image src="/partners/openclaw.svg" alt="" aria-hidden="true" width={48} height={48} className="h-12 w-12 rounded-[12px]" />
-                  <span>
-                    <b className="block text-[14px]">OpenClaw</b>
-                    <span className="gf-faint text-[12px]">Connect through MCP</span>
+              {/* Agent, folder, agent. The two ends change; the middle is what
+                  makes the handoff possible, so it is the one drawn in blue.
+                  Only marks from a project's own public material are used —
+                  the agents without one get an honest glyph instead. */}
+              <div className="gf-relay">
+                <div className="gf-relay-node">
+                  <span className="gf-relay-mark gf-relay-mark-dark"><TerminalIcon /></span>
+                  <b>Codex</b>
+                  <small>On your laptop</small>
+                </div>
+                <span className="gf-relay-arrow" aria-hidden="true"><ArrowRightIcon /></span>
+                <div className="gf-relay-node gf-relay-hub">
+                  <span className="gf-relay-mark"><BrandMark size={42} title="GoodFolder" /></span>
+                  <b>Q3 Report</b>
+                  <small>24 Saves, in order</small>
+                </div>
+                <span className="gf-relay-arrow" aria-hidden="true"><ArrowRightIcon /></span>
+                <div className="gf-relay-node">
+                  <span className="gf-relay-pair">
+                    <a href="https://openclaw.ai/" aria-label="OpenClaw">
+                      <Image src="/partners/openclaw.svg" alt="" aria-hidden="true" width={42} height={42} />
+                    </a>
+                    <a href="https://hermes-agent.nousresearch.com/" aria-label="Hermes Agent">
+                      <Image src="/partners/hermes-agent.png" alt="" aria-hidden="true" width={42} height={42} />
+                    </a>
                   </span>
-                </a>
-                <a
-                  href="https://hermes-agent.nousresearch.com/"
-                  className="flex items-center gap-3 rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white p-3.5 transition-transform hover:-translate-y-0.5"
-                >
-                  <Image src="/partners/hermes-agent.png" alt="" aria-hidden="true" width={48} height={48} className="h-12 w-12 rounded-[12px]" />
-                  <span>
-                    <b className="block text-[14px]">Hermes Agent</b>
-                    <span className="gf-faint text-[12px]">Connect through MCP</span>
-                  </span>
-                </a>
+                  <b>OpenClaw, Hermes Agent</b>
+                  <small>In the cloud, through MCP</small>
+                </div>
               </div>
             </div>
           </div>
@@ -675,6 +679,10 @@ export default function Landing() {
 
             <p className="gf-notice mt-9 text-[15px] font-semibold">
               A suggestion waits as a Change Proposal. Your folder stays unchanged until you accept it.
+            </p>
+            <p className="gf-faint mt-4 max-w-2xl text-[12.5px] leading-relaxed">
+              People you invite work in the browser. They read, comment and send Change Proposals; the folder itself
+              stays on your own computers.
             </p>
           </div>
         </section>
