@@ -78,12 +78,30 @@ export class HostedBilling {
     if (["trialing", "active", "past_due"].includes(String(current[0]?.status ?? ""))) {
       throw new Error("subscription-active");
     }
+    // The customer is made here rather than left to Checkout. A setup-mode
+    // session opened with only `customer_email` completes with `customer`
+    // still null, and the webhook that finishes the subscription has nothing
+    // to attach the card to — the person pays, sees the success page, and
+    // gets no trial. Reuse the one this account already has if there is one.
+    const known = await this.sql`
+      SELECT provider_customer_id AS "customerId" FROM account_billing
+      WHERE account_id = ${accountId} LIMIT 1`;
+    const customerId = known[0]?.customerId
+      ? String(known[0].customerId)
+      : (await this.stripe.customers.create({
+          email,
+          metadata: { goodfolder_account_id: accountId },
+        })).id;
+
     // Mixed-interval subscriptions (annual flat fee + monthly metered overage)
     // can't be created through Checkout, so Checkout only collects the
     // payment method here; the webhook finishes creating the subscription.
     const session = await this.stripe.checkout.sessions.create({
       mode: "setup",
-      customer_email: email,
+      // Setup mode has no line items to imply one, and Stripe refuses the
+      // session without it. GoodFolder Hosted is priced in USD everywhere.
+      currency: "usd",
+      customer: customerId,
       success_url: this.config.stripe.checkoutSuccessUrl,
       metadata: { goodfolder_account_id: accountId, plan_code: planCode, interval },
     });
@@ -153,17 +171,24 @@ export class HostedBilling {
   private async finishCheckout(session: Stripe.Checkout.Session): Promise<void> {
     if (!this.stripe || !this.config.stripe) return;
     if (session.mode !== "setup") return;
+    // Every reason to stop here is said out loud. Someone has just handed over
+    // a card and been shown a success page; a subscription that quietly never
+    // gets made is the worst way for this to fail.
+    const decline = (why: string) => {
+      console.error(`Stripe checkout ${session.id} completed but no subscription was created: ${why}`);
+    };
     const accountId = session.metadata?.goodfolder_account_id;
     const rawPlanCode = session.metadata?.plan_code;
     const rawInterval = session.metadata?.interval;
-    if (!accountId) return;
-    if (!isPlanCode(rawPlanCode)) return;
-    if (rawInterval !== "month" && rawInterval !== "year") return;
+    if (!accountId) return decline("no account in the session metadata");
+    if (!isPlanCode(rawPlanCode)) return decline(`unknown plan ${String(rawPlanCode)}`);
+    if (rawInterval !== "month" && rawInterval !== "year") return decline(`unknown interval ${String(rawInterval)}`);
     const planCode = rawPlanCode;
     const interval = rawInterval;
     const customerId = String(session.customer ?? "");
     const setupIntentId = String(session.setup_intent ?? "");
-    if (!customerId || !setupIntentId) return;
+    if (!customerId) return decline("the session carries no customer");
+    if (!setupIntentId) return decline("the session carries no setup intent");
     const setupIntent = await this.stripe.setupIntents.retrieve(setupIntentId);
     const paymentMethod = String(setupIntent.payment_method ?? "");
     if (!paymentMethod) return;
