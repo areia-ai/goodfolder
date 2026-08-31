@@ -577,30 +577,21 @@ export default function Landing() {
               <p className="gf-eyebrow">No copy and paste</p>
               <h2 className="gf-h2 mt-4">WebMCP gives your assistant 18 tools for the folder you have open.</h2>
               <p className="gf-lead mt-5">
-                Ask in normal language. Your assistant can read the page you’re signed into, check a Save, or prepare
-                a Change Proposal without asking you to upload the files to chat.
+                Ask in normal language. Nothing is uploaded to a chat — the assistant reads the folder already in
+                front of you.
               </p>
 
-              <ol className="mt-8 grid gap-3 sm:grid-cols-3">
-                {[
-                  ["1", "Open a folder"],
-                  ["2", "Site tools appear"],
-                  ["3", "Ask in normal language"],
-                ].map(([number, label]) => (
-                  <li key={number} className="rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white p-4">
-                    <span className="gf-num gf-accent text-[12px] font-bold">{number}</span>
-                    <span className="mt-1 block text-[13.5px] font-semibold leading-snug">{label}</span>
-                  </li>
-                ))}
-              </ol>
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              {/* The counts are the permission story, and the only numbers in
+                  this section that a reader can check. The three numbered
+                  steps that used to sit above them said what the sentence
+                  above already says. */}
+              <div className="mt-8 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white p-5">
                   <b className="flex items-baseline gap-2 text-[16px]">
                     <span className="gf-figure-num text-[2rem]">14</span> read and explain
                   </b>
                   <p className="gf-body mt-2 text-[13.5px]">
-                    Files, selected text, tables, Saves, proposals, and Restore previews. Nothing changes.
+                    Files, tables, Saves, proposals, Restore previews. Nothing changes.
                   </p>
                 </div>
                 <div className="rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white p-5">
@@ -608,13 +599,13 @@ export default function Landing() {
                     <span className="gf-figure-num text-[2rem]">4</span> comment or propose
                   </b>
                   <p className="gf-body mt-2 text-[13.5px]">
-                    Comments and Change Proposals only. They never approve themselves.
+                    Comments and Change Proposals. They never approve themselves.
                   </p>
                 </div>
               </div>
 
               <p className="gf-faint mt-6 max-w-xl text-[12.5px] leading-relaxed">
-                ChatGPT’s built-in browser, ChatGPT Work, and Codex discover these as{" "}
+                ChatGPT’s built-in browser, ChatGPT Work and Codex find these as{" "}
                 <a href="https://learn.chatgpt.com/docs/webmcp" className="underline underline-offset-2">
                   Site tools
                 </a>
@@ -622,7 +613,7 @@ export default function Landing() {
                 <a href="https://webmachinelearning.github.io/webmcp/" className="underline underline-offset-2">
                   WebMCP
                 </a>{" "}
-                is a W3C Community Group draft. Without it, the dashboard works as usual.
+                is a W3C Community Group draft; without it the dashboard works as usual.
               </p>
             </div>
             <AgentPreview />

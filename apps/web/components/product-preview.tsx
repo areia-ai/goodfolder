@@ -9,27 +9,17 @@ import {
   ArrowRightIcon,
   ChevronRightIcon,
   ClockIcon,
+  DocumentIcon,
   FolderIcon,
+  PdfIcon,
   ProposalIcon,
+  SheetIcon,
+  SparklesIcon,
   ViewColumnsIcon,
   ViewGalleryIcon,
   ViewIconsIcon,
   ViewListIcon,
 } from "@/components/icons";
-
-function Chrome({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="gf-preview" aria-hidden="true">
-      <div className="gf-preview-bar">
-        <span className="gf-preview-dot" />
-        <span className="gf-preview-dot" />
-        <span className="gf-preview-dot" />
-        <span className="ml-2">{label}</span>
-      </div>
-      <div className="gf-preview-body">{children}</div>
-    </div>
-  );
-}
 
 const SAVES = [
   {
@@ -139,55 +129,87 @@ export function TimelinePreview() {
 }
 
 /* --------------------------------------------------------------------------
-   How a session with an agent actually reads. Every line below is example
-   content; the tool names are the real ones the dashboard registers.
+   The assistant beside the window it is reading.
+
+   This is what WebMCP actually is: the tools belong to the page, and the
+   assistant is the browser's, sitting alongside. Drawing the chat on its own
+   left that relationship to the caption. Every line is example content; the
+   tool names are the real ones the dashboard registers.
 -------------------------------------------------------------------------- */
 
+const OPEN_FILES = [
+  { name: "summary.md", Glyph: DocumentIcon, on: true },
+  { name: "figures", Glyph: FolderIcon },
+  { name: "Budget.xlsx", Glyph: SheetIcon },
+  { name: "Board pack.pdf", Glyph: PdfIcon },
+];
+
 const EXCHANGE: Array<{ who: "person" | "agent"; text: string; tool?: string; note?: string }> = [
-  { who: "person", text: "What did Codex change in the Q3 report yesterday?" },
+  { who: "person", text: "What did Codex change yesterday?" },
   {
     who: "agent",
     tool: "get_timeline",
-    text: "Save #24 was two hours ago. Codex added the pricing table, tightened the summary, and touched report.md and pricing/notes.md. That came to 2 files added, 3 changed, and 1 removed.",
+    text: "Save #24, two hours ago — the pricing table, and a tighter summary. 2 added, 3 changed, 1 removed.",
   },
-  { who: "person", text: "The opening paragraph is flabby. Suggest something tighter." },
+  { who: "person", text: "Tighten the opening paragraph." },
   {
     who: "agent",
     tool: "propose_document_change",
-    text: "Sent as a Change Proposal, with the current text beside my suggestion.",
-    note: "The document hasn’t changed. This proposal is waiting for you to accept or reject it.",
+    text: "Sent as a Change Proposal, my suggestion beside the current text.",
+    note: "Nothing has changed until you accept it.",
   },
 ];
 
 export function AgentPreview() {
   return (
-    <figure className="m-0">
-      <Chrome label="Your browser’s assistant, on the dashboard">
-        <ol className="grid gap-2.5">
+    <div className="gf-mock" aria-hidden="true">
+      <div className="gf-mock-bar">
+        <span className="gf-preview-dot" />
+        <span className="gf-preview-dot" />
+        <span className="gf-preview-dot" />
+        <span className="gf-mock-title">Q3 Report</span>
+        <span className="gf-mock-views">
+          <span><ViewIconsIcon /></span>
+          <span className="on"><ViewListIcon /></span>
+          <span><ViewColumnsIcon /></span>
+          <span><ViewGalleryIcon /></span>
+        </span>
+      </div>
+
+      <div className="gf-mock-split">
+        <div className="gf-mock-files">
+          {OPEN_FILES.map(({ name, Glyph, on }) => (
+            <span key={name} className={`gf-mock-file ${on ? "on" : ""}`}>
+              <Glyph />
+              <b>{name}</b>
+            </span>
+          ))}
+        </div>
+
+        <div className="gf-mock-chat">
+          <p className="gf-mock-chat-head">
+            <SparklesIcon />
+            Your browser’s assistant
+          </p>
           {EXCHANGE.map((line, i) => (
-            <li
-              key={i}
-              className={`min-w-0 rounded-[var(--gf-radius)] border p-3.5 ${
-                line.who === "person"
-                  ? "border-[var(--gf-line)] bg-[var(--gf-surface-sunken)]"
-                  : "border-[var(--gf-blue-line-soft)] bg-white"
-              }`}
-            >
-              <span className="gf-faint mb-1.5 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[.09em]">
+            <div key={i} className={`gf-mock-turn ${line.who === "agent" ? "from-agent" : ""}`}>
+              <span className="gf-mock-who">
                 {line.who === "person" ? "You" : "Assistant"}
                 {line.tool && <code className="gf-tool-chip">{line.tool}</code>}
               </span>
-              <p className="text-[13.5px] leading-snug">{line.text}</p>
-              {line.note && (
-                <p className="gf-accent mt-2 text-[12.5px] font-semibold leading-snug">{line.note}</p>
-              )}
-            </li>
+              <p>{line.text}</p>
+              {line.note && <p className="gf-mock-note">{line.note}</p>}
+            </div>
           ))}
-        </ol>
-      </Chrome>
-      <figcaption className="gf-preview-caption">
-        Sample conversation. The tool names match the ones registered by this site.
-      </figcaption>
-    </figure>
+        </div>
+      </div>
+
+      <div className="gf-mock-foot">
+        <span>GoodFolder</span>
+        <ChevronRightIcon />
+        <span className="now">Q3 Report</span>
+        <span className="ml-auto"><b>7 items</b> · 4.4 MB</span>
+      </div>
+    </div>
   );
 }

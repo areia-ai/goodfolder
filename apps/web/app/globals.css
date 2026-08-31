@@ -551,6 +551,56 @@ img, svg { max-width: 100%; }
 }
 
 .gf-mock-panel { min-width: 0; padding: 9px 11px 11px; }
+
+/* The assistant beside the window it is reading. */
+.gf-mock-split { display: grid; grid-template-columns: 150px minmax(0, 1fr); }
+.gf-mock-files {
+  display: grid; align-content: start; gap: 1px;
+  border-right: 1px solid var(--gf-line);
+  padding: 8px 6px;
+}
+.gf-mock-file {
+  display: flex; align-items: center; gap: 6px;
+  border-radius: 6px; padding: 4px 6px;
+  font-size: 11px; color: var(--gf-ink-soft);
+}
+.gf-mock-file svg { height: 13px; width: 13px; flex: none; color: var(--gf-blue-ink); }
+.gf-mock-file b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.gf-mock-file.on { background: var(--gf-blue-ink); color: var(--gf-white); }
+.gf-mock-file.on svg { color: var(--gf-white); }
+.gf-mock-file.on b { font-weight: 650; }
+
+.gf-mock-chat {
+  display: grid; align-content: start; gap: 7px;
+  background: var(--gf-surface-sunken);
+  padding: 9px 11px 12px;
+}
+.gf-mock-chat-head {
+  display: flex; align-items: center; gap: 5px;
+  padding-bottom: 2px;
+  font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--gf-ink-faint);
+}
+.gf-mock-chat-head svg { height: 12px; width: 12px; color: var(--gf-blue-ink); }
+.gf-mock-turn {
+  border: 1px solid var(--gf-line); border-radius: var(--gf-radius-sm);
+  background: var(--gf-white);
+  padding: 7px 9px;
+}
+.gf-mock-turn.from-agent { border-color: var(--gf-blue-line-soft); }
+.gf-mock-who {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  margin-bottom: 3px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--gf-ink-faint);
+}
+.gf-mock-turn p { font-size: 11.5px; line-height: 1.4; color: var(--gf-ink); }
+.gf-mock-note { margin-top: 4px; color: var(--gf-blue-ink) !important; font-weight: 650; }
+
+@media (max-width: 560px) {
+  .gf-mock-split { grid-template-columns: minmax(0, 1fr); }
+  .gf-mock-files { display: none; }
+}
 .gf-mock-tabs {
   display: flex; gap: 12px;
   border-bottom: 1px solid var(--gf-line);
