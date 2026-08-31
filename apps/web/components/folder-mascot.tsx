@@ -24,8 +24,8 @@ const POSES = {
   },
   moments: {
     src: "/brand/mascot/mascot-moments.png",
-    width: 1000,
-    height: 750,
+    width: 1448,
+    height: 1086,
   },
 } as const;
 
