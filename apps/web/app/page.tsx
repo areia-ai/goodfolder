@@ -4,6 +4,7 @@ import { BrandLockup, BrandMark } from "@/components/brand";
 import { Faq, type FaqItem } from "@/components/faq";
 import { MascotPose } from "@/components/folder-mascot";
 import { ForEngineers } from "@/components/for-engineers";
+import { HeroAgentDemo } from "@/components/hero-agent-demo";
 import { PricingTiers } from "@/components/pricing";
 import { AgentPreview, TimelinePreview } from "@/components/product-preview";
 import { Shot } from "@/components/shot";
@@ -49,8 +50,8 @@ const GAPS = [
     body: "It worked through the folder while you were somewhere else. The only record of what it did is the files themselves.",
   },
   {
-    title: "Nobody knows which one",
-    body: "The newest version of the deck is the one called final_v3. Or final_v3b. Somebody renamed it and moved on.",
+    title: "final_final_v5.pdf",
+    body: "You shouldn’t have to open five files to find the real final. GoodFolder shows which version came last and what changed, with every earlier one still there when you need it.",
   },
   {
     title: "Yesterday is gone",
@@ -302,19 +303,20 @@ export default function Landing() {
 
       <main id="main">
         {/* ---------------------------------------------------------------- Hero */}
-        <section className="overflow-hidden pt-16 sm:pt-24">
+        <section className="overflow-hidden pb-12 pt-16 sm:pb-16 sm:pt-24 lg:pb-20">
           <div className="gf-wrap">
             <div className="mx-auto grid max-w-5xl items-center gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6">
               <div className="text-center lg:text-left">
                 <p className="gf-eyebrow">For documents, spreadsheets, decks, photos, and recordings</p>
                 <h1 className="gf-display-xl mt-5">
-                  Let the AI agent work on your files.
+                  Let AI agents work on your files.
                   <br />
                   <i>Keep a way back.</i>
                 </h1>
                 <p className="gf-lead mx-auto mt-7 max-w-2xl lg:mx-0">
                   GoodFolder gives a folder on your computer a history you can read. When a piece of work is finished,
-                  it records what changed, who changed it, and a version you can return to.
+                  it records what changed, who changed it, and a version you can return to. Use that same folder with
+                  your agents, wherever you work.
                 </p>
                 <div className="mt-9 flex justify-center lg:justify-start">
                   <Link href="/dashboard" className="gf-button-primary gf-button-lg">
@@ -331,9 +333,7 @@ export default function Landing() {
           </div>
 
           <div className="gf-wrap mt-14 sm:mt-20">
-            <div className="gf-stage mx-auto max-w-[1240px]">
-              <Shot id="workspace" priority />
-            </div>
+            <HeroAgentDemo />
           </div>
         </section>
 
