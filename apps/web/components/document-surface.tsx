@@ -5,11 +5,13 @@ import {
   addDocumentComment,
   createProposal,
   listDocumentComments,
+  readFileRaw,
   saveDocument,
   type ChangeProposal,
   type Folder,
   type OpenedFile,
 } from "@/lib/gf-api";
+import { markdownToHtml } from "@/lib/markdown";
 import { FilePreview } from "@/components/file-preview";
 import { DelimitedTableEditor, type DelimitedTableChange } from "@/components/delimited-table-editor";
 import type { TableEdit } from "@/lib/table";
@@ -40,22 +42,6 @@ export interface DocumentSurfaceProps {
   onNotice: Notify;
 }
 
-function markdownToHtml(value: string): string {
-  const escaped = value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return escaped
-    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
-    .replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>")
-    .replace(/^[-*] (.+)$/gm, "<li>$1</li>")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2">$1</a>')
-    .split(/\n{2,}/)
-    .map((block) => (/^(<h|<blockquote|<li)/.test(block) ? block : `<p>${block.replace(/\n/g, "<br>")}</p>`))
-    .join("");
-}
-
 function htmlToMarkdown(root: HTMLElement): string {
   function walk(node: Node): string {
     if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
@@ -72,6 +58,7 @@ function htmlToMarkdown(root: HTMLElement): string {
       case "BLOCKQUOTE": return `> ${body.trim()}\n\n`;
       case "LI": return `- ${body.trim()}\n`;
       case "A": return `[${body}](${node.getAttribute("href") ?? ""})`;
+      case "IMG": return `![${node.getAttribute("alt") ?? ""}](${node.dataset.gfMarkdownImageSource ?? ""})`;
       default: return body;
     }
   }
@@ -287,7 +274,7 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
 
   useEffect(() => {
     if (editor.current && props.file.kind === "text" && props.file.content !== undefined) {
-      editor.current.innerHTML = markdownToHtml(props.file.content);
+      editor.current.innerHTML = markdownToHtml(props.file.content, props.file.path);
       setDirty(false);
     }
     if (props.file.kind === "text" && props.file.content !== undefined) {
@@ -296,6 +283,34 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.file.path, props.file.sha]);
+
+  useEffect(() => {
+    const root = editor.current;
+    if (!root || props.file.kind !== "text") return;
+    const images = [...root.querySelectorAll<HTMLImageElement>("img[data-gf-inline-image-path]")];
+    const objectUrls: string[] = [];
+    let cancelled = false;
+
+    void Promise.all(images.map(async (image) => {
+      const path = image.dataset.gfInlineImagePath;
+      if (!path) return;
+      try {
+        const result = await readFileRaw(props.folder.id, path);
+        if (cancelled || !result.blob || !result.mimeType?.startsWith("image/")) return;
+        const url = URL.createObjectURL(result.blob);
+        objectUrls.push(url);
+        image.src = url;
+      } catch {
+        // A broken or unavailable local reference remains its original Markdown
+        // when saved; the image is simply not rendered in this view.
+      }
+    }));
+
+    return () => {
+      cancelled = true;
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [props.folder.id, props.file.path, props.file.sha, props.file.kind]);
 
   useEffect(() => {
     void listDocumentComments(props.folder.id, props.file.path).then(setComments).catch(() => setComments([]));
