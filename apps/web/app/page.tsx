@@ -159,7 +159,7 @@ const ONLY_YOU_CAN = [
 
 const SOURCE_PARTS = [
   "The command-line tool on your computer",
-  "The agent server and all eighteen WebMCP tools",
+  "The agent server and all nineteen WebMCP tools",
   "The dashboard and hosted-service code",
   "The storage service and Docker setup",
 ];
@@ -226,7 +226,7 @@ const QUESTIONS: FaqItem[] = [
     question: "Can my AI assistant use GoodFolder directly?",
     answer: [
       "Yes, in two places. On your computer, GoodFolder uses the Model Context Protocol, so Codex, Claude Code, and other compatible agents can protect a folder, Save, Sync, and Restore.",
-      "The dashboard also gives a browser assistant eighteen WebMCP tools. Fourteen only read; the other four can add a comment or prepare a Change Proposal, but a person still has to accept it.",
+      "The dashboard also gives a browser assistant nineteen WebMCP tools. Fourteen only read; the other five can add a comment or prepare a Change Proposal, including media that stays outside the folder until a person accepts it.",
       "WebMCP comes from the W3C Web Machine Learning Community Group and is still a draft. If your browser doesn’t support it, the dashboard works normally without those tools.",
     ],
   },
@@ -575,7 +575,7 @@ export default function Landing() {
           <div className="gf-wrap grid items-center gap-12 lg:grid-cols-[minmax(0,.92fr)_minmax(0,1.08fr)] lg:gap-16">
             <div>
               <p className="gf-eyebrow">No copy and paste</p>
-              <h2 className="gf-h2 mt-4">WebMCP gives your assistant 18 tools for the folder you have open.</h2>
+              <h2 className="gf-h2 mt-4">WebMCP gives your assistant 19 tools for the folder you have open.</h2>
               <p className="gf-lead mt-5">
                 Ask in normal language. Nothing is uploaded to a chat — the assistant reads the folder already in
                 front of you.

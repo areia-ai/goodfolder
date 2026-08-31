@@ -40,7 +40,7 @@ import { acceptStagedFile, forgetStagedFile, hashFile, putStoredFileFromPath, st
 import {
   TABLE_EDIT_CAP,
 } from "./table.ts";
-import { applyProposalOperations, isFileOperation, type StoredProposalSuggestion } from "./proposal-operations.ts";
+import { applyProposalOperations, isDocumentMediaBundle, isFileOperation, type StoredProposalSuggestion } from "./proposal-operations.ts";
 import {
   PREVIEW_BYTE_CAP,
   parseStoredFilePointer,
@@ -1706,6 +1706,112 @@ app.post("/api/projects/:id/proposals", async (c) => {
   if (!title || rawOperations.length === 0) return c.json({ error: { code: "proposal", message: "A title and at least one file operation are required." } }, 400);
 
   /**
+   * A generated-media insertion travels as one proposal with two inseparable
+   * suggestions: add the waiting bytes, then update the document that refers
+   * to them. Neither half reaches the folder before an owner accepts both.
+   */
+  const proposedAsset = rawOperations.length === 2
+    ? rawOperations.find((item) => item?.kind === "asset_replace") ?? null
+    : null;
+  const proposedText = rawOperations.length === 2
+    ? rawOperations.find((item) => (item?.kind ?? "text_replace") === "text_replace") ?? null
+    : null;
+  if (proposedAsset && proposedText) {
+    const assetPath = safeDocumentPath(proposedAsset.path);
+    const documentPath = safeDocumentPath(proposedText.path);
+    const before = typeof proposedText.before === "string" ? proposedText.before.slice(0, 20_000) : "";
+    const replacement = typeof proposedText.replacement === "string" ? proposedText.replacement.slice(0, 20_000) : "";
+    const section = typeof proposedText.section === "string" ? proposedText.section.trim().slice(0, 160) : null;
+    const assetExplanation = typeof proposedAsset.explanation === "string" ? proposedAsset.explanation.trim().slice(0, 500) : "";
+    const textExplanation = typeof proposedText.explanation === "string" ? proposedText.explanation.trim().slice(0, 500) : "";
+    if (!assetPath || !documentPath || assetPath === documentPath) {
+      return c.json({ error: { code: "suggestion", message: "Choose different safe paths for the document and its media." } }, 400);
+    }
+    const mediaKind = previewKindFor(assetPath);
+    if (!mediaKind || !["image", "video", "audio"].includes(mediaKind)) {
+      return c.json({ error: { code: "suggestion", message: "Proposed document media must be a previewable image, video, or audio file." } }, 400);
+    }
+    if (!isTextDocument(documentPath) || !before || typeof proposedText.replacement !== "string") {
+      return c.json({ error: { code: "suggestion", message: "The document change needs an exact passage in a readable text file." } }, 400);
+    }
+    const stagingId = typeof proposedAsset.stagingId === "string" ? proposedAsset.stagingId.trim() : "";
+    const staged = stagingId
+      ? await sql`
+          SELECT oid, size_bytes AS "sizeBytes", file_name AS "fileName", mime_type AS "mimeType"
+          FROM staged_uploads
+          WHERE id = ${stagingId} AND project_id = ${projectId}
+            AND author_account_id = ${acct.accountId} AND expires_at > now()
+          LIMIT 1`
+      : [];
+    if (!staged.length) {
+      return c.json({ error: { code: "suggestion", message: "That media is no longer waiting to be proposed. Add it again." } }, 409);
+    }
+    const tree = await repos.tree(projectId);
+    if (tree.some((entry) => entry.type === "blob" && entry.path === assetPath)) {
+      return c.json({ error: { code: "suggestion", message: "Choose a new path for the proposed media." } }, 409);
+    }
+    const documentEntry = tree.find((entry) => entry.type === "blob" && entry.path === documentPath) ?? null;
+    const currentFile = await repos.readFile(projectId, documentPath);
+    if (!documentEntry || !currentFile) return c.json({ error: { code: "not-found", message: "That document no longer exists in the folder." } }, 404);
+    if (parseStoredFilePointer(currentFile.content)) {
+      return c.json({ error: { code: "stored-for-device", message: "That document is stored on a connected computer and cannot be edited in the browser yet." } }, 409);
+    }
+    const applied = applyProposalOperations(currentFile.content.toString("utf8"), documentPath, [{
+      kind: "text",
+      before,
+      replacement,
+      operation: { kind: "text_replace", before, replacement },
+    }]);
+    if ("error" in applied) {
+      return c.json({ error: { code: "suggestion", message: "The exact document passage is missing or appears more than once." } }, 409);
+    }
+    const row = staged[0]!;
+    const sizeBytes = Number(row.sizeBytes);
+    const gate = checkWrite({
+      tree,
+      writes: [
+        { path: assetPath, sizeBytes },
+        { path: documentPath, sizeBytes: Buffer.byteLength(applied.content) },
+      ],
+    });
+    if (!gate.ok) return c.json({ error: { code: gate.refusal.code, message: gate.refusal.message } }, gate.refusal.status);
+
+    const currentHead = await repos.head(projectId);
+    const latest = await sql`SELECT COALESCE(MAX(seq), 0)::int AS seq FROM saves WHERE project_id = ${projectId}`;
+    const baseSaveNumber = Number(latest[0]?.seq ?? 0) || null;
+    const proposalExplanation = typeof body.explanation === "string" ? body.explanation.slice(0, 1000) : "";
+    const id = crypto.randomUUID();
+    await sql.begin(async (tx) => {
+      await tx`
+        INSERT INTO change_proposals (id, project_id, author_account_id, title, explanation, base_commit_sha, base_save_seq)
+        VALUES (${id}, ${projectId}, ${acct.accountId}, ${title}, ${proposalExplanation}, ${currentHead}, ${baseSaveNumber})`;
+      await tx`
+        INSERT INTO proposal_suggestions (id, proposal_id, document_path, kind, base_file_sha, operation, section_hint, before_text, replacement_text, explanation)
+        VALUES (${crypto.randomUUID()}, ${id}, ${assetPath}, ${"asset"}, ${null}, ${sql.json({
+          kind: "asset_replace",
+          bundle: "document_media",
+          stagingId,
+          oid: String(row.oid),
+          sizeBytes,
+          fileName: String(row.fileName),
+          mimeType: row.mimeType == null ? null : String(row.mimeType),
+          explanation: assetExplanation,
+        })}, ${null}, ${""}, ${""}, ${assetExplanation})`;
+      await tx`
+        INSERT INTO proposal_suggestions (id, proposal_id, document_path, kind, base_file_sha, operation, section_hint, before_text, replacement_text, explanation)
+        VALUES (${crypto.randomUUID()}, ${id}, ${documentPath}, ${"text"}, ${currentFile.sha}, ${sql.json({
+          kind: "text_replace",
+          bundle: "document_media",
+          section,
+          before,
+          replacement,
+          explanation: textExplanation,
+        })}, ${section}, ${before}, ${replacement}, ${textExplanation})`;
+    });
+    return c.json({ ok: true, proposalId: id, title, suggestionCount: 2, url: `https://trygoodfolder.com/dashboard?folder=${projectId}&proposal=${id}` });
+  }
+
+  /**
    * Proposing a change to which files the folder holds, rather than to what
    * is inside one.
    *
@@ -1980,15 +2086,21 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
     baseSaveNumber: number | null;
     baseFileSha: string | null;
   };
-  const suggestions = await sql`
+  const allSuggestions = await sql`
     SELECT ps.id, ps.document_path AS path, ps.before_text AS before,
            ps.replacement_text AS replacement, ps.status, ps.kind,
            ps.base_file_sha AS "baseFileSha", ps.operation,
            cp.base_commit_sha AS "baseHead", cp.base_save_seq AS "baseSaveNumber"
     FROM proposal_suggestions ps JOIN change_proposals cp ON cp.id = ps.proposal_id
     WHERE cp.id = ${proposalId} AND cp.project_id = ${projectId}
-      AND (${body.suggestionId ?? null}::uuid IS NULL OR ps.id = ${body.suggestionId ?? null})
     ORDER BY ps.created_at` as unknown as StoredSuggestion[];
+  const reviewTogether = isDocumentMediaBundle(allSuggestions);
+  if (body.suggestionId && reviewTogether) {
+    return c.json({ error: { code: "proposal", message: "The media and its document reference must be reviewed together." } }, 400);
+  }
+  const suggestions = body.suggestionId
+    ? allSuggestions.filter((suggestion) => suggestion.id === body.suggestionId)
+    : allSuggestions;
   if (!suggestions.length) return c.json({ error: { code: "not-found", message: "Suggestion not found." } }, 404);
 
   async function refreshProposalStatus(): Promise<string> {
@@ -2041,12 +2153,6 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
     const status = await needsReview(selectedIds);
     return c.json({ ok: true, status, acceptedSuggestionIds: [], head: null, saveNumber: null });
   }
-  const paths = new Set(openSuggestions.map((suggestion) => String(suggestion.path)));
-  if (paths.size !== 1) {
-    const status = await needsReview(selectedIds);
-    return c.json({ ok: true, status, acceptedSuggestionIds: [], head: null, saveNumber: null });
-  }
-  const path = [...paths][0]!;
   const currentHead = await repos.head(projectId);
   const currentSaves = await sql`SELECT COALESCE(MAX(seq), 0)::int AS seq FROM saves WHERE project_id = ${projectId}`;
   const currentSaveNumber = Number(currentSaves[0]?.seq ?? 0) || 0;
@@ -2059,6 +2165,98 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
     const status = await needsReview(selectedIds);
     return c.json({ ok: true, status, acceptedSuggestionIds: [], head: currentHead, saveNumber: null });
   }
+
+  if (reviewTogether) {
+    const stale = async () => {
+      const status = await needsReview(selectedIds);
+      return c.json({ ok: true, status, acceptedSuggestionIds: [], head: currentHead, saveNumber: null });
+    };
+    if (openSuggestions.length !== 2) return stale();
+    const asset = openSuggestions.find((suggestion) => suggestion.kind === "asset");
+    const text = openSuggestions.find((suggestion) => suggestion.kind === "text");
+    if (!asset || !text || asset.path === text.path) return stale();
+    const assetOperation = asset.operation && typeof asset.operation === "object"
+      ? asset.operation as Record<string, unknown>
+      : {};
+    const oid = typeof assetOperation.oid === "string" ? assetOperation.oid : "";
+    const stagingId = typeof assetOperation.stagingId === "string" ? assetOperation.stagingId : "";
+    const size = Number(assetOperation.sizeBytes ?? -1);
+    if (!/^[0-9a-f]{64}$/.test(oid) || !stagingId || !Number.isSafeInteger(size) || size < 0) return stale();
+    const stillWaiting = await sql`
+      SELECT id FROM staged_uploads
+      WHERE id = ${stagingId} AND project_id = ${projectId} AND oid = ${oid} AND expires_at > now()
+      LIMIT 1`;
+    if (!stillWaiting.length) return stale();
+
+    const currentDocument = await repos.readFile(projectId, text.path);
+    if (!currentDocument || (text.baseFileSha && String(text.baseFileSha) !== currentDocument.sha)) return stale();
+    if (parseStoredFilePointer(currentDocument.content)) return stale();
+    const applied = applyProposalOperations(currentDocument.content.toString("utf8"), text.path, [text]);
+    if ("error" in applied) return stale();
+    const tree = await repos.tree(projectId);
+    if (tree.some((entry) => entry.type === "blob" && entry.path === asset.path)) return stale();
+    const gate = checkWrite({
+      tree,
+      writes: [
+        { path: asset.path, sizeBytes: size },
+        { path: text.path, sizeBytes: Buffer.byteLength(applied.content) },
+      ],
+    });
+    if (!gate.ok) return stale();
+
+    const assetPlan = gate.plan.writes.find((write) => write.path === asset.path);
+    if (!assetPlan) return stale();
+    let assetContent: Buffer;
+    let copiedToStored = false;
+    if (assetPlan.target === "lfs") {
+      const accepted = await acceptStagedFile({ s3: previewStorage, bucket: cfg.s3Bucket, projectId, oid, size });
+      await confirmStoredObject(projectId, oid, size);
+      assetContent = accepted.pointer;
+      copiedToStored = true;
+    } else {
+      const object = await previewStorage.send(
+        new GetObjectCommand({ Bucket: cfg.s3Bucket, Key: stagingKey(projectId, oid) }),
+      );
+      if (!object.Body) return stale();
+      assetContent = Buffer.from(await object.Body.transformToByteArray());
+    }
+
+    const label = `Added ${fileName(asset.path)} to ${fileName(text.path)}`;
+    try {
+      const saved = await repos.changeFiles({
+        projectId,
+        changes: [
+          { operation: "write", path: asset.path, content: assetContent },
+          { operation: "write", path: text.path, content: Buffer.from(applied.content) },
+        ],
+        message: label,
+        expectedHead: currentHead,
+      });
+      if (!copiedToStored) await forgetStagedFile({ s3: previewStorage, bucket: cfg.s3Bucket, projectId, oid });
+      const saveNumber = await recordWebSave({
+        projectId,
+        commitSha: saved.commitSha,
+        label,
+        changedPaths: [asset.path, text.path],
+        accountEmail: acct.email,
+        counts: { added: 1, changed: 1 },
+      });
+      await sql`UPDATE proposal_suggestions SET status = 'accepted', reviewed_at = now() WHERE id IN ${sql(selectedIds)}`;
+      await sql`DELETE FROM staged_uploads WHERE id = ${stagingId} AND project_id = ${projectId}`;
+      const status = await refreshProposalStatus();
+      return c.json({ ok: true, status, acceptedSuggestionIds: selectedIds, head: saved.commitSha, saveNumber });
+    } catch (error) {
+      if ((error as { code?: string }).code === "newer-work") return stale();
+      throw error;
+    }
+  }
+
+  const paths = new Set(openSuggestions.map((suggestion) => String(suggestion.path)));
+  if (paths.size !== 1) {
+    const status = await needsReview(selectedIds);
+    return c.json({ ok: true, status, acceptedSuggestionIds: [], head: null, saveNumber: null });
+  }
+  const path = [...paths][0]!;
   /**
    * Accepting a change to which files the folder holds.
    *

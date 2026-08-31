@@ -53,7 +53,11 @@ export function ProposalList({
       description="Suggestions from people and agents stay separate until the folder owner accepts them."
     >
       <div className="grid gap-3.5">
-        {proposals.map((proposal) => (
+        {proposals.map((proposal) => {
+          const reviewTogether = proposal.suggestions.length > 1 &&
+            proposal.suggestions.some((suggestion) => suggestion.kind === "asset_replace") &&
+            proposal.suggestions.some((suggestion) => !changesTheFolder(suggestion.kind));
+          return (
           <article key={proposal.id} className="gf-card p-5 sm:p-6">
             <div className="flex flex-wrap items-start gap-3">
               {/* basis keeps the title on its own row before it gets squeezed. */}
@@ -80,6 +84,11 @@ export function ProposalList({
             </div>
 
             <div className="mt-5 grid gap-3">
+              {reviewTogether && (
+                <p className="rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-[var(--gf-blue-soft)] px-3 py-2 text-[12.5px]">
+                  The media and its document reference travel together. Accept or reject the whole proposal.
+                </p>
+              )}
               {proposal.suggestions.map((suggestion) => (
                 <div
                   key={suggestion.id}
@@ -120,7 +129,7 @@ export function ProposalList({
                     </div>
                   )}
                   {suggestion.explanation && <p className="gf-body mt-2.5 text-[12.5px]">{suggestion.explanation}</p>}
-                  {role === "owner" && suggestion.status === "open" && (
+                  {role === "owner" && suggestion.status === "open" && !reviewTogether && (
                     <div className="mt-3 flex justify-end gap-2">
                       <button
                         type="button"
@@ -172,7 +181,8 @@ export function ProposalList({
               </button>
             </form>
           </article>
-        ))}
+          );
+        })}
 
         {proposals.length === 0 && (
           <EmptyState icon={<ProposalIcon />} title="No Change Proposals yet">

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyProposalOperations, isFileOperation } from "./proposal-operations.ts";
+import { applyProposalOperations, isDocumentMediaBundle, isFileOperation } from "./proposal-operations.ts";
 
 test("applies multiple text anchors in memory", () => {
   const result = applyProposalOperations(
@@ -62,4 +62,12 @@ test("a change to which files a folder holds is not a change to a file", () => {
   assert.equal(isFileOperation("text"), false);
   assert.equal(isFileOperation("table"), false);
   assert.equal(isFileOperation(null), false);
+});
+
+test("document media is recognized only when the file and reference travel together", () => {
+  const text = { kind: "text" as const, before: "## Steps", replacement: "![Drink](drink.png)\n\n## Steps", operation: { kind: "text_replace", bundle: "document_media" } };
+  const asset = { kind: "asset" as const, before: "", replacement: "", operation: { kind: "asset_replace", bundle: "document_media" } };
+  assert.equal(isDocumentMediaBundle([asset, text]), true);
+  assert.equal(isDocumentMediaBundle([asset]), false);
+  assert.equal(isDocumentMediaBundle([{ ...asset, operation: { kind: "asset_replace" } }, text]), false);
 });

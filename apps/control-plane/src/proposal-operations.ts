@@ -21,6 +21,19 @@ export interface StoredProposalSuggestion {
   operation: unknown;
 }
 
+/** A media file and the text that refers to it must be reviewed as one unit. */
+export function isDocumentMediaBundle(suggestions: StoredProposalSuggestion[]): boolean {
+  return suggestions.length === 2 &&
+    suggestions.some((suggestion) => suggestion.kind === "asset") &&
+    suggestions.some((suggestion) => suggestion.kind === "text") &&
+    suggestions.every((suggestion) => {
+      const operation = suggestion.operation && typeof suggestion.operation === "object"
+        ? suggestion.operation as Record<string, unknown>
+        : {};
+      return operation.bundle === "document_media";
+    });
+}
+
 export type ProposalApplyError =
   | "missing"
   | "ambiguous"

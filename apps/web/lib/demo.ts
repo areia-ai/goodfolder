@@ -182,7 +182,7 @@ function makeFolders(): DemoFolder[] {
       folder: {
         id: "demo-report", name: "Q3 Report", createdAt: daysAgo(96),
         lastSeq: 24, lastSaveAt: hoursAgo(2), role: "owner",
-        contributorCount: 2, openProposalCount: 2,
+        contributorCount: 2, openProposalCount: 3,
       },
       files: [
         { path: "summary.md", size: REPORT_SUMMARY.length, content: REPORT_SUMMARY },
@@ -240,6 +240,35 @@ function makeFolders(): DemoFolder[] {
             explanation: "The last invoice has not cleared.",
             status: "open",
           }],
+        },
+        {
+          id: "demo-proposal-media",
+          title: "Add the finished chart to the summary",
+          explanation: "Show the finished visual immediately before the conclusions.",
+          status: "open",
+          createdAt: hoursAgo(1),
+          authorEmail: "assistant@example.com",
+          suggestions: [
+            {
+              id: "demo-suggestion-media-file",
+              path: "figures/q3-summary.png",
+              kind: "asset_replace",
+              before: "",
+              replacement: "",
+              operation: { kind: "asset_replace", sizeBytes: 245_760, fileName: "q3-summary.png" },
+              explanation: "Add the generated chart image.",
+              status: "open",
+            },
+            {
+              id: "demo-suggestion-media-reference",
+              path: "summary.md",
+              kind: "text_replace",
+              before: "## Conclusions",
+              replacement: "![Q3 summary](figures/q3-summary.png)\n\n## Conclusions",
+              explanation: "Place the chart immediately before the conclusions.",
+              status: "open",
+            },
+          ],
         },
       ],
       people: [
@@ -454,29 +483,33 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
     return json({ ok: true, stagingId: id, size: dropped?.size ?? 0 });
   }
   if (rest === "proposals" && method === "POST") {
-    const operation = (body.operation ?? {}) as Record<string, string>;
+    const operations = Array.isArray(body.suggestions)
+      ? body.suggestions as Array<Record<string, string>>
+      : [(body.operation ?? {}) as Record<string, string>];
     const id = `demo-proposal-${entry.proposals.length + 3}`;
-    const waiting = operation.stagingId ? staged.get(String(operation.stagingId)) : undefined;
     entry.proposals.unshift({
       id,
       title: String(body.title ?? "Suggested change"),
-      explanation: String(operation.explanation ?? ""),
+      explanation: String(body.explanation ?? operations[0]?.explanation ?? ""),
       status: "open",
       createdAt: new Date().toISOString(),
       authorEmail: "you@example.com",
-      suggestions: [{
-        id: `${id}-1`, path: String(operation.path ?? ""),
-        kind: (operation.kind as "text_replace") ?? "text_replace",
-        before: String(operation.before ?? ""), replacement: String(operation.replacement ?? ""),
-        explanation: String(operation.explanation ?? ""), status: "open",
-        operation: {
+      suggestions: operations.map((operation, index) => {
+        const waiting = operation.stagingId ? staged.get(String(operation.stagingId)) : undefined;
+        return {
+          id: `${id}-${index + 1}`, path: String(operation.path ?? ""),
           kind: (operation.kind as "text_replace") ?? "text_replace",
-          ...(operation.to ? { to: String(operation.to) } : {}),
-          ...(waiting ? { sizeBytes: waiting.size, fileName: waiting.name } : {}),
-        },
-      }],
+          before: String(operation.before ?? ""), replacement: String(operation.replacement ?? ""),
+          explanation: String(operation.explanation ?? ""), status: "open" as const,
+          operation: {
+            kind: (operation.kind as "text_replace") ?? "text_replace",
+            ...(operation.to ? { to: String(operation.to) } : {}),
+            ...(waiting ? { sizeBytes: waiting.size, fileName: waiting.name } : {}),
+          },
+        };
+      }),
     });
-    return json({ ok: true, proposalId: id, suggestionCount: 1, url: "" });
+    return json({ ok: true, proposalId: id, suggestionCount: operations.length, url: "" });
   }
   if (rest.startsWith("proposals/") && rest.endsWith("/review")) {
     const proposal = entry.proposals.find((item) => item.id === parts[4]);
@@ -485,21 +518,22 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
     proposal.status = accept ? "accepted" : "rejected";
     for (const suggestion of proposal.suggestions) suggestion.status = proposal.status;
     if (!accept) return json({ ok: true, status: proposal.status, acceptedSuggestionIds: [], head: null, saveNumber: null });
-    const first = proposal.suggestions[0];
-    const at = String(first?.path ?? "");
-    const target = entry.files.find((item) => item.path === at);
-    if (first?.kind === "path_remove") {
-      entry.files = entry.files.filter((item) => item.path !== at);
-    } else if (first?.kind === "path_rename") {
-      const to = String(first.operation?.to ?? "");
-      if (target && to) target.path = to;
-    } else if (first?.kind === "asset_replace") {
-      const size = Number(first.operation?.sizeBytes ?? 0);
-      if (target) target.size = size;
-      else entry.files.push({ path: at, size });
-    } else if (target?.content && first) {
-      target.content = target.content.replace(first.before, first.replacement);
-      target.size = target.content.length;
+    for (const suggestion of proposal.suggestions) {
+      const at = String(suggestion.path ?? "");
+      const target = entry.files.find((item) => item.path === at);
+      if (suggestion.kind === "path_remove") {
+        entry.files = entry.files.filter((item) => item.path !== at);
+      } else if (suggestion.kind === "path_rename") {
+        const to = String(suggestion.operation?.to ?? "");
+        if (target && to) target.path = to;
+      } else if (suggestion.kind === "asset_replace") {
+        const size = Number(suggestion.operation?.sizeBytes ?? 0);
+        if (target) target.size = size;
+        else entry.files.push({ path: at, size });
+      } else if (target?.content !== undefined) {
+        target.content = target.content.replace(suggestion.before, suggestion.replacement);
+        target.size = target.content.length;
+      }
     }
     const seq = nextSave(entry, `Accepted ${proposal.title}`, proposal.suggestions.map((s) => s.path));
     return json({ ok: true, status: "accepted", acceptedSuggestionIds: proposal.suggestions.map((s) => s.id), head: `demo-head-${seq}`, saveNumber: seq });

@@ -24,6 +24,7 @@ import {
   readFile,
   listProposals,
   createProposal,
+  stageFile,
   addProposalComment,
   addDocumentComment,
   listSaves,
@@ -31,6 +32,7 @@ import {
   type Folder,
   type SaveRow,
 } from "./gf-api.ts";
+import { extensionOfPath, previewKindFor } from "./preview.ts";
 import {
   parseDelimitedTable,
   TABLE_COL_CAP,
@@ -187,6 +189,7 @@ const TOOL_TITLES: Record<string, string> = {
   explain_change_proposal: "Explain Change Proposal",
   propose_file_change: "Propose file change",
   propose_document_change: "Propose document change",
+  propose_document_media: "Propose media in document",
   comment_on_change_proposal: "Comment on Change Proposal",
   comment_on_document: "Comment on document",
   get_timeline: "Read timeline",
@@ -194,6 +197,40 @@ const TOOL_TITLES: Record<string, string> = {
   explain_save: "Explain save",
   preview_restore: "Preview going back",
 };
+
+/**
+ * Inline media is deliberately bounded to the dashboard's preview ceiling.
+ * This keeps a WebMCP JSON call useful for generated images and short clips
+ * without letting one tool invocation hold an unpreviewable 100 MB payload in
+ * the page. Larger media can use the ordinary staged-upload path later.
+ */
+export const WEBMCP_MEDIA_BYTE_CAP = 25_000_000;
+
+const WEBMCP_MEDIA_MIMES: Readonly<Record<string, string>> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
+  svg: "image/svg+xml", avif: "image/avif", bmp: "image/bmp", ico: "image/x-icon",
+  heic: "image/heic", heif: "image/heif", tif: "image/tiff", tiff: "image/tiff",
+  mp4: "video/mp4", m4v: "video/x-m4v", webm: "video/webm", ogv: "video/ogg", mov: "video/quicktime",
+  mp3: "audio/mpeg", wav: "audio/wav", m4a: "audio/mp4", ogg: "audio/ogg", oga: "audio/ogg",
+  flac: "audio/flac", aac: "audio/aac",
+};
+
+export function decodeMediaDataUrl(value: string): { mimeType: string; bytes: Uint8Array } | { error: string } {
+  const match = /^data:((?:image|video|audio)\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)$/i.exec(value.trim());
+  if (!match) return { error: "Give the media as a base64 image, video, or audio data URL." };
+  try {
+    const binary = atob(match[2]!.replace(/\s/g, ""));
+    if (binary.length === 0) return { error: "The media data URL is empty." };
+    if (binary.length > WEBMCP_MEDIA_BYTE_CAP) {
+      return { error: `Inline proposed media is limited to ${Math.round(WEBMCP_MEDIA_BYTE_CAP / 1_000_000)} MB.` };
+    }
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return { mimeType: match[1]!.toLowerCase(), bytes };
+  } catch {
+    return { error: "The media data URL is not valid base64." };
+  }
+}
 
 function abortError(): Error {
   if (typeof DOMException !== "undefined") return new DOMException("The WebMCP operation was aborted.", "AbortError");
@@ -479,6 +516,107 @@ async function proposeFileChange(args: ProposeFileChangeArgs): Promise<unknown> 
     };
   } catch (e) {
     return { error: (e as Error).message };
+  }
+}
+
+type ProposeDocumentMediaArgs = {
+  document: string;
+  assetPath: string;
+  assetDataUrl: string;
+  anchorText: string;
+  insertionText: string;
+  placement: "before" | "after";
+  section?: string;
+  explanation: string;
+  title: string;
+};
+
+async function proposeDocumentMedia(args: ProposeDocumentMediaArgs): Promise<unknown> {
+  try {
+    const input = args && typeof args === "object" ? args : {} as ProposeDocumentMediaArgs;
+    const documentPath = typeof input.document === "string" ? input.document.trim() : "";
+    const assetPath = typeof input.assetPath === "string" ? input.assetPath.trim() : "";
+    const anchorText = typeof input.anchorText === "string" ? input.anchorText : "";
+    const insertionText = typeof input.insertionText === "string" ? input.insertionText.trim() : "";
+    const placement = input.placement;
+    const title = typeof input.title === "string" ? input.title.trim() : "";
+    const explanation = typeof input.explanation === "string" ? input.explanation.trim() : "";
+    if (!documentPath || documentPath.length > 512 || !assetPath || assetPath.length > 512) {
+      return { error: "Choose a safe document path and a safe path for the proposed media." };
+    }
+    if (!title || title.length > 120 || !explanation || explanation.length > 500) {
+      return { error: "Give the proposal a short title and explanation." };
+    }
+    if (!anchorText || anchorText.length > 20_000 || !insertionText || insertionText.length > 20_000) {
+      return { error: "Give an exact anchor and bounded text that refers to the media." };
+    }
+    if (placement !== "before" && placement !== "after") return { error: "Place the media before or after the anchor." };
+    if (!insertionText.includes(assetPath) && !insertionText.includes(assetPath.split("/").pop() ?? assetPath)) {
+      return { error: "The inserted document text must refer to the proposed media path." };
+    }
+    const kind = previewKindFor(assetPath);
+    if (kind !== "image" && kind !== "video" && kind !== "audio") {
+      return { error: "Use a browser-previewable image, video, or audio filename." };
+    }
+    const decoded = decodeMediaDataUrl(typeof input.assetDataUrl === "string" ? input.assetDataUrl : "");
+    if ("error" in decoded) return decoded;
+    const expectedMimeType = WEBMCP_MEDIA_MIMES[extensionOfPath(assetPath)];
+    if (!expectedMimeType || decoded.mimeType !== expectedMimeType) {
+      return { error: `The filename expects ${expectedMimeType ?? kind}, but the supplied data is ${decoded.mimeType}.` };
+    }
+
+    const folder = await folderFromPage();
+    if (!folder) return { error: "Open a folder first." };
+    const files = await listFiles(folder.id);
+    const document = files.files.find((item) => item.path === documentPath);
+    if (!document || !(document.proposable ?? document.editable)) return { error: "Choose a document that can be read as text." };
+    if (files.files.some((item) => item.path === assetPath)) return { error: "Choose a new path for the proposed media." };
+
+    const mediaBuffer = new ArrayBuffer(decoded.bytes.byteLength);
+    new Uint8Array(mediaBuffer).set(decoded.bytes);
+    const waiting = await stageFile(folder.id, {
+      name: assetPath,
+      file: new Blob([mediaBuffer], { type: decoded.mimeType }),
+    });
+    const replacementText = placement === "before"
+      ? `${insertionText}\n\n${anchorText}`
+      : `${anchorText}\n\n${insertionText}`;
+    const result = await createProposal(folder.id, {
+      title,
+      explanation,
+      baseHead: null,
+      suggestions: [
+        {
+          path: assetPath,
+          kind: "asset_replace",
+          stagingId: waiting.stagingId,
+          mimeType: decoded.mimeType,
+          explanation: `Add ${assetPath} for this document change.`,
+        },
+        {
+          path: documentPath,
+          kind: "text_replace",
+          section: typeof input.section === "string" ? input.section.trim().slice(0, 160) : undefined,
+          before: anchorText,
+          replacement: replacementText,
+          explanation,
+        },
+      ],
+    });
+    announceProposalCreated({ folderId: folder.id, path: documentPath, proposalId: result.proposalId });
+    return {
+      changedDocument: false,
+      stagedOutsideFolder: true,
+      reviewRequired: true,
+      folder: folder.name,
+      document: documentPath,
+      assetPath,
+      assetBytes: waiting.size,
+      proposalId: result.proposalId,
+      proposalUrl: result.url,
+    };
+  } catch (error) {
+    return { error: (error as Error).message };
   }
 }
 
@@ -775,6 +913,24 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
   });
 
   await mc.registerTool({
+    name: "propose_document_media",
+    description: "Create one reviewable Change Proposal that adds generated media and inserts its Markdown or HTML reference into a text document. The bytes wait outside the folder; accepting the whole proposal adds the media and edits the document in one Save. This never changes the folder by itself.",
+    inputSchema: objSchema({
+      document: { type: "string", description: "Exact path of the text document in the open GoodFolder." },
+      assetPath: { type: "string", description: "New path the image, video, or audio file will have if accepted, including its extension." },
+      assetDataUrl: { type: "string", description: "The generated image, video, or audio as a base64 data URL. Inline media is limited to 25 MB." },
+      anchorText: { type: "string", description: "Exact existing document text to anchor the insertion, at most 20,000 characters." },
+      insertionText: { type: "string", description: "Markdown or HTML that refers to assetPath, at most 20,000 characters." },
+      placement: { type: "string", enum: ["before", "after"], description: "Put insertionText before or after anchorText." },
+      section: { type: "string", description: "Optional section name shown during review." },
+      explanation: { type: "string", description: "Why the media belongs here, at most 500 characters." },
+      title: { type: "string", description: "Short Change Proposal title." },
+    }, ["document", "assetPath", "assetDataUrl", "anchorText", "insertionText", "placement", "explanation", "title"]),
+    annotations: proposesOnly,
+    execute: async (args: ProposeDocumentMediaArgs) => proposeDocumentMedia(args),
+  });
+
+  await mc.registerTool({
     name: "comment_on_change_proposal",
     description: "Add a comment to a Change Proposal for the people reviewing it. This adds discussion but does not change any document.",
     inputSchema: objSchema({ proposalId: { type: "string", description: "Change Proposal id." }, comment: { type: "string", description: "Comment, at most 4,000 characters." } }, ["proposalId", "comment"]), annotations: proposesOnly,
@@ -966,6 +1122,7 @@ export const DASHBOARD_TOOL_NAMES = {
   explain_change_proposal: true,
   propose_file_change: true,
   propose_document_change: true,
+  propose_document_media: true,
   comment_on_change_proposal: true,
   comment_on_document: true,
 };

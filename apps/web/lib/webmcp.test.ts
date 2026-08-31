@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeRestorePreview,
+  decodeMediaDataUrl,
   explainSave,
   searchSaves,
   toCompactSave,
@@ -86,19 +87,33 @@ test("site tools expose suggestions but never human review powers", () => {
   const reviewTools = [
     "propose_file_change",
     "propose_document_change",
+    "propose_document_media",
     "comment_on_change_proposal",
     "comment_on_document",
   ];
   const toolNames = Object.keys(DASHBOARD_TOOL_NAMES);
 
-  assert.equal(toolNames.length, 18);
-  assert.equal(reviewTools.length, 4);
+  assert.equal(toolNames.length, 19);
+  assert.equal(reviewTools.length, 5);
   assert.equal(toolNames.filter((name) => !reviewTools.includes(name)).length, 14);
   assert.equal(DASHBOARD_TOOL_NAMES.propose_document_change, true);
+  assert.equal(DASHBOARD_TOOL_NAMES.propose_document_media, true);
   assert.equal(DASHBOARD_TOOL_NAMES.comment_on_document, true);
   assert.equal(DASHBOARD_TOOL_NAMES.comment_on_change_proposal, true);
   const names = toolNames.join(" ");
   assert.doesNotMatch(names, /accept|reject|invite|permission|delete|save_document/);
+});
+
+test("media data URLs accept bounded media and refuse other payloads", () => {
+  const decoded = decodeMediaDataUrl("data:image/png;base64,aGVsbG8=");
+  assert.ok(!("error" in decoded));
+  if (!("error" in decoded)) {
+    assert.equal(decoded.mimeType, "image/png");
+    assert.equal(new TextDecoder().decode(decoded.bytes), "hello");
+  }
+  assert.deepEqual(decodeMediaDataUrl("data:text/plain;base64,aGVsbG8="), {
+    error: "Give the media as a base64 image, video, or audio data URL.",
+  });
 });
 
 test("new workspace tools keep the existing read tools", () => {
@@ -135,13 +150,16 @@ test("WebMCP registration is titled, idempotent, abort-aware, and reports state"
     assert.ok(calls.every((tool) => (tool.annotations as any)?.readOnlyHint === true || (tool.annotations as any)?.untrustedContentHint === true));
     const generic = calls.find((tool) => tool.name === "propose_file_change");
     const alias = calls.find((tool) => tool.name === "propose_document_change");
+    const media = calls.find((tool) => tool.name === "propose_document_media");
     const read = calls.find((tool) => tool.name === "read_file_context");
     assert.ok(generic);
     assert.ok(alias);
+    assert.ok(media);
     assert.ok(read);
     assert.deepEqual((generic.inputSchema as any).properties.operation.enum, ["text_replace", "table_update", "asset_replace"]);
     assert.equal((generic.annotations as any).untrustedContentHint, true);
     assert.equal((alias.annotations as any).untrustedContentHint, true);
+    assert.equal((media.annotations as any).untrustedContentHint, true);
     assert.equal((read.annotations as any).readOnlyHint, true);
     assert.equal((read.annotations as any).untrustedContentHint, true);
 
@@ -213,6 +231,80 @@ test("propose_file_change only creates a review item and announces it", async ()
     assert.equal(body.baseHead, null);
     assert.deepEqual(body.operation.changes, [{ address: "B2", before: "open", replacement: "done" }]);
     assert.equal(calls.some((call) => call.url.includes("/file?")), false);
+  } finally {
+    await unregisterDashboardTools();
+    globalThis.fetch = previousFetch;
+    if (previousDocument === undefined) delete (globalThis as { document?: unknown }).document;
+    else Object.defineProperty(globalThis, "document", { configurable: true, value: previousDocument });
+    if (previousWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+  }
+});
+
+test("propose_document_media holds bytes outside the folder and creates one bundled review item", async () => {
+  const previousDocument = (globalThis as { document?: unknown }).document;
+  const previousWindow = (globalThis as { window?: unknown }).window;
+  const previousFetch = globalThis.fetch;
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const tools: Array<Record<string, any>> = [];
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { modelContext: { registerTool: async (tool: Record<string, unknown>) => tools.push(tool) }, body: { dataset: {} } },
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      location: { search: "?folder=qa-folder&file=recipe.md" },
+      dispatchEvent: () => true,
+      getSelection: () => ({ toString: () => "" }),
+    },
+  });
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url.endsWith("/api/projects")) return new Response(JSON.stringify([{ id: "qa-folder", name: "QA" }]));
+    if (url.endsWith("/api/projects/qa-folder/files")) {
+      return new Response(JSON.stringify({ role: "owner", head: "head-before", files: [{ path: "recipe.md", size: 40, sha: "file-before", proposable: true }] }));
+    }
+    if (url.includes("/api/projects/qa-folder/staged-files?name=images%2Fdrink.png")) {
+      return new Response(JSON.stringify({ ok: true, stagingId: "staged-1", size: 5 }));
+    }
+    if (url.endsWith("/api/projects/qa-folder/proposals")) {
+      return new Response(JSON.stringify({ ok: true, proposalId: "proposal-media", title: "Add drink photo", suggestionCount: 2, url: "https://trygoodfolder.com/dashboard?folder=qa-folder&proposal=proposal-media" }));
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  try {
+    await registerDashboardTools();
+    const tool = tools.find((item) => item.name === "propose_document_media");
+    assert.ok(tool);
+    const result = await tool.execute({
+      document: "recipe.md",
+      assetPath: "images/drink.png",
+      assetDataUrl: "data:image/png;base64,aGVsbG8=",
+      anchorText: "## Steps",
+      insertionText: "![Piña colada](images/drink.png)",
+      placement: "before",
+      section: "Between Ingredients and Steps",
+      explanation: "Show the finished drink before the method.",
+      title: "Add drink photo",
+    });
+    assert.equal((result as any).changedDocument, false);
+    assert.equal((result as any).stagedOutsideFolder, true);
+    assert.equal((result as any).reviewRequired, true);
+    const staged = calls.find((call) => call.url.includes("/staged-files?"));
+    assert.ok(staged?.init?.body instanceof Blob);
+    assert.equal((staged!.init!.body as Blob).size, 5);
+    const proposal = calls.find((call) => call.url.endsWith("/proposals"));
+    assert.ok(proposal);
+    const body = JSON.parse(String(proposal!.init?.body));
+    assert.equal(body.suggestions.length, 2);
+    assert.deepEqual(body.suggestions.map((suggestion: { kind: string; path: string }) => [suggestion.kind, suggestion.path]), [
+      ["asset_replace", "images/drink.png"],
+      ["text_replace", "recipe.md"],
+    ]);
+    assert.equal(body.suggestions[1].before, "## Steps");
+    assert.equal(body.suggestions[1].replacement, "![Piña colada](images/drink.png)\n\n## Steps");
   } finally {
     await unregisterDashboardTools();
     globalThis.fetch = previousFetch;
