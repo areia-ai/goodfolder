@@ -88,6 +88,13 @@ test("observation mode reports the decision without refusing the write", () => {
   assert.equal(access.observedReason, "subscription-required");
 });
 
+test("enforced Hosted access refuses an account without a trial or subscription", () => {
+  const access = deriveEntitlement({ billingMode: "stripe", enforcement: "enforce", status: "none", now });
+  assert.equal(access.canWrite, false);
+  assert.equal(access.reason, "subscription-required");
+  assert.equal(access.observedReason, "subscription-required");
+});
+
 test("an active full-access override wins over subscription state", () => {
   const access = deriveEntitlement({
     billingMode: "stripe", enforcement: "enforce", status: "none", now,

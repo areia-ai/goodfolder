@@ -35,6 +35,7 @@ export async function accountCall<T = any>(
   method: string,
   path: string,
   body?: unknown,
+  subscriptionAction?: string,
 ): Promise<T> {
   const init: RequestInit = {
     method,
@@ -53,7 +54,7 @@ export async function accountCall<T = any>(
     /* non-JSON error bodies */
   }
   if (!res.ok) {
-    const billing = billingErrorMessage(json?.error?.code);
+    const billing = billingErrorMessage(json?.error?.code, subscriptionAction);
     if (billing) throw new CliError(`✗ ${billing}`);
     if (res.status === 401 || res.status === 403) throw new CliError(`✗ ${authHint()}`);
     throw new CliError(
@@ -63,8 +64,8 @@ export async function accountCall<T = any>(
   return json as T;
 }
 
-function billingErrorMessage(code: unknown): string | null {
-  if (code === "subscription-required") return "Start your GoodFolder Hosted trial before saving new work.";
+function billingErrorMessage(code: unknown, subscriptionAction = "saving new work"): string | null {
+  if (code === "subscription-required") return `Start your GoodFolder Hosted trial before ${subscriptionAction}.`;
   if (code === "read-only") return "This account is in read and export mode. Your existing files and earlier versions are still available.";
   if (code === "quota-exceeded") return "You have reached your protected-data limit. Nothing was removed; increase your limit or free some capacity before saving again.";
   if (code === "billing-unavailable") return "Hosted billing is unavailable right now. Try again shortly.";
@@ -95,7 +96,7 @@ export function createProject(
   return accountCall(apiUrl, accountToken, "POST", "/api/projects", {
     name,
     ...(deviceName ? { deviceName } : {}),
-  });
+  }, "connecting a folder");
 }
 
 export interface ProjectSummary {

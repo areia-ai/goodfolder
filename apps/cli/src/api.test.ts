@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { preflightSave } from "./api.ts";
+import { createProject, preflightSave } from "./api.ts";
 import type { FolderConfig } from "./config.ts";
 
 const cfg: FolderConfig = {
@@ -27,6 +27,21 @@ test("save preflight accepts a writable account", async () => {
   globalThis.fetch = async () => Response.json({ ok: true, canWrite: true });
   try {
     await preflightSave(cfg);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("a Hosted account without a trial is told how to connect a folder", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    error: { code: "subscription-required", message: "raw server message" },
+  }), { status: 402, headers: { "content-type": "application/json" } });
+  try {
+    await assert.rejects(
+      createProject("https://example.test", "Quarterly report", "approved-account-token"),
+      /Start your GoodFolder Hosted trial before connecting a folder\./,
+    );
   } finally {
     globalThis.fetch = original;
   }

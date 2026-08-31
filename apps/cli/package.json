@@ -4,19 +4,21 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "bin": {
-    "goodfolder": "./src/index.ts"
+    "goodfolder": "./dist/index.js"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/index.js",
     "test": "node --experimental-transform-types --test src/*.test.ts",
     "dev": "node --experimental-transform-types src/index.ts"
   },
-  "dependencies": {
-    "@goodfolder/shared": "workspace:*"
-  },
   "devDependencies": {
+    "@goodfolder/shared": "workspace:*",
     "@types/node": "^22.10.0",
     "typescript": "^5.9.2"
   }
