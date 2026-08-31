@@ -3,11 +3,14 @@
 import { useState } from "react";
 import {
   addProposalComment,
+  changesTheFolder,
   inviteContributor,
   reviewProposal,
   type ChangeProposal,
   type Folder,
+  type ProposalSuggestion,
 } from "@/lib/gf-api";
+import { formatBytes } from "@/lib/preview";
 import { PeopleIcon, ProposalIcon } from "@/components/icons";
 import { Badge, EmptyState, ReviewBadge, done, problem } from "@/components/ui";
 import type { Notify, Role } from "@/components/document-surface";
@@ -89,7 +92,9 @@ export function ProposalList({
                     </p>
                     <ReviewBadge status={suggestion.status} />
                   </div>
-                  {suggestion.kind === "table_update" ? (
+                  {changesTheFolder(suggestion.kind) ? (
+                    <FolderChange suggestion={suggestion} />
+                  ) : suggestion.kind === "table_update" ? (
                     <div className="mt-3 rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white p-3">
                       <span className="gf-change-label">Cell changes</span>
                       <div className="mt-2 grid gap-2">
@@ -177,6 +182,57 @@ export function ProposalList({
         )}
       </div>
     </Section>
+  );
+}
+
+/**
+ * A suggestion that changes which files the folder holds.
+ *
+ * There is no passage to put beside another passage here — the whole change
+ * is one sentence, so the card is that sentence and the name it concerns.
+ * The one about adding says how big the waiting file is, because that is the
+ * question an owner actually has about a file they cannot see yet.
+ */
+function FolderChange({ suggestion }: { suggestion: ProposalSuggestion }) {
+  const name = suggestion.path.split("/").pop() || suggestion.path;
+  const to = suggestion.operation?.to ?? "";
+  const size = suggestion.operation?.sizeBytes;
+  // A name with no slash in it is at the top of the folder, not one character
+  // short of itself — which is what a bare lastIndexOf would have said.
+  const holding = (path: string) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
+  const moving = holding(to) !== holding(suggestion.path);
+  const renaming = (to.split("/").pop() || to) !== name;
+  const there = holding(to) || "the top of the folder";
+  return (
+    <div className="mt-3 rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white p-3">
+      {suggestion.kind === "path_rename" && (
+        <p className="text-[13px]">
+          {renaming ? (
+            <>
+              Rename <b className="font-mono text-[12.5px]">{name}</b> to{" "}
+              <b className="font-mono text-[12.5px]">{to.split("/").pop() || to}</b>
+              {moving && <> — and move it to <span className="font-mono text-[12.5px]">{there}</span></>}.
+            </>
+          ) : (
+            <>
+              Move <b className="font-mono text-[12.5px]">{name}</b> to{" "}
+              <span className="font-mono text-[12.5px]">{there}</span>.
+            </>
+          )}
+        </p>
+      )}
+      {suggestion.kind === "path_remove" && (
+        <p className="text-[13px]">
+          Take <b className="font-mono text-[12.5px]">{name}</b> out of the folder. Every earlier Save still holds it.
+        </p>
+      )}
+      {suggestion.kind === "asset_replace" && (
+        <p className="text-[13px]">
+          Add <b className="font-mono text-[12.5px]">{name}</b>
+          {typeof size === "number" ? <> — {formatBytes(size)}</> : null}. Nothing is in the folder until you accept it.
+        </p>
+      )}
+    </div>
   );
 }
 

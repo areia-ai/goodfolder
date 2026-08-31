@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyProposalOperations } from "./proposal-operations.ts";
+import { applyProposalOperations, isFileOperation } from "./proposal-operations.ts";
 
 test("applies multiple text anchors in memory", () => {
   const result = applyProposalOperations(
@@ -48,4 +48,18 @@ test("does not apply unsupported binary operations", () => {
     applyProposalOperations("ignored", "photo.png", [{ kind: "asset", before: "", replacement: "", operation: { kind: "asset_replace" } }]),
     { error: "unsupported" },
   );
+});
+
+test("a change to which files a folder holds is not a change to a file", () => {
+  for (const kind of ["asset", "rename", "remove"] as const) {
+    assert.deepEqual(
+      applyProposalOperations("Some text.", "notes.md", [{ kind, before: "", replacement: "", operation: {} }]),
+      { error: "unsupported" },
+      kind,
+    );
+    assert.equal(isFileOperation(kind), true);
+  }
+  assert.equal(isFileOperation("text"), false);
+  assert.equal(isFileOperation("table"), false);
+  assert.equal(isFileOperation(null), false);
 });

@@ -9,6 +9,15 @@ import type { ServerConfig } from "./config.ts";
  * is enforced by GoodFolder's middleware BEFORE any request reaches here.
  */
 
+/** What the engine hands back per request, and how far this will read. */
+const TREE_PAGE_SIZE = 1000;
+export const TREE_ENTRY_CAP = 25_000;
+
+/** One file's part in a change. A rename is a `write` and a `remove` together. */
+export type FileChange =
+  | { operation: "write"; path: string; content: Buffer }
+  | { operation: "remove"; path: string };
+
 export class RepositoryAdapter {
   constructor(private cfg: ServerConfig) {}
 
@@ -81,29 +90,53 @@ export class RepositoryAdapter {
     return body.commit?.id ?? null;
   }
 
+  /**
+   * Every path in the project, not the first page of them.
+   *
+   * The engine hands back a thousand at a time. Stopping at the first page
+   * would mean the browser's checks — above all the one that refuses a pair
+   * of names differing only in case — judged a folder they had only partly
+   * seen, and passed. So this reads to the end, and past TREE_ENTRY_CAP it
+   * says so out loud rather than answering with a part of the truth.
+   */
   async tree(projectId: string, ref = "main"): Promise<Array<{
     path: string;
     type: "blob" | "tree";
     size: number;
     sha: string;
   }>> {
-    const res = await this.api(
-      `${this.repoPath(projectId)}/git/trees/${encodeURIComponent(ref)}?recursive=true&per_page=1000`,
-    );
-    // Gitea answers 400 when an empty project has no main tree yet.
-    if (res.status === 400 || res.status === 404) return [];
-    if (!res.ok) throw new Error(`tree failed (${res.status})`);
-    const body = (await res.json()) as {
-      tree?: Array<{ path?: string; type?: string; size?: number; sha?: string }>;
-    };
-    return (body.tree ?? [])
-      .filter((item) => item.path && (item.type === "blob" || item.type === "tree"))
-      .map((item) => ({
-        path: item.path!,
-        type: item.type as "blob" | "tree",
-        size: Number(item.size ?? 0),
-        sha: item.sha ?? "",
-      }));
+    const found = new Map<string, { path: string; type: "blob" | "tree"; size: number; sha: string }>();
+    for (let page = 1; page <= TREE_ENTRY_CAP / TREE_PAGE_SIZE; page += 1) {
+      const res = await this.api(
+        `${this.repoPath(projectId)}/git/trees/${encodeURIComponent(ref)}?recursive=true&per_page=${TREE_PAGE_SIZE}&page=${page}`,
+      );
+      // Gitea answers 400 when an empty project has no main tree yet.
+      if (res.status === 400 || res.status === 404) return [...found.values()];
+      if (!res.ok) throw new Error(`tree failed (${res.status})`);
+      const body = (await res.json()) as {
+        tree?: Array<{ path?: string; type?: string; size?: number; sha?: string }>;
+        truncated?: boolean;
+      };
+      const returned = body.tree ?? [];
+      const before = found.size;
+      for (const item of returned) {
+        if (!item.path || (item.type !== "blob" && item.type !== "tree")) continue;
+        found.set(item.path, {
+          path: item.path,
+          type: item.type,
+          size: Number(item.size ?? 0),
+          sha: item.sha ?? "",
+        });
+      }
+      // Three ways to know there is no more to read, so this does not depend
+      // on any one of them being reported the way it is documented.
+      if (returned.length < TREE_PAGE_SIZE) return [...found.values()];
+      if (body.truncated === false) return [...found.values()];
+      if (found.size === before) return [...found.values()];
+    }
+    const error = new Error("folder-too-large") as Error & { code?: string };
+    error.code = "folder-too-large";
+    throw error;
   }
 
   async readFile(
@@ -162,6 +195,65 @@ export class RepositoryAdapter {
     const response = (await res.json()) as { commit?: { sha?: string } };
     const commitSha = response.commit?.sha;
     if (!commitSha) throw new Error("writeFile returned no save id");
+    return { commitSha };
+  }
+
+  /**
+   * Several files changed in one save.
+   *
+   * A rename is a file arriving and a file leaving; done as two writes there
+   * is a moment where the folder holds both or neither, and whoever syncs in
+   * that moment gets it. One call, one save, no moment.
+   *
+   * The engine also offers a rename of its own, which would spare re-sending
+   * the bytes. It is not used: this shape works on every version and can be
+   * checked against one, which a rename that only newer engines understand
+   * could not be.
+   */
+  async changeFiles(input: {
+    projectId: string;
+    changes: readonly FileChange[];
+    message: string;
+    expectedHead: string | null;
+  }): Promise<{ commitSha: string }> {
+    if (input.changes.length === 0) throw new Error("changeFiles was asked to change nothing");
+    const currentHead = await this.head(input.projectId);
+    if (currentHead !== input.expectedHead) {
+      const error = new Error("newer-work") as Error & { code?: string };
+      error.code = "newer-work";
+      throw error;
+    }
+    // One read of the whole folder rather than one per file: what each
+    // change needs from it is the name the engine knows the old bytes by.
+    const known = new Map(
+      (await this.tree(input.projectId))
+        .filter((entry) => entry.type === "blob")
+        .map((entry) => [entry.path, entry.sha]),
+    );
+    const files = input.changes.map((change) => {
+      const sha = known.get(change.path);
+      if (change.operation === "remove") {
+        if (!sha) throw new Error(`changeFiles cannot take out a file that isn't there: ${change.path}`);
+        return { operation: "delete", path: change.path, sha };
+      }
+      return {
+        operation: sha ? "update" : "create",
+        path: change.path,
+        content: change.content.toString("base64"),
+        ...(sha ? { sha } : {}),
+      };
+    });
+    const res = await this.api(`${this.repoPath(input.projectId)}/contents`, {
+      method: "POST",
+      body: JSON.stringify({ branch: "main", message: input.message, files }),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(`changeFiles failed (${res.status}): ${detail.slice(0, 200)}`);
+    }
+    const response = (await res.json()) as { commit?: { sha?: string } };
+    const commitSha = response.commit?.sha;
+    if (!commitSha) throw new Error("changeFiles returned no save id");
     return { commitSha };
   }
 }

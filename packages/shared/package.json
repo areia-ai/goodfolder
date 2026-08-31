@@ -8,9 +8,11 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "test": "node --experimental-transform-types --test src/*.test.ts"
   },
   "devDependencies": {
+    "@types/node": "^22.10.0",
     "typescript": "^5.9.2"
   }
 }

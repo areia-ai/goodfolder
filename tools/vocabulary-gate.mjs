@@ -24,7 +24,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TARGETS = [
   "apps/cli/src",
   "apps/mcp/src",
-  "apps/control-plane/src/index.ts",
+  // The whole control plane, not just its routes: the write gate holds
+  // the words a person reads when a file is turned away.
+  "apps/control-plane/src",
   "apps/web/app",
   "apps/web/components",
   "apps/web/lib",

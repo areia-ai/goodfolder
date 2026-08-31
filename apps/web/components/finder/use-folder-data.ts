@@ -11,13 +11,6 @@ import {
 } from "@/lib/vfs";
 import type { Role } from "@/components/document-surface";
 
-/**
- * The transport hands back at most a thousand entries in one answer. Nobody
- * noticed while the file list was a narrow rail; a window someone browses will
- * reach it, and when it does the listing says so rather than quietly ending.
- */
-export const LISTING_LIMIT = 1000;
-
 export interface FolderData {
   status: "loading" | "ready" | "failed";
   error: string | null;
@@ -30,14 +23,12 @@ export interface FolderData {
   saves: SaveRow[];
   proposals: ChangeProposal[];
   people: Array<{ email: string; role: Role }>;
-  /** True when the folder holds more than one answer can carry. */
-  truncated: boolean;
 }
 
 const LOADING: FolderData = {
   status: "loading", error: null, role: "owner", head: null, files: [],
   tree: buildTree([]), changed: EMPTY_CHANGE_INDEX, review: new Map(),
-  saves: [], proposals: [], people: [], truncated: false,
+  saves: [], proposals: [], people: [],
 };
 
 export interface FolderStore {
@@ -88,7 +79,6 @@ export function useFolderData(folderId: string | null): FolderStore {
           saves,
           proposals: proposalData.proposals,
           people: peopleData.people,
-          truncated: fileData.files.length >= LISTING_LIMIT,
         },
       }));
     } catch (error) {

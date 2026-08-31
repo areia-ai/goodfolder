@@ -30,6 +30,9 @@ importers:
       '@goodfolder/serverlib':
         specifier: workspace:*
         version: link:../../packages/serverlib
+      '@goodfolder/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@hono/node-server':
         specifier: ^1.13.7
         version: 1.19.17(hono@4.13.3)
@@ -155,6 +158,9 @@ importers:
 
   packages/shared:
     devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
       typescript:
         specifier: ^5.9.2
         version: 5.9.3

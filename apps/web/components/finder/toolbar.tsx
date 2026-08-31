@@ -54,6 +54,8 @@ export interface ToolbarProps {
   reading?: boolean;
   /** Only at the root, where a new folder is a thing that can be made. */
   onNewFolder?: () => void;
+  /** Inside a folder you own: pick files rather than dragging them in. */
+  onAddFiles?: () => void;
   /** Folder-only actions; absent at the root. */
   folderActions?: {
     isPinned: boolean;
@@ -232,6 +234,12 @@ export function Toolbar(props: ToolbarProps) {
 
       {props.onNewFolder && !props.reading && (
         <button type="button" className="gf-win-tool" aria-label="New folder" onClick={props.onNewFolder}>
+          <PlusIcon />
+        </button>
+      )}
+
+      {props.onAddFiles && !props.reading && (
+        <button type="button" className="gf-win-tool" aria-label="Add files" onClick={props.onAddFiles}>
           <PlusIcon />
         </button>
       )}

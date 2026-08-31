@@ -153,7 +153,7 @@ const ONLY_YOU_CAN = [
   "Accept or reject a Change Proposal",
   "Invite people or change who has access",
   "Restore or undo from the computer where the folder lives",
-  "Delete anything",
+  "Take anything out of the folder",
 ];
 
 const SOURCE_PARTS = [
@@ -494,8 +494,8 @@ export default function Landing() {
                 ))}
               </div>
               <p className="gf-faint mt-6 max-w-xl text-[13px] leading-relaxed">
-                Sync and Restore happen on the computer that holds the folder. The dashboard shows what happened,
-                and tells you which computer to use when an action needs the original files.
+                Sync and Restore need the computer that holds the folder. Adding a file, renaming one and taking
+                one out all work in the browser too.
               </p>
             </div>
             <div>

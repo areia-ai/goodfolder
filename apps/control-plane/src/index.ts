@@ -1,5 +1,10 @@
 import { createServer } from "node:http";
-import { Transform } from "node:stream";
+import { createReadStream } from "node:fs";
+import { mkdtemp, open as openFile, readFile as readTempFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   createCipheriv,
   createDecipheriv,
@@ -7,7 +12,7 @@ import {
   randomBytes,
 } from "node:crypto";
 import { getRequestListener } from "@hono/node-server";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import {
   tokenFromAuthHeader,
   loadConfig,
@@ -18,7 +23,9 @@ import {
   resolveAuthContext,
   resolveScope,
   GetObjectCommand,
+  PutObjectCommand,
   loadBillingConfig,
+  type FileChange,
   makeS3,
   isPlanCode,
   PLANS,
@@ -27,10 +34,13 @@ import {
 } from "@goodfolder/serverlib";
 import { HostedBilling } from "./hosted-billing.ts";
 import { safeDocumentPath } from "./collaboration.ts";
+import { ROUTING_CEILING_BYTES } from "@goodfolder/shared";
+import { checkWrite, filesUnder } from "./write-gate.ts";
+import { acceptStagedFile, forgetStagedFile, hashFile, putStoredFileFromPath, stagingKey } from "./stored-file.ts";
 import {
   TABLE_EDIT_CAP,
 } from "./table.ts";
-import { applyProposalOperations, type StoredProposalSuggestion } from "./proposal-operations.ts";
+import { applyProposalOperations, isFileOperation, type StoredProposalSuggestion } from "./proposal-operations.ts";
 import {
   PREVIEW_BYTE_CAP,
   parseStoredFilePointer,
@@ -1034,16 +1044,27 @@ async function recordWebSave(input: {
   projectId: string;
   commitSha: string;
   label: string;
+  /** Every path this save touched — what tells each file when it last changed. */
   changedPaths: string[];
   accountEmail: string;
+  /**
+   * What a person should read beside the label. A rename touches two paths
+   * per file and changes one file, so the count is not always the length of
+   * the list above. Left out, it says the whole list changed.
+   */
+  counts?: { added?: number; changed?: number; removed?: number };
 }): Promise<number> {
   const deviceId = await ensureWebDevice(input.projectId);
+  const added = input.counts?.added ?? 0;
+  const removed = input.counts?.removed ?? 0;
+  const changed = input.counts?.changed ?? (input.counts ? 0 : input.changedPaths.length);
   const rows = await sql`
     INSERT INTO saves (id, project_id, seq, label, label_source, actor_device_id,
-                       changed_paths, commit_sha, changed_count, top_paths, harness)
+                       changed_paths, commit_sha, added_count, changed_count, removed_count,
+                       top_paths, harness)
     SELECT ${crypto.randomUUID()}, ${input.projectId}, COALESCE(MAX(s.seq), 0) + 1,
            ${input.label.slice(0, 120)}, 'user', ${deviceId},
-           ${sql.json(input.changedPaths)}, ${input.commitSha}, 1,
+           ${sql.json(input.changedPaths)}, ${input.commitSha}, ${added}, ${changed}, ${removed},
            ${sql.json(input.changedPaths.slice(0, 10))}, 'GoodFolder web'
     FROM saves s WHERE s.project_id = ${input.projectId}
     RETURNING seq`;
@@ -1062,7 +1083,21 @@ app.get("/api/projects/:id/files", async (c) => {
   const projectId = c.req.param("id");
   const role = await projectAccess(projectId, acct.accountId);
   if (!role) return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
-  const [head, tree] = await Promise.all([repos.head(projectId), repos.tree(projectId)]);
+  let head: string | null;
+  let tree: Awaited<ReturnType<typeof repos.tree>>;
+  try {
+    [head, tree] = await Promise.all([repos.head(projectId), repos.tree(projectId)]);
+  } catch (error) {
+    if ((error as { code?: string }).code === "folder-too-large") {
+      return c.json({
+        error: {
+          code: "folder-too-large",
+          message: "This folder holds more files than the browser can show. Open it on the computer where it lives.",
+        },
+      }, 413);
+    }
+    throw error;
+  }
   return c.json({
     role,
     head,
@@ -1212,9 +1247,11 @@ app.post("/api/projects/:id/document/save", async (c) => {
   const path = safeDocumentPath(body.path);
   if (!path || !EDITABLE_DOCUMENT.test(path)) return c.json({ error: { code: "path", message: "Choose a supported document." } }, 400);
   if (typeof body.content !== "string" || Buffer.byteLength(body.content) > 1_000_000) return c.json({ error: { code: "content", message: "Document is missing or too large." } }, 400);
-  const names = await repos.tree(projectId);
-  const caseCollision = names.find((item) => item.type === "blob" && item.path !== path && item.path.toLowerCase() === path.toLowerCase());
-  if (caseCollision) return c.json({ error: { code: "name-collision", message: `“${path}” is too similar to “${caseCollision.path}”. Choose a different name.` } }, 409);
+  const gate = checkWrite({
+    tree: await repos.tree(projectId),
+    writes: [{ path, sizeBytes: Buffer.byteLength(body.content) }],
+  });
+  if (!gate.ok) return c.json({ error: { code: gate.refusal.code, message: gate.refusal.message } }, gate.refusal.status);
   const currentFile = await repos.readFile(projectId, path);
   if (currentFile && parseStoredFilePointer(currentFile.content)) {
     return c.json({ error: { code: "stored-for-device", message: "That file is stored on a connected computer and cannot be edited in the browser yet." } }, 409);
@@ -1225,6 +1262,267 @@ app.post("/api/projects/:id/document/save", async (c) => {
     return c.json({ ok: true, head: saved.commitSha, saveNumber: seq });
   } catch (error) {
     if ((error as { code?: string }).code === "newer-work") return c.json({ error: { code: "newer-work", message: "Newer work arrived while you were editing. Your draft is still here; review the latest save before trying again." } }, 409);
+    throw error;
+  }
+});
+
+/* --------------------------------------------------------------------------
+   Adding, renaming and taking out files from the browser.
+
+   Only the owner. Someone invited to a folder reaches the same three verbs
+   through a Change Proposal, which the owner accepts — the boundary that
+   makes an invitation safe to hand out is that nothing an invited person
+   does lands in the folder without the owner saying so.
+
+   All three go through `checkWrite` and none of them reach for the engine
+   twice: a rename is one save that both adds and takes away, so there is no
+   moment where the folder holds two copies or none.
+-------------------------------------------------------------------------- */
+
+/** How many files one browser gesture may move at once. */
+const BATCH_ENTRY_CAP = 500;
+
+async function requireOwnerWrite(
+  c: Context,
+): Promise<{ ok: true; projectId: string; email: string } | { ok: false; response: Response }> {
+  const acct = await accountFrom(c);
+  if (!acct) {
+    return { ok: false, response: c.json({ error: { code: "account-scope", message: "account approval required" } }, 403) };
+  }
+  const projectId = c.req.param("id") ?? "";
+  if (await projectAccess(projectId, acct.accountId) !== "owner") {
+    return {
+      ok: false,
+      response: c.json({
+        error: { code: "owner-only", message: "Only the folder owner can change files directly. Send a Change Proposal instead." },
+      }, 403),
+    };
+  }
+  const denied = await projectWriteAccessError(projectId);
+  if (denied) {
+    return { ok: false, response: c.json({ error: { code: denied.code, message: denied.message } }, denied.status) };
+  }
+  return { ok: true, projectId, email: acct.email };
+}
+
+/**
+ * Count the account's stored bytes the moment they land, rather than waiting
+ * for the nightly pass. Someone who adds ten photos and looks at what their
+ * folder is using should see the ten photos.
+ */
+async function confirmStoredObject(projectId: string, oid: string, sizeBytes: number): Promise<void> {
+  await sql`
+    INSERT INTO stored_objects (project_id, oid, declared_bytes, confirmed_bytes, state, verified_at)
+    VALUES (${projectId}, ${oid}, ${sizeBytes}, ${sizeBytes}, 'confirmed', now())
+    ON CONFLICT (project_id, oid) DO UPDATE SET confirmed_bytes = EXCLUDED.confirmed_bytes,
+      declared_bytes = EXCLUDED.declared_bytes, state = 'confirmed', verified_at = now(),
+      reservation_expires_at = NULL, updated_at = now()`;
+}
+
+function fileName(path: string): string {
+  return path.split("/").pop() || path;
+}
+
+function directoryOf(path: string): string {
+  const cut = path.lastIndexOf("/");
+  return cut < 0 ? "" : path.slice(0, cut);
+}
+
+/**
+ * Stop reading once the limit is past. Without this, a body that claims one
+ * size and sends another writes the difference to disk before anyone checks.
+ */
+function cutOffAfter(limit: number): Transform {
+  let seen = 0;
+  return new Transform({
+    transform(chunk, _encoding, done) {
+      seen += chunk.length;
+      if (seen > limit) {
+        done(Object.assign(new Error("too-large"), { code: "too-large" }));
+        return;
+      }
+      done(null, chunk);
+    },
+  });
+}
+
+const TOO_MANY_AT_ONCE = `That is more than ${BATCH_ENTRY_CAP} files at once. Do it on the computer where the folder lives, or take a smaller part of it.`;
+
+app.post("/api/projects/:id/files/upload", async (c) => {
+  const guard = await requireOwnerWrite(c);
+  if (!guard.ok) return guard.response;
+  const { projectId } = guard;
+
+  const path = safeDocumentPath(c.req.query("path"));
+  if (!path) return c.json({ error: { code: "path", message: "Choose a name for the file." } }, 400);
+  // What the person was looking at when they dropped the file. Every one of
+  // these three refuses rather than writing over work that arrived since.
+  const baseHead = c.req.query("baseHead") ?? null;
+  const declared = Number(c.req.header("content-length") ?? 0);
+  if (Number.isFinite(declared) && declared > ROUTING_CEILING_BYTES) {
+    return c.json({ error: { code: "too-large", message: `The largest file the browser can add is ${Math.round(ROUTING_CEILING_BYTES / (1024 * 1024))} MB.` } }, 413);
+  }
+  const body = c.req.raw.body;
+  if (!body) return c.json({ error: { code: "content", message: "No file arrived. Try again." } }, 400);
+
+  // Straight to disk, never into memory: the box that runs this holds other
+  // people's folders too, and a hundred megabytes read into it at once is
+  // how one person's upload becomes everybody's outage.
+  const dir = await mkdtemp(join(tmpdir(), "gf-upload-"));
+  const spooled = join(dir, "bytes");
+  try {
+    const handle = await openFile(spooled, "w");
+    try {
+      await pipeline(
+        Readable.fromWeb(body as import("node:stream/web").ReadableStream),
+        cutOffAfter(ROUTING_CEILING_BYTES),
+        handle.createWriteStream(),
+      );
+    } finally {
+      await handle.close();
+    }
+    const { size } = await stat(spooled);
+
+    const tree = await repos.tree(projectId);
+    const gate = checkWrite({ tree, writes: [{ path, sizeBytes: size }] });
+    if (!gate.ok) return c.json({ error: { code: gate.refusal.code, message: gate.refusal.message } }, gate.refusal.status);
+    const planned = gate.plan.writes[0]!;
+
+    let content: Buffer;
+    if (planned.target === "lfs") {
+      const stored = await putStoredFileFromPath({
+        s3: previewStorage,
+        bucket: cfg.s3Bucket,
+        projectId,
+        sourcePath: spooled,
+        size,
+        contentType: previewMimeFor(path) ?? undefined,
+      });
+      await confirmStoredObject(projectId, stored.oid, stored.size);
+      content = stored.pointer;
+    } else {
+      content = await readTempFile(spooled);
+    }
+
+    const replacing = tree.some((entry) => entry.type === "blob" && entry.path === path);
+    const label = replacing ? `Replaced ${fileName(path)}` : `Added ${fileName(path)}`;
+    const saved = await repos.writeFile({
+      projectId,
+      path,
+      content,
+      message: label,
+      expectedHead: baseHead,
+    });
+    const saveNumber = await recordWebSave({
+      projectId, commitSha: saved.commitSha, label, changedPaths: [path], accountEmail: guard.email,
+      counts: replacing ? { changed: 1 } : { added: 1 },
+    });
+    return c.json({ ok: true, path, head: saved.commitSha, saveNumber });
+  } catch (error) {
+    if ((error as { code?: string }).code === "too-large") {
+      return c.json({ error: { code: "too-large", message: `The largest file the browser can add is ${Math.round(ROUTING_CEILING_BYTES / (1024 * 1024))} MB.` } }, 413);
+    }
+    if ((error as { code?: string }).code === "newer-work") {
+      return c.json({ error: { code: "newer-work", message: "Newer work arrived while the file was on its way. Look at the latest save, then try again." } }, 409);
+    }
+    throw error;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+app.post("/api/projects/:id/files/rename", async (c) => {
+  const guard = await requireOwnerWrite(c);
+  if (!guard.ok) return guard.response;
+  const { projectId } = guard;
+  const body = await c.req.json<{ from?: string; to?: string; baseHead?: string | null }>()
+    .catch(() => ({} as { from?: string; to?: string; baseHead?: string | null }));
+  const from = safeDocumentPath(body.from);
+  const to = safeDocumentPath(body.to);
+  if (!from || !to) return c.json({ error: { code: "path", message: "Choose a name." } }, 400);
+  if (from === to) return c.json({ error: { code: "path", message: "That is the name it already has." } }, 400);
+
+  const tree = await repos.tree(projectId);
+  const moving = filesUnder(tree, [from]);
+  if (moving.length === 0) return c.json({ error: { code: "not-found", message: `“${fileName(from)}” isn’t in this folder any more.` } }, 404);
+  if (moving.length > BATCH_ENTRY_CAP) return c.json({ error: { code: "too-many", message: TOO_MANY_AT_ONCE } }, 400);
+
+  const renamed = moving.map((file) => ({ ...file, to: `${to}${file.path.slice(from.length)}` }));
+  const gate = checkWrite({
+    tree,
+    writes: renamed.map((file) => ({ path: file.to, sizeBytes: file.size })),
+    removes: renamed.map((file) => file.path),
+  });
+  if (!gate.ok) return c.json({ error: { code: gate.refusal.code, message: gate.refusal.message } }, gate.refusal.status);
+
+  const changes: FileChange[] = [];
+  for (const file of renamed) {
+    const current = await repos.readFile(projectId, file.path);
+    if (!current) return c.json({ error: { code: "not-found", message: `“${fileName(file.path)}” isn’t in this folder any more.` } }, 404);
+    changes.push({ operation: "write", path: file.to, content: current.content });
+    changes.push({ operation: "remove", path: file.path });
+  }
+
+  const label = directoryOf(from) === directoryOf(to)
+    ? `Renamed ${fileName(from)} to ${fileName(to)}`
+    : `Moved ${fileName(from)} to ${directoryOf(to) || "the top of the folder"}`;
+  try {
+    const saved = await repos.changeFiles({ projectId, changes, message: label, expectedHead: body.baseHead ?? null });
+    const changedPaths = renamed.flatMap((file) => [file.to, file.path]);
+    const saveNumber = await recordWebSave({
+      projectId, commitSha: saved.commitSha, label, changedPaths, accountEmail: guard.email,
+      counts: { changed: renamed.length },
+    });
+    return c.json({ ok: true, from, to, head: saved.commitSha, saveNumber });
+  } catch (error) {
+    if ((error as { code?: string }).code === "newer-work") {
+      return c.json({ error: { code: "newer-work", message: "Newer work arrived first. Look at the latest save, then try again." } }, 409);
+    }
+    throw error;
+  }
+});
+
+app.post("/api/projects/:id/files/remove", async (c) => {
+  const guard = await requireOwnerWrite(c);
+  if (!guard.ok) return guard.response;
+  const { projectId } = guard;
+  const body = await c.req.json<{ paths?: unknown; baseHead?: string | null }>()
+    .catch(() => ({} as { paths?: unknown; baseHead?: string | null }));
+  const asked = Array.isArray(body.paths) ? body.paths.map((value) => safeDocumentPath(value)) : [];
+  if (asked.length === 0 || asked.some((path) => path === null)) {
+    return c.json({ error: { code: "path", message: "Choose what to take out." } }, 400);
+  }
+
+  const tree = await repos.tree(projectId);
+  const going = filesUnder(tree, asked as string[]);
+  if (going.length === 0) {
+    return c.json({ error: { code: "not-found", message: "That isn’t in this folder any more. Nothing was changed." } }, 404);
+  }
+  if (going.length > BATCH_ENTRY_CAP) return c.json({ error: { code: "too-many", message: TOO_MANY_AT_ONCE } }, 400);
+
+  const gate = checkWrite({ tree, removes: going.map((file) => file.path) });
+  if (!gate.ok) return c.json({ error: { code: gate.refusal.code, message: gate.refusal.message } }, gate.refusal.status);
+
+  const label = going.length === 1
+    ? `Took out ${fileName(going[0]!.path)}`
+    : `Took out ${going.length} files`;
+  try {
+    const saved = await repos.changeFiles({
+      projectId,
+      changes: going.map((file) => ({ operation: "remove", path: file.path }) as const),
+      message: label,
+      expectedHead: body.baseHead ?? null,
+    });
+    const changedPaths = going.map((file) => file.path);
+    const saveNumber = await recordWebSave({
+      projectId, commitSha: saved.commitSha, label, changedPaths, accountEmail: guard.email,
+      counts: { removed: going.length },
+    });
+    return c.json({ ok: true, removed: changedPaths, head: saved.commitSha, saveNumber });
+  } catch (error) {
+    if ((error as { code?: string }).code === "newer-work") {
+      return c.json({ error: { code: "newer-work", message: "Newer work arrived first. Look at the latest save, then try again." } }, 409);
+    }
     throw error;
   }
 });
@@ -1243,7 +1541,10 @@ app.get("/api/projects/:id/proposals", async (c) => {
              'id', ps.id, 'path', ps.document_path, 'section', ps.section_hint,
              'before', ps.before_text, 'replacement', ps.replacement_text,
              'explanation', ps.explanation, 'status', ps.status,
-             'kind', CASE ps.kind WHEN 'table' THEN 'table_update' WHEN 'asset' THEN 'asset_replace' ELSE 'text_replace' END,
+             'kind', CASE ps.kind
+               WHEN 'table' THEN 'table_update' WHEN 'asset' THEN 'asset_replace'
+               WHEN 'rename' THEN 'path_rename' WHEN 'remove' THEN 'path_remove'
+               ELSE 'text_replace' END,
              'operation', ps.operation, 'baseFileSha', ps.base_file_sha
            ) ORDER BY ps.created_at) FILTER (WHERE ps.id IS NOT NULL), '[]') AS suggestions
     FROM change_proposals cp
@@ -1252,6 +1553,115 @@ app.get("/api/projects/:id/proposals", async (c) => {
     WHERE cp.project_id = ${projectId}
     GROUP BY cp.id, a.email ORDER BY cp.created_at DESC LIMIT 100`;
   return c.json({ role, proposals: rows });
+});
+
+/**
+ * Bytes sent up by someone who cannot save them.
+ *
+ * An invited person dropping a file into a folder is proposing to add it, and
+ * a proposal is a thing the owner reads before anything happens. So the bytes
+ * have to wait somewhere that is not the folder: filed by their own hash,
+ * under a key the storage count deliberately does not recognise, and swept
+ * after a week if nobody accepts them.
+ */
+const STAGED_UPLOAD_DAYS = 7;
+/** What one person may have waiting in one folder at a time. */
+const STAGED_UPLOAD_LIMIT = 20;
+
+/**
+ * Let go of bytes nobody is waiting on.
+ *
+ * The same file staged twice is the same bytes under the same name, so the
+ * object only goes when the last thing pointing at it does.
+ */
+async function releaseStagedBytes(projectId: string, oid: string): Promise<void> {
+  const left = await sql`
+    SELECT 1 FROM staged_uploads WHERE project_id = ${projectId} AND oid = ${oid} LIMIT 1`;
+  if (left.length) return;
+  await forgetStagedFile({ s3: previewStorage, bucket: cfg.s3Bucket, projectId, oid });
+}
+
+/**
+ * Sweep bytes nobody accepted. Runs whoever is hosting this and whatever
+ * they are or aren't billed — an installation that never charges anyone
+ * still shouldn't fill up with files nobody chose to keep.
+ */
+async function sweepStagedUploads(): Promise<void> {
+  const expired = await sql`
+    DELETE FROM staged_uploads WHERE expires_at <= now()
+    RETURNING project_id AS "projectId", oid`;
+  const seen = new Set<string>();
+  for (const row of expired) {
+    const key = `${row.projectId}/${row.oid}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    await releaseStagedBytes(String(row.projectId), String(row.oid));
+  }
+}
+
+app.post("/api/projects/:id/staged-files", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const projectId = c.req.param("id") ?? "";
+  if (!await projectAccess(projectId, acct.accountId)) {
+    return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
+  }
+  const denied = await projectWriteAccessError(projectId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
+
+  const name = safeDocumentPath(c.req.query("name"));
+  if (!name) return c.json({ error: { code: "path", message: "Choose a name for the file." } }, 400);
+  const declared = Number(c.req.header("content-length") ?? 0);
+  if (Number.isFinite(declared) && declared > ROUTING_CEILING_BYTES) {
+    return c.json({ error: { code: "too-large", message: `The largest file the browser can add is ${Math.round(ROUTING_CEILING_BYTES / (1024 * 1024))} MB.` } }, 413);
+  }
+  const waiting = await sql`
+    SELECT COUNT(*)::int AS count FROM staged_uploads
+    WHERE project_id = ${projectId} AND author_account_id = ${acct.accountId} AND expires_at > now()`;
+  if (Number(waiting[0]?.count ?? 0) >= STAGED_UPLOAD_LIMIT) {
+    return c.json({
+      error: { code: "too-many", message: `You already have ${STAGED_UPLOAD_LIMIT} files waiting for review here. Send those first.` },
+    }, 429);
+  }
+  const body = c.req.raw.body;
+  if (!body) return c.json({ error: { code: "content", message: "No file arrived. Try again." } }, 400);
+
+  const dir = await mkdtemp(join(tmpdir(), "gf-staged-"));
+  const spooled = join(dir, "bytes");
+  try {
+    const handle = await openFile(spooled, "w");
+    try {
+      await pipeline(
+        Readable.fromWeb(body as import("node:stream/web").ReadableStream),
+        cutOffAfter(ROUTING_CEILING_BYTES),
+        handle.createWriteStream(),
+      );
+    } finally {
+      await handle.close();
+    }
+    const { size } = await stat(spooled);
+    const oid = await hashFile(spooled);
+    await previewStorage.send(new PutObjectCommand({
+      Bucket: cfg.s3Bucket,
+      Key: stagingKey(projectId, oid),
+      Body: createReadStream(spooled),
+      ContentLength: size,
+      ...(previewMimeFor(name) ? { ContentType: previewMimeFor(name)! } : {}),
+    }));
+    const id = crypto.randomUUID();
+    await sql`
+      INSERT INTO staged_uploads (id, project_id, author_account_id, oid, size_bytes, file_name, mime_type, expires_at)
+      VALUES (${id}, ${projectId}, ${acct.accountId}, ${oid}, ${size}, ${fileName(name)}, ${previewMimeFor(name)},
+              now() + ${`${STAGED_UPLOAD_DAYS} days`}::interval)`;
+    return c.json({ ok: true, stagingId: id, size });
+  } catch (error) {
+    if ((error as { code?: string }).code === "too-large") {
+      return c.json({ error: { code: "too-large", message: `The largest file the browser can add is ${Math.round(ROUTING_CEILING_BYTES / (1024 * 1024))} MB.` } }, 413);
+    }
+    throw error;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 app.post("/api/projects/:id/proposals", async (c) => {
@@ -1264,8 +1674,10 @@ app.post("/api/projects/:id/proposals", async (c) => {
   if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   type ProposalOperationInput = {
     path?: string;
-    kind?: "text_replace" | "table_update" | "asset_replace";
+    kind?: "text_replace" | "table_update" | "asset_replace" | "path_rename" | "path_remove";
     section?: string;
+    /** Where a rename is asking the file to go. */
+    to?: string;
     before?: string;
     replacement?: string;
     changes?: Array<{ address?: string; before?: string; replacement?: string }>;
@@ -1292,8 +1704,95 @@ app.post("/api/projects/:id/proposals", async (c) => {
       ? body.suggestions.slice(0, 20)
       : [];
   if (!title || rawOperations.length === 0) return c.json({ error: { code: "proposal", message: "A title and at least one file operation are required." } }, 400);
-  if (rawOperations.some((item) => !item || !["text_replace", "table_update", "asset_replace"].includes(item.kind ?? "text_replace"))) {
-    return c.json({ error: { code: "operation", message: "Choose text_replace, table_update, or asset_replace." } }, 400);
+
+  /**
+   * Proposing a change to which files the folder holds, rather than to what
+   * is inside one.
+   *
+   * These three carry no text to anchor into and no file to read, so they
+   * part company with the rest here rather than being threaded through
+   * validation written for passages and cells. They go through the same gate
+   * an owner's own change does — a proposal is not a way around it, only a
+   * way of asking someone to make it.
+   */
+  const lone = rawOperations.length === 1 ? rawOperations[0]! : null;
+  const loneKind = lone?.kind ?? "";
+  if (lone && (loneKind === "asset_replace" || loneKind === "path_rename" || loneKind === "path_remove")) {
+    const path = safeDocumentPath(lone.path);
+    if (!path) return c.json({ error: { code: "suggestion", message: "Each operation needs a safe file path." } }, 400);
+    const explanation = typeof lone.explanation === "string" ? lone.explanation.trim().slice(0, 500) : "";
+    const tree = await repos.tree(projectId);
+    const here = tree.find((entry) => entry.type === "blob" && entry.path === path) ?? null;
+
+    let stored: "asset" | "rename" | "remove";
+    let operation: Record<string, string | number | null>;
+    let gate: ReturnType<typeof checkWrite>;
+
+    if (loneKind === "asset_replace") {
+      const stagingId = typeof lone.stagingId === "string" ? lone.stagingId.trim() : "";
+      const staged = stagingId
+        ? await sql`
+            SELECT oid, size_bytes AS "sizeBytes", file_name AS "fileName", mime_type AS "mimeType"
+            FROM staged_uploads
+            WHERE id = ${stagingId} AND project_id = ${projectId}
+              AND author_account_id = ${acct.accountId} AND expires_at > now()
+            LIMIT 1`
+        : [];
+      if (!staged.length) {
+        return c.json({ error: { code: "suggestion", message: "That file is no longer waiting to be sent. Add it again." } }, 409);
+      }
+      const row = staged[0]!;
+      stored = "asset";
+      operation = {
+        kind: "asset_replace",
+        stagingId,
+        oid: String(row.oid),
+        sizeBytes: Number(row.sizeBytes),
+        fileName: String(row.fileName),
+        mimeType: row.mimeType == null ? null : String(row.mimeType),
+        explanation,
+      };
+      gate = checkWrite({ tree, writes: [{ path, sizeBytes: Number(row.sizeBytes) }] });
+    } else if (loneKind === "path_rename") {
+      const to = safeDocumentPath((lone as { to?: string }).to);
+      if (!to) return c.json({ error: { code: "suggestion", message: "Choose a name." } }, 400);
+      if (to === path) return c.json({ error: { code: "suggestion", message: "That is the name it already has." } }, 400);
+      if (!here) return c.json({ error: { code: "not-found", message: "That file no longer exists in the folder." } }, 404);
+      stored = "rename";
+      operation = { kind: "path_rename", to, explanation };
+      gate = checkWrite({ tree, writes: [{ path: to, sizeBytes: here.size }], removes: [path] });
+    } else {
+      if (!here) return c.json({ error: { code: "not-found", message: "That file no longer exists in the folder." } }, 404);
+      stored = "remove";
+      operation = { kind: "path_remove", explanation };
+      gate = checkWrite({ tree, removes: [path] });
+    }
+
+    if (!gate.ok) return c.json({ error: { code: gate.refusal.code, message: gate.refusal.message } }, gate.refusal.status);
+
+    const currentHead = await repos.head(projectId);
+    const latest = await sql`SELECT COALESCE(MAX(seq), 0)::int AS seq FROM saves WHERE project_id = ${projectId}`;
+    const baseSaveNumber = Number(latest[0]?.seq ?? 0) || null;
+    const proposalExplanation = typeof body.explanation === "string" ? body.explanation.slice(0, 1000) : "";
+    const id = crypto.randomUUID();
+    await sql.begin(async (tx) => {
+      await tx`
+        INSERT INTO change_proposals (id, project_id, author_account_id, title, explanation, base_commit_sha, base_save_seq)
+        VALUES (${id}, ${projectId}, ${acct.accountId}, ${title}, ${proposalExplanation}, ${currentHead}, ${baseSaveNumber})`;
+      await tx`
+        INSERT INTO proposal_suggestions (id, proposal_id, document_path, kind, base_file_sha, operation, section_hint, before_text, replacement_text, explanation)
+        VALUES (${crypto.randomUUID()}, ${id}, ${path}, ${stored}, ${here?.sha ?? null}, ${sql.json(operation)}, ${null}, ${""}, ${""}, ${explanation})`;
+    });
+    return c.json({ ok: true, proposalId: id, title, suggestionCount: 1, url: `https://trygoodfolder.com/dashboard?folder=${projectId}&proposal=${id}` });
+  }
+
+  if (rawOperations.some((item) => !item || !["text_replace", "table_update"].includes(item.kind ?? "text_replace"))) {
+    return c.json({
+      error: {
+        code: "operation",
+        message: "Choose text_replace or table_update. Adding, renaming and taking out a file each travel on their own.",
+      },
+    }, 400);
   }
   if (rawOperations.some((item) => {
     if (!item || typeof item !== "object") return true;
@@ -1372,10 +1871,6 @@ app.post("/api/projects/:id/proposals", async (c) => {
   const paths = new Set(clean.map((item) => item.path!));
   if (paths.size !== 1) return c.json({ error: { code: "proposal", message: "A Change Proposal can affect one file at a time." } }, 400);
   const path = clean[0]!.path!;
-  if (clean.some((item) => item.kind === "asset_replace")) {
-    if (!previewKindFor(path)) return c.json({ error: { code: "suggestion", message: "Choose a previewable file for a temporary uploaded replacement." } }, 400);
-    return c.json({ error: { code: "unsupported-operation", message: "Binary replacement proposals are not available yet. The file has not changed." } }, 501);
-  }
   // Proposals reach further than hand-editing: anything readable as text can
   // be anchored into, source files included. Typing into it here still cannot.
   if (!isTextDocument(path)) return c.json({ error: { code: "suggestion", message: "Choose a file that can be read as text." } }, 400);
@@ -1518,6 +2013,16 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
 
   if (body.action === "reject") {
     await sql`UPDATE proposal_suggestions SET status = 'rejected', reviewed_at = now() WHERE id IN ${sql(suggestions.map((s) => s.id))}`;
+    // Bytes sent up for a suggestion nobody wants have nothing left to wait for.
+    for (const turned of suggestions) {
+      if (turned.kind !== "asset") continue;
+      const carried = (turned.operation && typeof turned.operation === "object" ? turned.operation : {}) as Record<string, unknown>;
+      const oid = typeof carried.oid === "string" ? carried.oid : "";
+      const stagingId = typeof carried.stagingId === "string" ? carried.stagingId : "";
+      if (!/^[0-9a-f]{64}$/.test(oid) || !stagingId) continue;
+      await sql`DELETE FROM staged_uploads WHERE id = ${stagingId} AND project_id = ${projectId}`;
+      await releaseStagedBytes(projectId, oid);
+    }
     return c.json({ ok: true, status: await refreshProposalStatus(), acceptedSuggestionIds: [], head: null, saveNumber: null });
   }
 
@@ -1554,24 +2059,133 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
     const status = await needsReview(selectedIds);
     return c.json({ ok: true, status, acceptedSuggestionIds: [], head: currentHead, saveNumber: null });
   }
+  /**
+   * Accepting a change to which files the folder holds.
+   *
+   * The rest of this handler reads a file, rewrites its text, and writes it
+   * back. These three never touch a file's contents — they add one, give one
+   * a different name, or take one out — so they part company here and end in
+   * one Save of their own, through the same gate the owner's own change goes
+   * through.
+   */
+  if (isFileOperation(openSuggestions[0]!.kind)) {
+    if (openSuggestions.length !== 1) {
+      const status = await needsReview(selectedIds);
+      return c.json({ ok: true, status, acceptedSuggestionIds: [], head: currentHead, saveNumber: null });
+    }
+    const suggestion = openSuggestions[0]!;
+    const operation = (suggestion.operation && typeof suggestion.operation === "object"
+      ? suggestion.operation
+      : {}) as Record<string, unknown>;
+    const tree = await repos.tree(projectId);
+    const here = tree.find((entry) => entry.type === "blob" && entry.path === path) ?? null;
+
+    const stale = async () => {
+      const status = await needsReview(selectedIds);
+      return c.json({ ok: true, status, acceptedSuggestionIds: [], head: currentHead, saveNumber: null });
+    };
+
+    let changes: FileChange[];
+    let label: string;
+    let changedPaths: string[];
+    let counts: { added?: number; changed?: number; removed?: number };
+    let staged: { oid: string; size: number } | null = null;
+
+    if (suggestion.kind === "asset") {
+      const oid = typeof operation.oid === "string" ? operation.oid : "";
+      const size = Number(operation.sizeBytes ?? -1);
+      if (!/^[0-9a-f]{64}$/.test(oid) || !Number.isSafeInteger(size) || size < 0) return stale();
+      const stillWaiting = await sql`
+        SELECT id FROM staged_uploads
+        WHERE project_id = ${projectId} AND oid = ${oid} AND expires_at > now() LIMIT 1`;
+      if (!stillWaiting.length) return stale();
+      const gate = checkWrite({ tree, writes: [{ path, sizeBytes: size }] });
+      if (!gate.ok) return stale();
+
+      let content: Buffer;
+      if (gate.plan.writes[0]!.target === "lfs") {
+        const accepted = await acceptStagedFile({ s3: previewStorage, bucket: cfg.s3Bucket, projectId, oid, size });
+        await confirmStoredObject(projectId, oid, size);
+        content = accepted.pointer;
+      } else {
+        // Small enough to live in the folder itself, so the bytes come back
+        // from where they were waiting and go in as they are.
+        const object = await previewStorage.send(
+          new GetObjectCommand({ Bucket: cfg.s3Bucket, Key: stagingKey(projectId, oid) }),
+        );
+        if (!object.Body) return stale();
+        content = Buffer.from(await object.Body.transformToByteArray());
+        await forgetStagedFile({ s3: previewStorage, bucket: cfg.s3Bucket, projectId, oid });
+      }
+      staged = { oid, size };
+      changes = [{ operation: "write", path, content }];
+      label = here ? `Replaced ${fileName(path)}` : `Added ${fileName(path)}`;
+      changedPaths = [path];
+      counts = here ? { changed: 1 } : { added: 1 };
+    } else if (suggestion.kind === "rename") {
+      const to = typeof operation.to === "string" ? safeDocumentPath(operation.to) : null;
+      if (!to || !here) return stale();
+      const gate = checkWrite({ tree, writes: [{ path: to, sizeBytes: here.size }], removes: [path] });
+      if (!gate.ok) return stale();
+      const current = await repos.readFile(projectId, path);
+      if (!current) return stale();
+      changes = [
+        { operation: "write", path: to, content: current.content },
+        { operation: "remove", path },
+      ];
+      label = directoryOf(path) === directoryOf(to)
+        ? `Renamed ${fileName(path)} to ${fileName(to)}`
+        : `Moved ${fileName(path)} to ${directoryOf(to) || "the top of the folder"}`;
+      changedPaths = [to, path];
+      counts = { changed: 1 };
+    } else {
+      if (!here) return stale();
+      const gate = checkWrite({ tree, removes: [path] });
+      if (!gate.ok) return stale();
+      changes = [{ operation: "remove", path }];
+      label = `Took out ${fileName(path)}`;
+      changedPaths = [path];
+      counts = { removed: 1 };
+    }
+
+    try {
+      const saved = await repos.changeFiles({ projectId, changes, message: label, expectedHead: currentHead });
+      const saveNumber = await recordWebSave({
+        projectId, commitSha: saved.commitSha, label, changedPaths, accountEmail: acct.email, counts,
+      });
+      await sql`UPDATE proposal_suggestions SET status = 'accepted', reviewed_at = now() WHERE id IN ${sql(selectedIds)}`;
+      if (staged) await sql`DELETE FROM staged_uploads WHERE project_id = ${projectId} AND oid = ${staged.oid}`;
+      const status = await refreshProposalStatus();
+      return c.json({ ok: true, status, acceptedSuggestionIds: selectedIds, head: saved.commitSha, saveNumber });
+    } catch (error) {
+      if ((error as { code?: string }).code === "newer-work") return stale();
+      throw error;
+    }
+  }
+
   const file = await repos.readFile(projectId, path);
   if (!file || openSuggestions.some((suggestion) => suggestion.baseFileSha && String(suggestion.baseFileSha) !== file.sha)) {
     const status = await needsReview(selectedIds);
     return c.json({ ok: true, status, acceptedSuggestionIds: [], head: currentHead, saveNumber: null });
   }
-  const names = await repos.tree(projectId);
-  const caseCollision = names.find((item) => item.type === "blob" && item.path !== path && item.path.toLowerCase() === path.toLowerCase());
-  if (caseCollision) {
-    const status = await needsReview(selectedIds);
-    return c.json({ ok: true, status, acceptedSuggestionIds: [], head: currentHead, saveNumber: null });
-  }
-
   const applied = applyProposalOperations(file.content.toString("utf8"), path, openSuggestions);
   if ("error" in applied) {
     const status = await needsReview(selectedIds);
     return c.json({ ok: true, status, acceptedSuggestionIds: [], head: currentHead, saveNumber: null });
   }
   const nextContent = applied.content;
+
+  // The same gate a direct save goes through. Someone else's suggestion is
+  // not a reason to relax it, and a change this would spoil goes to review
+  // rather than being refused outright — the owner still gets to look.
+  const gate = checkWrite({
+    tree: await repos.tree(projectId),
+    writes: [{ path, sizeBytes: Buffer.byteLength(nextContent) }],
+  });
+  if (!gate.ok) {
+    const status = await needsReview(selectedIds);
+    return c.json({ ok: true, status, acceptedSuggestionIds: [], head: currentHead, saveNumber: null });
+  }
 
   try {
     const saved = await repos.writeFile({
@@ -2026,6 +2640,11 @@ const server = createServer((req, res) => {
   if (p.startsWith("/lfs/")) return void lfsProxy(req, res);
   return listener(req, res);
 });
+
+const stagingSweep = setInterval(() => {
+  void sweepStagedUploads().catch((error) => console.error("sweep of unaccepted uploads failed:", error));
+}, 6 * 60 * 60_000);
+stagingSweep.unref();
 
 if (billingConfig.mode === "stripe") {
   const reconcileTimer = setTimeout(() => {

@@ -198,6 +198,103 @@ export function categoryOfPattern(pattern: string): SkipCategory | null {
   return SKIP_RULES.find((r) => r.pattern === pattern)?.category ?? null;
 }
 
+/**
+ * Which rule caught a path, and why it is left out.
+ */
+export interface SkipMatch {
+  path: string;
+  pattern: string;
+  category: SkipCategory;
+}
+
+/**
+ * Ask whether a save would leave one path out.
+ *
+ * On a person's own computer nothing calls this: `apps/cli` hands the rules
+ * to the engine and asks the engine both what a save contains and what it
+ * left out, so the two answers come from one place and cannot disagree.
+ *
+ * A server has no folder to ask. It still has to refuse to take in the very
+ * things a save exists to leave out — a dragged-in `.env`, a folder of
+ * downloaded packages — so the rules need a reader here too. This is that
+ * reader, and it lives beside the rules rather than beside the server, so
+ * there is one of it. It answers about a *file* path: a directory rule is
+ * matched against the path's folders, never its last segment.
+ *
+ * `exists` reports whether a path is present at the top of the folder, for
+ * the rules that only apply on evidence. `dist` is throwaway output next to
+ * a `package.json` and someone's real work without one.
+ */
+export function skipRuleFor(
+  path: string,
+  exists: (candidate: string) => boolean,
+): SkipMatch | null {
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length === 0) return null;
+  for (const keep of KEEP_PATTERNS) {
+    if (matchesName(segments, keep.slice(1))) return null;
+  }
+  for (const rule of SKIP_RULES) {
+    if (rule.needs !== undefined && !exists(rule.needs)) continue;
+    if (matchesPattern(segments, rule.pattern)) {
+      return { path, pattern: rule.pattern, category: rule.category };
+    }
+  }
+  return null;
+}
+
+/** A name pattern matches a file or a folder, at any depth. */
+function matchesName(segments: readonly string[], glob: string): boolean {
+  const re = globToRegExp(glob);
+  return segments.some((segment) => re.test(segment));
+}
+
+function matchesPattern(segments: readonly string[], pattern: string): boolean {
+  const directoryOnly = pattern.endsWith("/");
+  const body = directoryOnly ? pattern.slice(0, -1) : pattern;
+  if (body.includes("/")) {
+    // Written with a slash inside, so it is anchored at the top of the folder.
+    const parts = body.split("/");
+    if (parts.length > segments.length) return false;
+    if (directoryOnly && parts.length === segments.length) return false;
+    return parts.every((part, i) => globToRegExp(part).test(segments[i]!));
+  }
+  // A folder rule never matches the file's own name, only a folder above it.
+  const candidates = directoryOnly ? segments.slice(0, -1) : segments;
+  return matchesName(candidates, body);
+}
+
+const GLOB_CACHE = new Map<string, RegExp>();
+
+/**
+ * `*` is the only wildcard the rules use, and it never crosses a `/`.
+ * Anything else in a pattern is a literal.
+ */
+function globToRegExp(glob: string): RegExp {
+  const cached = GLOB_CACHE.get(glob);
+  if (cached) return cached;
+  const source = glob
+    .split("*")
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+    .join("[^/]*");
+  const re = new RegExp(`^${source}$`);
+  GLOB_CACHE.set(glob, re);
+  return re;
+}
+
+/**
+ * Every rule, in a shape the reader above understands. A rule that reached
+ * for anything more would be matched by the engine on a person's computer
+ * and missed by the server, which is the drift these rules exist to prevent.
+ * It is checked here, at load, so it cannot be introduced quietly.
+ */
+for (const pattern of [...SKIP_RULES.map((r) => r.pattern), ...KEEP_PATTERNS]) {
+  const body = pattern.replace(/^!/, "").replace(/\/$/, "");
+  if (!body || /[?\[\]{}!\\]/.test(body) || body.includes("**")) {
+    throw new Error(`skip rule "${pattern}" is not a shape skipRuleFor can match`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Manifest
 // ---------------------------------------------------------------------------

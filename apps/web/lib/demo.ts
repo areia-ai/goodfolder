@@ -377,9 +377,18 @@ function fileRow(file: DemoFile): FolderFile {
   };
 }
 
-function nextSave(entry: DemoFolder, label: string, paths: string[]): number {
+function nextSave(
+  entry: DemoFolder,
+  label: string,
+  paths: string[],
+  counts: Partial<Pick<SaveRow, "addedCount" | "changedCount" | "removedCount">> = {},
+): number {
   const seq = (entry.saves[0]?.seq ?? 0) + 1;
-  entry.saves.unshift(save(seq, new Date().toISOString(), label, paths, { deviceName: "GoodFolder web" }));
+  entry.saves.unshift(save(seq, new Date().toISOString(), label, paths, {
+    deviceName: "GoodFolder web",
+    changedCount: 0,
+    ...counts,
+  }));
   entry.folder.lastSeq = seq;
   entry.folder.lastSaveAt = entry.saves[0]!.createdAt;
   return seq;
@@ -390,10 +399,16 @@ function countOpen(entry: DemoFolder): number {
 }
 
 const comments = new Map<string, Array<{ id: string; path: string; quotedText?: string | null; body: string; createdAt: string; authorEmail: string }>>();
+/** Bytes an invited person has sent up that nobody has accepted yet. */
+const staged = new Map<string, { name: string; size: number }>();
 
 async function handle(pathname: string, search: URLSearchParams, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? "GET").toUpperCase();
-  const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+  // An added file arrives as bytes, not as JSON. Everything else is JSON.
+  const dropped = init?.body instanceof Blob ? init.body : null;
+  const body = init?.body && !dropped
+    ? JSON.parse(String(init.body)) as Record<string, unknown>
+    : {};
 
   if (pathname === "/api/me") return json({ id: "demo-account", email: "you@example.com" });
   if (pathname === "/api/auth/logout") return json({ ok: true });
@@ -433,9 +448,15 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
   if (rest === "proposals" && method === "GET") {
     return json({ role: entry.folder.role ?? "owner", proposals: entry.proposals });
   }
+  if (rest === "staged-files" && method === "POST") {
+    const id = `demo-waiting-${staged.size + 1}`;
+    staged.set(id, { name: search.get("name") ?? "file", size: dropped?.size ?? 0 });
+    return json({ ok: true, stagingId: id, size: dropped?.size ?? 0 });
+  }
   if (rest === "proposals" && method === "POST") {
     const operation = (body.operation ?? {}) as Record<string, string>;
     const id = `demo-proposal-${entry.proposals.length + 3}`;
+    const waiting = operation.stagingId ? staged.get(String(operation.stagingId)) : undefined;
     entry.proposals.unshift({
       id,
       title: String(body.title ?? "Suggested change"),
@@ -448,6 +469,11 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
         kind: (operation.kind as "text_replace") ?? "text_replace",
         before: String(operation.before ?? ""), replacement: String(operation.replacement ?? ""),
         explanation: String(operation.explanation ?? ""), status: "open",
+        operation: {
+          kind: (operation.kind as "text_replace") ?? "text_replace",
+          ...(operation.to ? { to: String(operation.to) } : {}),
+          ...(waiting ? { sizeBytes: waiting.size, fileName: waiting.name } : {}),
+        },
       }],
     });
     return json({ ok: true, proposalId: id, suggestionCount: 1, url: "" });
@@ -459,9 +485,20 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
     proposal.status = accept ? "accepted" : "rejected";
     for (const suggestion of proposal.suggestions) suggestion.status = proposal.status;
     if (!accept) return json({ ok: true, status: proposal.status, acceptedSuggestionIds: [], head: null, saveNumber: null });
-    const target = entry.files.find((item) => item.path === proposal.suggestions[0]?.path);
-    if (target?.content && proposal.suggestions[0]) {
-      target.content = target.content.replace(proposal.suggestions[0].before, proposal.suggestions[0].replacement);
+    const first = proposal.suggestions[0];
+    const at = String(first?.path ?? "");
+    const target = entry.files.find((item) => item.path === at);
+    if (first?.kind === "path_remove") {
+      entry.files = entry.files.filter((item) => item.path !== at);
+    } else if (first?.kind === "path_rename") {
+      const to = String(first.operation?.to ?? "");
+      if (target && to) target.path = to;
+    } else if (first?.kind === "asset_replace") {
+      const size = Number(first.operation?.sizeBytes ?? 0);
+      if (target) target.size = size;
+      else entry.files.push({ path: at, size });
+    } else if (target?.content && first) {
+      target.content = target.content.replace(first.before, first.replacement);
       target.size = target.content.length;
     }
     const seq = nextSave(entry, `Accepted ${proposal.title}`, proposal.suggestions.map((s) => s.path));
@@ -494,6 +531,43 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
     }
     const seq = nextSave(entry, String(body.label ?? "Saved from the browser"), [String(body.path ?? "")]);
     return json({ ok: true, head: `demo-head-${seq}`, saveNumber: seq });
+  }
+  if (rest === "files/upload" && method === "POST") {
+    const name = path.split("/").pop() || "file";
+    const size = dropped?.size ?? 0;
+    const readable = /\.(md|markdown|txt|csv|tsv)$/i.test(name);
+    const content = readable && dropped ? await dropped.text() : undefined;
+    const target = entry.files.find((item) => item.path === path);
+    if (target) {
+      target.size = size;
+      target.content = content;
+    } else {
+      entry.files.push({ path, size, content });
+    }
+    const seq = nextSave(entry, target ? `Replaced ${name}` : `Added ${name}`, [path],
+      target ? { changedCount: 1 } : { addedCount: 1 });
+    return json({ ok: true, path, head: `demo-head-${seq}`, saveNumber: seq });
+  }
+  if (rest === "files/rename" && method === "POST") {
+    const from = String(body.from ?? "");
+    const to = String(body.to ?? "");
+    const moving = entry.files.filter((item) => item.path === from || item.path.startsWith(`${from}/`));
+    if (moving.length === 0) return fail(404, "not-found", `“${from.split("/").pop()}” isn’t in this folder any more.`);
+    for (const item of moving) item.path = `${to}${item.path.slice(from.length)}`;
+    const seq = nextSave(entry, `Renamed ${from.split("/").pop()} to ${to.split("/").pop()}`,
+      moving.map((item) => item.path), { changedCount: moving.length });
+    return json({ ok: true, from, to, head: `demo-head-${seq}`, saveNumber: seq });
+  }
+  if (rest === "files/remove" && method === "POST") {
+    const asked = Array.isArray(body.paths) ? body.paths.map(String) : [];
+    const going = entry.files
+      .filter((item) => asked.some((name) => item.path === name || item.path.startsWith(`${name}/`)))
+      .map((item) => item.path);
+    if (going.length === 0) return fail(404, "not-found", "That isn’t in this folder any more. Nothing was changed.");
+    entry.files = entry.files.filter((item) => !going.includes(item.path));
+    const label = going.length === 1 ? `Took out ${going[0]!.split("/").pop()}` : `Took out ${going.length} files`;
+    const seq = nextSave(entry, label, going, { removedCount: going.length });
+    return json({ ok: true, removed: going, head: `demo-head-${seq}`, saveNumber: seq });
   }
   if (rest === "invitations") {
     entry.people.push({ email: String(body.email ?? "someone@example.com"), role: "contributor" });
@@ -556,4 +630,5 @@ export function installDemoTransport(apiOrigin: string): void {
 export function resetDemo(): void {
   state = null;
   comments.clear();
+  staged.clear();
 }

@@ -198,8 +198,9 @@ export function Inspector({
                   </div>
                 )}
                 <p className="gf-faint mt-4 border-t border-[var(--gf-line)] pt-3 text-[12px] leading-relaxed">
-                  Renaming, moving and deleting happen on the computer where this folder lives. The next Save brings
-                  the change here with the rest of its history.
+                  {data?.role === "contributor"
+                    ? "You can suggest a new name for this file, or suggest taking it out. The folder's owner decides, and nothing changes until they accept."
+                    : "Renaming this file, or taking it out, happens here and reaches your own computers at the next Sync. Going back to an earlier Save brings it back."}
                 </p>
               </>
             ) : selection.length > 1 ? (

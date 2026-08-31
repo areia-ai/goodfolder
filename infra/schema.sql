@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS proposal_suggestions (
   proposal_id UUID NOT NULL REFERENCES change_proposals(id) ON DELETE CASCADE,
   document_path TEXT NOT NULL,
   kind TEXT NOT NULL DEFAULT 'text'
-    CHECK (kind IN ('text', 'table', 'asset')),
+    CHECK (kind IN ('text', 'table', 'asset', 'rename', 'remove')),
   base_file_sha TEXT,
   operation JSONB NOT NULL DEFAULT '{}'::jsonb,
   section_hint TEXT,
@@ -285,6 +285,24 @@ CREATE TABLE IF NOT EXISTS stored_objects (
 );
 CREATE INDEX IF NOT EXISTS stored_objects_reservations
   ON stored_objects (reservation_expires_at) WHERE state = 'reserved';
+
+-- Bytes an invited person has sent up but nobody has accepted into a folder.
+-- They live under a `staging/` key in object storage, which the usage pass
+-- deliberately does not match: nothing here counts against anyone's storage
+-- until an owner accepts it, and unaccepted bytes are swept after a week.
+CREATE TABLE IF NOT EXISTS staged_uploads (
+  id UUID PRIMARY KEY,
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  author_account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  oid TEXT NOT NULL CHECK (oid ~ '^[a-f0-9]{64}$'),
+  size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
+  file_name TEXT NOT NULL,
+  mime_type TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS staged_uploads_expiry ON staged_uploads (expires_at);
+CREATE INDEX IF NOT EXISTS staged_uploads_project ON staged_uploads (project_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS usage_samples (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

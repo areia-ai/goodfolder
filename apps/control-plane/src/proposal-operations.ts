@@ -1,8 +1,21 @@
 import { applyAnchoredSuggestion } from "./collaboration.ts";
 import { applyDelimitedEdits, type TableEdit, type TableError } from "./table.ts";
 
+/**
+ * A proposal's stored kind. `text` and `table` transform a file's contents;
+ * `asset`, `rename` and `remove` change which files a folder holds and touch
+ * no contents at all. This module is only about the first two — the second
+ * family is named here so it is refused on purpose rather than by accident.
+ */
+export type StoredSuggestionKind = "text" | "table" | "asset" | "rename" | "remove";
+
+/** True for the kinds that change the folder's files rather than a file's text. */
+export function isFileOperation(kind: StoredSuggestionKind | string | null): boolean {
+  return kind === "asset" || kind === "rename" || kind === "remove";
+}
+
 export interface StoredProposalSuggestion {
-  kind: "text" | "table" | "asset" | null;
+  kind: StoredSuggestionKind | null;
   before: string;
   replacement: string;
   operation: unknown;
@@ -19,7 +32,7 @@ export type ProposalApplyResult = { content: string } | { error: ProposalApplyEr
 function operationFor(suggestion: StoredProposalSuggestion):
   | { kind: "text_replace"; before: string; replacement: string }
   | { kind: "table_update"; changes: TableEdit[]; malformed?: boolean }
-  | { kind: "asset_replace" } {
+  | { kind: "file_operation" } {
   const operation = suggestion.operation && typeof suggestion.operation === "object"
     ? suggestion.operation as Record<string, unknown>
     : {};
@@ -40,7 +53,7 @@ function operationFor(suggestion: StoredProposalSuggestion):
     });
     return { kind: "table_update", changes, malformed };
   }
-  if (suggestion.kind === "asset" || operation.kind === "asset_replace") return { kind: "asset_replace" };
+  if (isFileOperation(suggestion.kind) || operation.kind === "asset_replace") return { kind: "file_operation" };
   return {
     kind: "text_replace",
     before: typeof operation.before === "string" ? operation.before : suggestion.before,
@@ -57,7 +70,7 @@ export function applyProposalOperations(
   if (suggestions.length === 0) return { error: "unsupported" };
   const operations = suggestions.map(operationFor);
   const kinds = new Set(operations.map((operation) => operation.kind));
-  if (kinds.size !== 1 || kinds.has("asset_replace")) return { error: "unsupported" };
+  if (kinds.size !== 1 || kinds.has("file_operation")) return { error: "unsupported" };
 
   if (operations[0]!.kind === "text_replace") {
     let next = content;

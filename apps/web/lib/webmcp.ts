@@ -723,7 +723,7 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
 
   await mc.registerTool({
     name: "propose_file_change",
-    description: "Create a reviewable one-file suggestion. text_replace works on any file readable as text, source files included; table_update takes exact CSV/TSV cells; asset_replace stages a binary for later. This never changes the file; only the folder owner can accept it.",
+    description: "Create a reviewable one-file suggestion. text_replace works on any file readable as text, source files included; table_update takes exact CSV/TSV cells; asset_replace puts a file somebody already sent up in place of this one. This never changes the file; only the folder owner can accept it.",
     inputSchema: objSchema({
       document: { type: "string", description: "Exact file path in the current GoodFolder." },
       operation: { type: "string", enum: ["text_replace", "table_update", "asset_replace"], description: "The kind of reviewable change." },

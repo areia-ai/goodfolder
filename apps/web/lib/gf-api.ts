@@ -73,19 +73,38 @@ export interface OpenedFile {
   previewMessage?: string;
 }
 
+/**
+ * `text_replace` and `table_update` change what is inside a file.
+ * `asset_replace`, `path_rename` and `path_remove` change which files the
+ * folder holds — they carry no passage and no cells, and the review card
+ * shows each of them as the sentence it is.
+ */
+export type SuggestionKind =
+  | "text_replace" | "table_update"
+  | "asset_replace" | "path_rename" | "path_remove";
+
+export function changesTheFolder(kind: SuggestionKind): boolean {
+  return kind === "asset_replace" || kind === "path_rename" || kind === "path_remove";
+}
+
 export interface ProposalSuggestion {
   id: string;
   path: string;
-  kind: "text_replace" | "table_update" | "asset_replace";
+  kind: SuggestionKind;
   section?: string | null;
   before: string;
   replacement: string;
   operation?: {
-    kind?: "text_replace" | "table_update" | "asset_replace";
+    kind?: SuggestionKind;
     changes?: Array<{ address: string; before: string; replacement: string }>;
     stagingId?: string;
-    mimeType?: string;
+    mimeType?: string | null;
     extension?: string;
+    /** Where a rename is asking the file to go. */
+    to?: string;
+    /** How big the waiting file is, for an add. */
+    sizeBytes?: number;
+    fileName?: string;
   } | null;
   baseFileSha?: string | null;
   explanation: string;
@@ -307,12 +326,70 @@ export async function openFile(
 export const saveDocument = (folderId: string, input: { path: string; content: string; baseHead: string | null; label: string }) =>
   send<{ ok: true; head: string; saveNumber: number }>(`/api/projects/${folderId}/document/save`, input);
 
+/**
+ * Adding a file, one at a time.
+ *
+ * The bytes go up as the body of the request rather than wrapped in JSON:
+ * a photo does not need to be spelled out in letters on the way, and the
+ * server writes it straight to disk without holding it in memory.
+ *
+ * `baseHead` is what the window was showing. If newer work arrived in the
+ * meantime the server refuses rather than writing over it, and the answer
+ * carries the new head so the next file in a drop follows this one.
+ */
+export async function uploadFile(
+  folderId: string,
+  input: { path: string; file: Blob; baseHead: string | null },
+): Promise<{ ok: true; path: string; head: string; saveNumber: number }> {
+  const query = new URLSearchParams({ path: input.path });
+  if (input.baseHead) query.set("baseHead", input.baseHead);
+  const res = await fetch(`${API}/api/projects/${folderId}/files/upload?${query}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/octet-stream" },
+    body: input.file,
+  });
+  const json = (await res.json().catch(() => ({}))) as { ok?: true; path?: string; head?: string; saveNumber?: number; error?: { message?: string } };
+  if (!res.ok) throw Object.assign(new Error(json.error?.message ?? `GoodFolder request failed (${res.status})`), { status: res.status });
+  return json as { ok: true; path: string; head: string; saveNumber: number };
+}
+
+/**
+ * Send a file up without saving it.
+ *
+ * Someone invited to a folder cannot save, so a file they drop in has to wait
+ * where it is nobody's yet, until the owner accepts the proposal that carries
+ * it. This puts the bytes there and hands back the ticket for them.
+ */
+export async function stageFile(
+  folderId: string,
+  input: { name: string; file: Blob },
+): Promise<{ ok: true; stagingId: string; size: number }> {
+  const res = await fetch(`${API}/api/projects/${folderId}/staged-files?name=${encodeURIComponent(input.name)}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/octet-stream" },
+    body: input.file,
+  });
+  const json = (await res.json().catch(() => ({}))) as { ok?: true; stagingId?: string; size?: number; error?: { message?: string } };
+  if (!res.ok) throw Object.assign(new Error(json.error?.message ?? `GoodFolder request failed (${res.status})`), { status: res.status });
+  return json as { ok: true; stagingId: string; size: number };
+}
+
+export const renameFile = (folderId: string, input: { from: string; to: string; baseHead: string | null }) =>
+  send<{ ok: true; from: string; to: string; head: string; saveNumber: number }>(`/api/projects/${folderId}/files/rename`, input);
+
+export const removeFiles = (folderId: string, input: { paths: string[]; baseHead: string | null }) =>
+  send<{ ok: true; removed: string[]; head: string; saveNumber: number }>(`/api/projects/${folderId}/files/remove`, input);
+
 export const listProposals = (folderId: string) =>
   get<{ role: "owner" | "contributor"; proposals: ChangeProposal[] }>(`/api/projects/${folderId}/proposals`);
 
 export type FileProposalOperation = {
   path: string;
-  kind: "text_replace" | "table_update" | "asset_replace";
+  kind: SuggestionKind;
+  /** Where a rename is asking the file to go. */
+  to?: string;
   section?: string;
   before?: string;
   replacement?: string;

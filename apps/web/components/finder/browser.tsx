@@ -10,15 +10,15 @@ import { ContextMenu, type ContextMenuState } from "@/components/finder/context-
 import type { MenuItem } from "@/components/finder/menu";
 import { useOpenedFile } from "@/components/finder/use-opened-file";
 import { AlertIcon, FolderIcon, SearchIcon, SparklesIcon } from "@/components/icons";
-import { EmptyState, Notice, Skeleton, done, problem, type NoticeMessage } from "@/components/ui";
+import { EmptyState, Notice, Skeleton, done, info, problem, type NoticeMessage } from "@/components/ui";
 import { DocumentSurface } from "@/components/document-surface";
 import { registerDashboardTools, webMcpSupported } from "@/lib/webmcp";
 import { formatBytes } from "@/lib/preview";
 import {
   ROOT_SCOPE_LABEL, baseName, breadcrumb, descendantFiles, filterNodes, filterRoot,
   flattenRows, folderChildren, groupNodes, locationKey, locationOf, parentLocation,
-  rootChildren, sortNodes, type Decoration, type ListRow, type Location, type SortKey,
-  type TreeIndex, type VfsNode,
+  rootChildren, sortNodes, type Decoration, type DirectoryNode, type FileNode,
+  type ListRow, type Location, type SortKey, type TreeIndex, type VfsNode,
 } from "@/lib/vfs";
 import {
   preferenceFor, readPrefs, togglePinned, withExpanded, withPreference,
@@ -34,8 +34,20 @@ import { ColumnsView } from "@/components/finder/view-columns";
 import { GalleryView } from "@/components/finder/view-gallery";
 import { Inspector, type InspectorTab } from "@/components/finder/inspector";
 import { useNavigation } from "@/components/finder/use-navigation";
-import { useFolderData, LISTING_LIMIT } from "@/components/finder/use-folder-data";
+import { useFolderData } from "@/components/finder/use-folder-data";
 import { useSelection, type ClickModifiers } from "@/components/finder/use-selection";
+import { droppedFiles, useFileVerbs } from "@/components/finder/use-file-verbs";
+import { RemoveDialog, RenameDialog } from "@/components/finder/verb-dialogs";
+
+/**
+ * Everything with a path inside a folder — so, everything but a GoodFolder
+ * itself. Renaming and taking out are about these; a whole GoodFolder is
+ * neither renamed nor taken out from a listing.
+ */
+type NamedNode = DirectoryNode | FileNode;
+
+const withPath = (nodes: readonly VfsNode[]): NamedNode[] =>
+  nodes.filter((node): node is NamedNode => node.kind !== "folder");
 
 /**
  * One window over everything: the folders at the top, and the files inside
@@ -59,8 +71,13 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   const [glanceId, setGlanceId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [naming, setNaming] = useState(false);
+  const [renaming, setRenaming] = useState<NamedNode | null>(null);
+  const [removing, setRemoving] = useState<NamedNode[] | null>(null);
+  const [dropTarget, setDropTarget] = useState(false);
 
   const listing = useRef<HTMLDivElement>(null);
+  const chooser = useRef<HTMLInputElement>(null);
+  const dragDepth = useRef(0);
   const typed = useRef({ buffer: "", at: 0 });
 
   const store = useFolderData(location.folderId);
@@ -295,6 +312,84 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     await loadFolders();
   }, [location.folderId, store, loadFolders]);
 
+  /* --------------------------------------------------- Changing the folder */
+
+  /**
+   * Both roles get all three verbs inside a folder. An owner's lands; a
+   * contributor's is sent as a Change Proposal for the owner to decide. The
+   * window says which one it is doing at every point where it offers it.
+   */
+  const inFolder = Boolean(location.folderId) && data?.status === "ready";
+  const canChange = inFolder && data?.role === "owner";
+  const suggesting = inFolder && data?.role === "contributor";
+  const canTouch = canChange || suggesting;
+
+  const verbs = useFileVerbs({
+    folderId: location.folderId,
+    head: data?.head ?? null,
+    role: data?.role ?? null,
+    onNotice: setNotice,
+    onChanged: refresh,
+  });
+
+  const addFiles = useCallback(
+    (files: readonly File[]) => {
+      if (!canTouch) return;
+      void verbs.add(files, location.dir);
+    },
+    [canTouch, verbs, location.dir],
+  );
+
+  const startRename = useCallback((node: NamedNode) => setRenaming(node), []);
+
+  const startRemove = useCallback((nodes: readonly VfsNode[]) => {
+    const named = withPath(nodes);
+    if (named.length > 0) setRemoving(named);
+  }, []);
+
+  const doRename = useCallback(
+    (name: string) => {
+      const node = renaming;
+      setRenaming(null);
+      if (!node) return;
+      const parent = node.path.includes("/") ? `${node.path.slice(0, node.path.lastIndexOf("/"))}/` : "";
+      void verbs.rename(node.path, `${parent}${name}`);
+    },
+    [renaming, verbs],
+  );
+
+  const doRemove = useCallback(() => {
+    const nodes = removing;
+    setRemoving(null);
+    if (!nodes) return;
+    // Nothing can stay selected once it is out of the folder, or the count
+    // at the foot goes on describing files that are no longer there.
+    selection.clear();
+    void verbs.remove(nodes.map((node) => node.path));
+  }, [removing, verbs, selection]);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      dragDepth.current = 0;
+      setDropTarget(false);
+      if (!event.dataTransfer) return;
+      event.preventDefault();
+      if (!canTouch) {
+        setNotice(problem("Open one of your folders first, then drop the files inside it."));
+        return;
+      }
+      const { files, hadFolder } = droppedFiles(event.dataTransfer);
+      if (hadFolder) {
+        setNotice(problem(
+          "A whole folder has to be copied in on the computer where this folder lives; the next Save brings it here. Files on their own can be dropped here.",
+        ));
+        return;
+      }
+      addFiles(files);
+    },
+    [canTouch, addFiles],
+  );
+
   const reviewFromWindow = useCallback(
     async (proposal: ChangeProposal, action: "accept" | "reject") => {
       if (!location.folderId) return;
@@ -405,6 +500,13 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       else open(node);
       return;
     }
+    if (event.key === "Backspace" || event.key === "Delete") {
+      const chosen = withPath(selection.nodes);
+      if (chosen.length === 0) return;
+      event.preventDefault();
+      startRemove(chosen);
+      return;
+    }
     if (event.key === "Escape") {
       if (search) setSearch("");
       else selection.clear();
@@ -418,7 +520,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       typed.current.at = now;
       selection.typeAhead(typed.current.buffer);
     }
-  }, [ordered, selection, searching, preference.group, toggleRow, open, location, go, search, glanceId]);
+  }, [ordered, selection, searching, preference.group, toggleRow, open, location, go, search, glanceId, startRemove]);
 
   useEffect(() => {
     document.addEventListener("keydown", onListKey);
@@ -437,12 +539,8 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   const totalBytes = nodes.reduce((sum, node) => sum + (node.size ?? 0), 0);
   const asideOpen = preference.previewPane;
 
-  const statusNote = location.folderId
-    ? data?.truncated
-      ? `Showing the first ${LISTING_LIMIT} items in this folder`
-      : data?.changed.partial && preference.sort === "changed"
-        ? "Some dates are older than the timeline reaches"
-        : null
+  const statusNote = location.folderId && data?.changed.partial && preference.sort === "changed"
+    ? "Some dates are older than the timeline reaches"
     : null;
 
   const glance = useMemo<VfsNode | null>(
@@ -472,18 +570,53 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
    */
   const elsewhere: MenuItem = {
     id: "elsewhere",
-    label: "Rename, move or delete",
+    label: "Rename or take out",
     disabled: true,
     dividerBefore: true,
-    note: "On the computer where this folder lives. The next Save brings the change here.",
+    note: "This happens on the computer where the folder lives.",
   };
+
+  const changeItems = useCallback(
+    (node: NamedNode): MenuItem[] => {
+      if (!canTouch) return [elsewhere];
+      const chosen = withPath(selection.nodes);
+      const many = chosen.length > 1 && chosen.some((entry) => entry.id === node.id);
+      return [
+        {
+          id: "rename",
+          label: suggesting ? "Suggest a new name…" : "Rename…",
+          dividerBefore: true,
+          onSelect: () => startRename(node),
+        },
+        {
+          id: "remove",
+          label: suggesting
+            ? many ? `Suggest taking ${chosen.length} out…` : "Suggest taking it out…"
+            : many ? `Take ${chosen.length} out of the folder…` : "Take out of the folder…",
+          note: suggesting
+            ? "The owner decides. Nothing changes until they accept."
+            : "It stays in every earlier Save.",
+          onSelect: () => startRemove(many ? chosen : [node]),
+        },
+      ];
+    },
+    // `elsewhere` is a constant shape; the rest is what actually varies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canTouch, suggesting, selection.nodes, startRename, startRemove],
+  );
 
   const contextItemsFor = useCallback(
     (node: VfsNode | null): MenuItem[] => {
       if (!node) {
         return [
           ...(location.folderId
-            ? []
+            ? canTouch
+              ? [{
+                  id: "add",
+                  label: suggesting ? "Suggest adding files…" : "Add files…",
+                  onSelect: () => chooser.current?.click(),
+                }]
+              : []
             : [{ id: "new", label: "New Folder…", onSelect: () => setNaming(true) }]),
           {
             id: "panel",
@@ -507,7 +640,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
         return [
           { id: "open", label: "Open", onSelect: () => open(node) },
           { id: "info", label: "Get info", onSelect: () => openInspector("info") },
-          elsewhere,
+          ...changeItems(node),
         ];
       }
       return [
@@ -515,10 +648,10 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
         { id: "glance", label: "Take a look", onSelect: () => setGlanceId(node.id) },
         { id: "download", label: "Download a copy", onSelect: () => void download(node) },
         { id: "info", label: "What has happened to it", onSelect: () => openInspector("info") },
-        elsewhere,
+        ...changeItems(node),
       ];
     },
-    [location.folderId, preference.previewPane, setPreference, open, prefs.pinned, openInspector, download],
+    [location.folderId, preference.previewPane, setPreference, open, prefs.pinned, openInspector, download, changeItems, canTouch, suggesting],
   );
 
   const selectNode = useCallback(
@@ -625,6 +758,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
           searchLabel={location.folderId ? `Search ${folder?.name ?? "this folder"}` : "Search your folders"}
           reading={readingFile}
           onNewFolder={location.folderId ? undefined : () => setNaming(true)}
+          onAddFiles={canTouch ? () => chooser.current?.click() : undefined}
           folderActions={
             folder
               ? {
@@ -643,7 +777,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             id="listing"
             ref={listing}
             aria-label={location.folderId ? `Inside ${title}` : title}
-            className={`gf-win-listing ${inlineDetail && !notice ? "gf-win-listing-fill" : ""}`}
+            className={`gf-win-listing ${inlineDetail && !notice ? "gf-win-listing-fill" : ""} ${dropTarget ? "gf-win-dropping" : ""}`}
             tabIndex={0}
             onClick={(event) => {
               if (event.target === event.currentTarget) selection.clear();
@@ -654,7 +788,48 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
               selection.clear();
               onContext(null, { x: event.clientX, y: event.clientY });
             }}
+            onDragEnter={(event) => {
+              if (![...event.dataTransfer.types].includes("Files")) return;
+              dragDepth.current += 1;
+              setDropTarget(true);
+            }}
+            onDragOver={(event) => {
+              if (![...event.dataTransfer.types].includes("Files")) return;
+              // Without this the browser opens the file instead of dropping it.
+              event.preventDefault();
+              event.dataTransfer.dropEffect = canTouch ? "copy" : "none";
+            }}
+            onDragLeave={() => {
+              // Dragging over a child fires leave on the parent; count depth
+              // rather than believing the first one.
+              dragDepth.current = Math.max(0, dragDepth.current - 1);
+              if (dragDepth.current === 0) setDropTarget(false);
+            }}
+            onDrop={onDrop}
           >
+            {dropTarget && (
+              <p className="gf-win-drop" role="status">
+                {suggesting
+                  ? `Drop to suggest adding to ${title}`
+                  : canChange
+                    ? `Drop to add to ${title}`
+                    : "Open one of your folders to add files"}
+              </p>
+            )}
+
+            {verbs.progress && (
+              <div className="px-3 pt-3">
+                <Notice
+                  message={info(
+                    `${suggesting ? "Sending" : "Adding"} ${verbs.progress.name}${
+                      verbs.progress.total === 1
+                        ? ""
+                        : ` — ${verbs.progress.done + 1} of ${verbs.progress.total}`
+                    }…`,
+                  )}
+                />
+              </div>
+            )}
             {notice && (
               <div className="px-3 pt-3">
                 <Notice message={notice} />
@@ -744,6 +919,36 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
 
         {contextMenu && <ContextMenu state={contextMenu} onClose={() => setContextMenu(null)} />}
         {naming && <NameFolder onCancel={() => setNaming(false)} onName={(name) => void makeFolder(name)} />}
+        {renaming && (
+          <RenameDialog
+            name={renaming.name}
+            kind={renaming.kind === "directory" ? "folder" : "file"}
+            suggesting={suggesting}
+            onCancel={() => setRenaming(null)}
+            onRename={doRename}
+          />
+        )}
+        {removing && (
+          <RemoveDialog
+            names={removing.map((node) => node.name)}
+            suggesting={suggesting}
+            onCancel={() => setRemoving(null)}
+            onRemove={doRemove}
+          />
+        )}
+
+        <input
+          ref={chooser}
+          type="file"
+          multiple
+          className="sr-only"
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={(event) => {
+            addFiles([...(event.target.files ?? [])]);
+            event.target.value = "";
+          }}
+        />
 
         <div className="gf-win-foot">
           <PathBar crumbs={crumbs} onGo={go} />
