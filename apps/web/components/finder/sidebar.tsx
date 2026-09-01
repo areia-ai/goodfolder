@@ -32,6 +32,7 @@ export function Sidebar({
   onTogglePin,
   onSignOut,
   onManagePlan,
+  onRedeemChallenge,
 }: {
   folders: Folder[];
   location: Location;
@@ -41,6 +42,7 @@ export function Sidebar({
   onTogglePin: (folderId: string) => void;
   onSignOut: () => void;
   onManagePlan: () => void;
+  onRedeemChallenge: () => void;
 }) {
   const sharedCount = folders.filter((folder) => folder.role === "contributor").length;
   const reviewCount = folders.reduce((total, folder) => total + Number(folder.openProposalCount ?? 0), 0);
@@ -134,6 +136,7 @@ export function Sidebar({
           }
           items={[
             { id: "plan", label: "Plan and storage", onSelect: onManagePlan },
+            { id: "challenge", label: "Redeem challenge code", onSelect: onRedeemChallenge },
             { id: "out", label: "Sign out", onSelect: onSignOut, dividerBefore: true },
           ]}
         />

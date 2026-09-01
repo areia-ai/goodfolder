@@ -270,6 +270,20 @@ CREATE TABLE IF NOT EXISTS account_access_overrides (
 CREATE INDEX IF NOT EXISTS account_access_overrides_current
   ON account_access_overrides (account_id, created_at DESC);
 
+-- A temporary, code-redeemed hosted-access campaign. This is deliberately
+-- separate from billing: redemption never creates a provider customer or a
+-- subscription, and expiry leaves the account and its files intact.
+CREATE TABLE IF NOT EXISTS campaign_access_redemptions (
+  id UUID PRIMARY KEY,
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  campaign TEXT NOT NULL,
+  redeemed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  UNIQUE (account_id, campaign)
+);
+CREATE INDEX IF NOT EXISTS campaign_access_redemptions_current
+  ON campaign_access_redemptions (account_id, expires_at DESC);
+
 CREATE TABLE IF NOT EXISTS stored_objects (
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   oid TEXT NOT NULL CHECK (oid ~ '^[a-f0-9]{64}$'),

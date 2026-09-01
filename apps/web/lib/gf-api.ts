@@ -209,6 +209,8 @@ export const startHostedTrial = (plan: PlanCode, interval: BillingInterval) =>
   send<{ url: string }>("/api/billing/checkout", { plan, interval });
 export const openBillingPortal = () => send<{ url: string }>("/api/billing/portal", {});
 export const setOverageCap = (capCents: number) => put<AccountPlan>("/api/billing/overage", { capCents });
+export const redeemChallengeAccess = (code: string) =>
+  send<{ ok: true; expiresAt: string }>("/api/access/challenge/redeem", { code });
 
 export const me = () => get<{ id: string; email: string }>("/api/me");
 

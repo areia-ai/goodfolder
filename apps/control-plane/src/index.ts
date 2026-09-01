@@ -10,6 +10,7 @@ import {
   createDecipheriv,
   createHash,
   randomBytes,
+  timingSafeEqual,
 } from "node:crypto";
 import { getRequestListener } from "@hono/node-server";
 import { Hono, type Context } from "hono";
@@ -57,6 +58,24 @@ const repos = new RepositoryAdapter(cfg);
 const previewStorage = makeS3(cfg);
 const billingConfig = loadBillingConfig();
 const billing = new HostedBilling(sql, billingConfig, repos, previewStorage, cfg.s3Bucket);
+
+const CHALLENGE_CAMPAIGN = "webmcp-2026";
+const challengeCode = process.env.CHALLENGE_ACCESS_CODE?.trim() ?? "";
+const challengeExpiresAt = process.env.CHALLENGE_ACCESS_EXPIRES_AT?.trim() ?? "";
+const challengeStaffEmails = new Set(
+  (process.env.CHALLENGE_ACCESS_STAFF_EMAILS ?? "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean),
+);
+const challengeEnabled = Boolean(challengeCode || challengeExpiresAt || challengeStaffEmails.size);
+if (challengeEnabled && (!challengeCode || !challengeExpiresAt || Number.isNaN(Date.parse(challengeExpiresAt)))) {
+  throw new Error("CHALLENGE_ACCESS_CODE and CHALLENGE_ACCESS_EXPIRES_AT are both required when challenge access is enabled");
+}
+const challengeExpiry = challengeEnabled ? new Date(challengeExpiresAt) : null;
+
+function sameSecret(left: string, right: string): boolean {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 /** Absolute origin browsers are sent back to (magic links, pairing pages). */
 const PUBLIC_BASE = process.env.PUBLIC_URL ?? "https://api.trygoodfolder.com";
@@ -751,7 +770,27 @@ function billingError(error: unknown): { code: string; message: string; status: 
   return { code: "billing-unavailable", message: "Billing could not be reached. Try again shortly.", status: 503 };
 }
 
+async function challengeAccessError(accountId: string): Promise<{ code: string; message: string; status: 402 | 403 } | null> {
+  if (!challengeEnabled || !challengeExpiry) return null;
+  const account = await sql`SELECT email FROM accounts WHERE id = ${accountId} LIMIT 1`;
+  if (challengeStaffEmails.has(String(account[0]?.email ?? "").toLowerCase())) return null;
+  const grant = await sql`
+    SELECT expires_at AS "expiresAt" FROM campaign_access_redemptions
+    WHERE account_id = ${accountId} AND campaign = ${CHALLENGE_CAMPAIGN}
+    LIMIT 1`;
+  if (grant[0] && new Date(String(grant[0].expiresAt)).getTime() > Date.now()) return null;
+  if (grant[0]) {
+    // The campaign ends cleanly, but a later paid or card-backed trial must
+    // be able to restore write access without deleting this historical grant.
+    if (billingConfig.mode === "stripe" && (await billing.entitlement(accountId)).canWrite) return null;
+    return { code: "challenge-access-ended", message: "Your WebMCP Challenge access ended on October 1. Your folders remain available to read and export; start a hosted trial to keep changing them.", status: 403 };
+  }
+  return { code: "challenge-access-required", message: "Redeem the WebMCP Challenge code before changing a folder.", status: 402 };
+}
+
 async function writeAccessError(accountId: string): Promise<{ code: string; message: string; status: 402 | 403 | 409 } | null> {
+  const challengeDenied = await challengeAccessError(accountId);
+  if (challengeDenied) return challengeDenied;
   const entitlement = await billing.entitlement(accountId);
   if (entitlement.canWrite) return null;
   if (entitlement.reason === "quota-exceeded") {
@@ -788,6 +827,28 @@ app.get("/api/account/usage", async (c) => {
     canWrite: plan.canWrite,
     reason: plan.reason,
   });
+});
+
+app.post("/api/access/challenge/redeem", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "Sign in before redeeming a challenge code." } }, 403);
+  if (!challengeEnabled || !challengeExpiry || challengeExpiry.getTime() <= Date.now()) {
+    return c.json({ error: { code: "challenge-unavailable", message: "WebMCP Challenge access is not available." } }, 404);
+  }
+  if (!rateLimit("challenge-redeem", acct.accountId, 10, 3_600_000)) {
+    return c.json({ error: { code: "rate", message: "Too many code attempts. Try again later." } }, 429);
+  }
+  const body = await c.req.json<{ code?: string }>().catch(() => ({} as { code?: string }));
+  if (!sameSecret(String(body.code ?? "").trim(), challengeCode)) {
+    return c.json({ error: { code: "challenge-code", message: "That challenge code is not valid." } }, 400);
+  }
+  await sql`
+    INSERT INTO campaign_access_redemptions (id, account_id, campaign, expires_at)
+    VALUES (${crypto.randomUUID()}, ${acct.accountId}, ${CHALLENGE_CAMPAIGN}, ${challengeExpiry})
+    ON CONFLICT (account_id, campaign) DO NOTHING`;
+  await sql`INSERT INTO audit_log (actor, action, detail)
+    VALUES (${acct.email}, 'access.challenge_redeem', ${sql.json({ campaign: CHALLENGE_CAMPAIGN, expiresAt: challengeExpiry.toISOString() })})`;
+  return c.json({ ok: true, expiresAt: challengeExpiry.toISOString() });
 });
 
 app.get("/api/plans", (c) => c.json(PLANS));
@@ -928,6 +989,8 @@ app.post("/api/projects/:id/token", async (c) => {
   if (own.length === 0) {
     return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
   }
+  const denied = await writeAccessError(acct.accountId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const deviceId = crypto.randomUUID();
   const tok = newToken();
   const body = await c.req.json<{ deviceName?: string }>().catch(
@@ -2559,10 +2622,15 @@ function fallbackOf(ai?: { summary: string }): string {
 app.get("/api/save/preflight", async (c) => {
   const scope = c.get("scope");
   if (!scope) return c.json({ error: { code: "project-scope", message: "folder token required" } }, 403);
+  const denied = await writeAccessError(scope.ownerAccountId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const entitlement = await billing.entitlement(scope.ownerAccountId);
   if (!entitlement.canWrite) {
-    const denied = await writeAccessError(scope.ownerAccountId);
-    return c.json({ error: { code: denied!.code, message: denied!.message } }, denied!.status);
+    const accessDenied = await writeAccessError(scope.ownerAccountId);
+    return c.json(
+      { error: { code: accessDenied?.code ?? "subscription-required", message: accessDenied?.message ?? "Hosted access is required before saving." } },
+      accessDenied?.status ?? 402,
+    );
   }
   return c.json({ ok: true, canWrite: true, authorizedBytes: entitlement.authorizedBytes, usageBytes: entitlement.usageBytes, reservedBytes: entitlement.reservedBytes });
 });
@@ -2686,6 +2754,8 @@ async function gitProxy(req: import("node:http").IncomingMessage, res: import("n
   const isWrite = /\/git-receive-pack$/.test(m[2]!) || url.searchParams.get("service") === "git-receive-pack";
   let remainingBytes = Number.POSITIVE_INFINITY;
   if (isWrite) {
+    const denied = await writeAccessError(scope.ownerAccountId);
+    if (denied) return deny(denied.status, denied.message, denied.code);
     const entitlement = await billing.entitlement(scope.ownerAccountId);
     if (!entitlement.canWrite) {
       const code = entitlement.reason ?? "subscription-required";

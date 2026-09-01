@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  acceptInvitation, createFolder, getAccountPlan, listFolders, openFile as openFolderFile,
+  acceptInvitation, createFolder, getAccountPlan, listFolders, openFile as openFolderFile, redeemChallengeAccess,
   reviewProposal, type AccountPlan, type ChangeProposal, type Folder, type OpenedFile,
 } from "@/lib/gf-api";
 import { QuickLook } from "@/components/finder/quick-look";
@@ -74,6 +74,9 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   const [renaming, setRenaming] = useState<NamedNode | null>(null);
   const [removing, setRemoving] = useState<NamedNode[] | null>(null);
   const [dropTarget, setDropTarget] = useState(false);
+  const [challengeCodeOpen, setChallengeCodeOpen] = useState(false);
+  const [challengeCode, setChallengeCode] = useState("");
+  const [redeemingChallenge, setRedeemingChallenge] = useState(false);
 
   const listing = useRef<HTMLDivElement>(null);
   const chooser = useRef<HTMLInputElement>(null);
@@ -691,6 +694,21 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     />
   );
 
+  const redeemChallenge = async () => {
+    setRedeemingChallenge(true);
+    try {
+      const result = await redeemChallengeAccess(challengeCode);
+      setChallengeCodeOpen(false);
+      setChallengeCode("");
+      setNotice(done(`Challenge access is active until ${new Date(result.expiresAt).toLocaleString()}.`));
+      setPlan(await getAccountPlan().catch(() => null));
+    } catch (error) {
+      setNotice(problem((error as Error).message));
+    } finally {
+      setRedeemingChallenge(false);
+    }
+  };
+
   return (
     <div className={`gf-win ${prefs.sidebarCollapsed ? "gf-win-collapsed" : ""}`}>
       <a href="#listing" className="gf-skip-link">Skip to the files</a>
@@ -705,6 +723,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
           onTogglePin={(id) => setPrefs((current) => togglePinned(current, id))}
           onSignOut={onSignOut}
           onManagePlan={() => openInspector("info")}
+          onRedeemChallenge={() => setChallengeCodeOpen(true)}
         />
       </div>
 
@@ -724,6 +743,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
               onTogglePin={(id) => setPrefs((current) => togglePinned(current, id))}
               onSignOut={onSignOut}
               onManagePlan={() => openInspector("info")}
+              onRedeemChallenge={() => setChallengeCodeOpen(true)}
             />
           </div>
         </>
@@ -935,6 +955,17 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             onCancel={() => setRemoving(null)}
             onRemove={doRemove}
           />
+        )}
+        {challengeCodeOpen && (
+          <div className="gf-win-dialog-scrim" role="presentation">
+            <form className="gf-card absolute left-1/2 top-1/2 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 p-5 shadow-xl" onSubmit={(event) => { event.preventDefault(); void redeemChallenge(); }}>
+              <h2 className="gf-h3">Redeem challenge code</h2>
+              <p className="gf-body mt-2 text-sm">This gives your account full access for the WebMCP Challenge. It ends October 1; your folders remain yours.</p>
+              <label className="mt-4 block text-sm font-semibold" htmlFor="challenge-code">Code</label>
+              <input id="challenge-code" autoFocus className="gf-input mt-1 w-full" value={challengeCode} onChange={(event) => setChallengeCode(event.target.value)} disabled={redeemingChallenge} />
+              <div className="mt-5 flex justify-end gap-2"><button type="button" className="gf-button-secondary" onClick={() => setChallengeCodeOpen(false)} disabled={redeemingChallenge}>Cancel</button><button type="submit" className="gf-button-primary" disabled={redeemingChallenge || !challengeCode.trim()}>{redeemingChallenge ? "Checking…" : "Redeem"}</button></div>
+            </form>
+          </div>
         )}
 
         <input

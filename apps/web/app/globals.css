@@ -1835,6 +1835,11 @@ img, svg { max-width: 100%; }
 }
 @media (min-width: 1100px) { .gf-win-scrim { display: none; } }
 
+.gf-win-dialog-scrim {
+  position: fixed; inset: 0; z-index: 50;
+  background: color-mix(in srgb, var(--gf-black) 28%, transparent);
+}
+
 .gf-win-aside-head {
   position: sticky; top: 0; z-index: 2;
   display: flex; align-items: center; gap: 6px;

@@ -36,6 +36,16 @@ const cfg = loadConfig();
 const sql = openDb(cfg.databaseUrl);
 const s3 = makeS3(cfg);
 const billingConfig = loadBillingConfig(process.env, false);
+const CHALLENGE_CAMPAIGN = "webmcp-2026";
+const challengeCode = process.env.CHALLENGE_ACCESS_CODE?.trim() ?? "";
+const challengeExpiresAt = process.env.CHALLENGE_ACCESS_EXPIRES_AT?.trim() ?? "";
+const challengeStaffEmails = new Set(
+  (process.env.CHALLENGE_ACCESS_STAFF_EMAILS ?? "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean),
+);
+const challengeEnabled = Boolean(challengeCode || challengeExpiresAt || challengeStaffEmails.size);
+if (challengeEnabled && (!challengeCode || !challengeExpiresAt || Number.isNaN(Date.parse(challengeExpiresAt)))) {
+  throw new Error("CHALLENGE_ACCESS_CODE and CHALLENGE_ACCESS_EXPIRES_AT are both required when challenge access is enabled");
+}
 
 const presignOn = process.env.PRESIGN === "1";
 const presignS3: ReturnType<typeof makeS3> | null = presignOn
@@ -61,10 +71,22 @@ const keyFor = (projectId: string, oid: string) => `${projectId}/${oid}`;
 const publicOrigin = () =>
   process.env.PUBLIC_LFS_ORIGIN ?? `http://127.0.0.1:${process.env.PORT ?? 4101}`;
 
+async function challengeAccessDenied(scope: TokenScope, db = sql): Promise<{ code: number; message: string } | null> {
+  if (!challengeEnabled) return null;
+  const account = await db`SELECT email FROM accounts WHERE id = ${scope.ownerAccountId} LIMIT 1`;
+  if (challengeStaffEmails.has(String(account[0]?.email ?? "").toLowerCase())) return null;
+  const grant = await db`SELECT expires_at AS "expiresAt" FROM campaign_access_redemptions WHERE account_id = ${scope.ownerAccountId} AND campaign = ${CHALLENGE_CAMPAIGN} LIMIT 1`;
+  if (grant[0] && new Date(String(grant[0].expiresAt)).getTime() > Date.now()) return null;
+  if (grant[0] && billingConfig.mode === "stripe" && (await accountEntitlement(db, billingConfig, scope.ownerAccountId)).canWrite) return null;
+  return { code: grant[0] ? 403 : 402, message: grant[0] ? "WebMCP Challenge access ended; this account is read-only." : "Redeem the WebMCP Challenge code before uploading." };
+}
+
 async function reserveUpload(scope: TokenScope, oid: string, declaredBytes: number): Promise<"reserved" | "confirmed" | { code: number; message: string }> {
   if (!Number.isSafeInteger(declaredBytes) || declaredBytes < 0) return { code: 400, message: "invalid object size" };
   return sql.begin(async (tx) => {
     await tx`SELECT pg_advisory_xact_lock(hashtext(${scope.ownerAccountId}))`;
+    const challengeDenied = await challengeAccessDenied(scope, tx as unknown as typeof sql);
+    if (challengeDenied) return challengeDenied;
     const existing = await tx`
       SELECT state, confirmed_bytes AS "confirmedBytes" FROM stored_objects
       WHERE project_id = ${scope.projectId} AND oid = ${oid} LIMIT 1`;
