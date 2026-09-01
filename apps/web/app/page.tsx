@@ -6,7 +6,7 @@ import { MascotPose } from "@/components/folder-mascot";
 import { ForEngineers } from "@/components/for-engineers";
 import { HeroAgentDemo } from "@/components/hero-agent-demo";
 import { PricingTiers } from "@/components/pricing";
-import { AgentPreview, TimelinePreview } from "@/components/product-preview";
+import { TimelinePreview } from "@/components/product-preview";
 import { Shot } from "@/components/shot";
 import {
   ArrowRightIcon,
@@ -572,8 +572,8 @@ export default function Landing() {
 
         {/* --------------------------------------------------------------- WebMCP */}
         <section id="webmcp" className="gf-band gf-band-tint scroll-mt-16">
-          <div className="gf-wrap grid items-center gap-12 lg:grid-cols-[minmax(0,.92fr)_minmax(0,1.08fr)] lg:gap-16">
-            <div>
+          <div className="gf-wrap">
+            <div className="max-w-2xl">
               <p className="gf-eyebrow">No copy and paste</p>
               <h2 className="gf-h2 mt-4">WebMCP gives your assistant 19 tools for the folder you have open.</h2>
               <p className="gf-lead mt-5">
@@ -616,7 +616,34 @@ export default function Landing() {
                 is a W3C Community Group draft; without it the dashboard works as usual.
               </p>
             </div>
-            <AgentPreview />
+            <div className="mt-10 grid gap-5">
+              <figure className="overflow-hidden rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white shadow-[var(--gf-shadow)]">
+                <figcaption className="flex items-center gap-2 border-b border-[var(--gf-line)] px-4 py-3 text-[13px] font-semibold">
+                  <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--gf-blue-ink)] text-[11px] text-white">1</span>
+                  The assistant prepares a Change Proposal
+                </figcaption>
+                <Image
+                  src="/shots/webmcp-proposal.png"
+                  alt="A GoodFolder Change Proposal that adds a generated image and its Markdown reference to a recipe, with an Accept and Save button."
+                  width={2520}
+                  height={1050}
+                  className="block h-auto w-full"
+                />
+              </figure>
+              <figure className="overflow-hidden rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white shadow-[var(--gf-shadow)]">
+                <figcaption className="flex items-center gap-2 border-b border-[var(--gf-line)] px-4 py-3 text-[13px] font-semibold">
+                  <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--gf-blue-ink)] text-[11px] text-white">2</span>
+                  The person accepts it, and the result appears inline
+                </figcaption>
+                <Image
+                  src="/shots/webmcp-result.png"
+                  alt="The accepted image rendered inline in the GoodFolder recipe, between the ingredients and preparation steps."
+                  width={2520}
+                  height={1050}
+                  className="block h-auto w-full"
+                />
+              </figure>
+            </div>
           </div>
         </section>
 
