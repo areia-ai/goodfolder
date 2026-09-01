@@ -91,6 +91,9 @@ WebMCP, which lets a browser assistant read the dashboard, is a draft from the
 W3C Web Machine Learning Community Group. Where it is unavailable the dashboard
 works normally without it.
 
+For the OpenAI WebMCP Challenge, see [HACKATHON.md](HACKATHON.md) for the
+challenge-specific work, judge-access path, and checks kept in this repository.
+
 ## Licence
 
 [GNU Affero General Public License v3.0](LICENSE).
