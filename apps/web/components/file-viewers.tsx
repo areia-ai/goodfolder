@@ -748,9 +748,9 @@ async function parseDeck(blob: Blob, registerUrl: (url: string) => string): Prom
   return { width, height, slides, mediaCount: Object.keys(entries).filter((name) => name.startsWith("ppt/media/")).length };
 }
 
-function SlideCanvas({ slide, width, height, thumb = false }: { slide: ParsedSlide; width: number; height: number; thumb?: boolean }) {
+function SlideCanvas({ slide, width, height }: { slide: ParsedSlide; width: number; height: number }) {
   return (
-    <div className="relative w-full overflow-hidden border border-[var(--gf-line-strong)]" style={{ aspectRatio: `${width} / ${height}`, background: slide.background }}>
+    <div className="relative w-full overflow-hidden border border-[var(--gf-line-strong)]" style={{ aspectRatio: `${width} / ${height}`, background: slide.background, containerType: "inline-size" }}>
       {slide.elements.map((element, index) => {
         const style: CSSProperties = {
           position: "absolute",
@@ -763,7 +763,12 @@ function SlideCanvas({ slide, width, height, thumb = false }: { slide: ParsedSli
         if (element.kind === "image") {
           return <img key={index} src={element.url} alt={element.alt} style={{ ...style, objectFit: "contain" }} />;
         }
-        return <div key={index} style={{ ...style, color: element.color, fontSize: thumb ? "7px" : `${element.fontSizePt}pt`, fontWeight: element.bold ? 700 : 400, lineHeight: 1.15, whiteSpace: "pre-wrap" }}>{element.text}</div>;
+        // PowerPoint positions use EMUs while text sizes use points. `cqw`
+        // scales the text with this canvas just as the percentage geometry
+        // above scales its box: 1 point is 12,700 EMUs. Keeping it fixed in
+        // points made text overflow its now-smaller box and get clipped.
+        const fontSize = `${element.fontSizePt * 12_700 / width * 100}cqw`;
+        return <div key={index} style={{ ...style, color: element.color, fontSize, fontWeight: element.bold ? 700 : 400, lineHeight: 1.15, whiteSpace: "pre-wrap" }}>{element.text}</div>;
       })}
     </div>
   );
@@ -820,7 +825,7 @@ export function SlidesPreview({ path, blob }: { path: string; blob: Blob }) {
               }}
               className={`block w-28 shrink-0 rounded-[var(--gf-radius-sm)] border p-1.5 text-left lg:w-full ${index === active ? "border-[var(--gf-blue-ink)] bg-[var(--gf-blue-soft)]" : "border-[var(--gf-line)] bg-white hover:bg-[var(--gf-blue-wash)]"}`}
             >
-              <div className="aspect-video w-full overflow-hidden rounded-[5px] bg-white"><SlideCanvas slide={slide} width={deck.width} height={deck.height} thumb /></div>
+              <div className="aspect-video w-full overflow-hidden rounded-[5px] bg-white"><SlideCanvas slide={slide} width={deck.width} height={deck.height} /></div>
               <span className="gf-faint mt-1 block px-0.5 text-[11px] font-semibold">Slide {index + 1}</span>
             </button>
           ))}
