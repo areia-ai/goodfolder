@@ -624,9 +624,9 @@ export default function Landing() {
                 </figcaption>
                 <Image
                   src="/shots/webmcp-proposal.png"
-                  alt="A GoodFolder Change Proposal that adds a generated image and its Markdown reference to a recipe, with an Accept and Save button."
-                  width={2520}
-                  height={1050}
+                  alt="Codex beside GoodFolder, where the assistant has prepared a Change Proposal that adds a generated image and its Markdown reference to a recipe."
+                  width={3814}
+                  height={2074}
                   className="block h-auto w-full"
                 />
               </figure>
@@ -637,9 +637,9 @@ export default function Landing() {
                 </figcaption>
                 <Image
                   src="/shots/webmcp-result.png"
-                  alt="The accepted image rendered inline in the GoodFolder recipe, between the ingredients and preparation steps."
-                  width={2520}
-                  height={1050}
+                  alt="Codex beside GoodFolder, showing the accepted image rendered inline in the recipe between the ingredients and preparation steps."
+                  width={3814}
+                  height={2080}
                   className="block h-auto w-full"
                 />
               </figure>
