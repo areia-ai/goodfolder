@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { BrandLockup, BrandMark } from "@/components/brand";
+import { AgentHandoffMotion } from "@/components/agent-handoff-motion";
 import { Faq, type FaqItem } from "@/components/faq";
 import { MascotPose } from "@/components/folder-mascot";
 import { ForEngineers } from "@/components/for-engineers";
@@ -490,34 +491,30 @@ export default function Landing() {
               <div className="mt-7 rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-[var(--gf-blue-wash)] p-5">
                 <b className="block text-[15px]">Wherever the agent runs.</b>
                 <p className="gf-body mt-2 text-[14px]">
-                  Codex, Claude Code and OpenClaw can all work with GoodFolder. Each one connects to the computer
-                  that has the folder, and gets the same actions and the same timeline.
+                  GoodFolder keeps the same folder history legible when a different agent harness picks up the work.
+                  The folder stays on the computer that has it.
                 </p>
               </div>
             </div>
-            <div className="relative mx-auto w-full max-w-[620px]">
+            <AgentHandoffMotion>
               <Image
                 src="/brand/mascot/mascot-agent-handoff-v2.png"
-                alt="GoodFolder mascot holding Codex and OpenClaw"
+                alt="GoodFolder mascot holding two rotating agent-harness signs"
                 width={1383}
                 height={1137}
-                className="h-auto w-full"
+                className="gf-agent-handoff__mascot"
               />
-              <Image
-                src="/partners/codex-app.png"
-                alt="Codex"
-                width={108}
-                height={108}
-                className="absolute left-[17%] top-[27%] w-[16%] -translate-x-1/2 -translate-y-1/2 rounded-[24%] shadow-sm"
-              />
-              <a
-                href="https://openclaw.ai/"
-                aria-label="OpenClaw"
-                className="absolute left-[83%] top-[27%] block w-[17%] -translate-x-1/2 -translate-y-1/2 rounded-full p-0 transition-transform duration-150 hover:scale-105"
-              >
-                <Image src="/partners/openclaw.svg" alt="" aria-hidden="true" width={184} height={184} className="h-auto w-full" />
-              </a>
-            </div>
+              <span className="gf-agent-handoff__sign gf-agent-handoff__sign--left" aria-hidden="true">
+                <Image src="/partners/codex.svg" alt="" width={24} height={24} className="gf-agent-handoff__mark gf-agent-handoff__mark--left-first" />
+                <Image src="/partners/pi-agent.svg" alt="" width={800} height={800} className="gf-agent-handoff__mark gf-agent-handoff__mark--left-second gf-agent-handoff__mark--pi-agent" />
+                <Image src="/partners/hermes-agent.svg" alt="" width={24} height={24} className="gf-agent-handoff__mark gf-agent-handoff__mark--left-last" />
+              </span>
+              <span className="gf-agent-handoff__sign gf-agent-handoff__sign--right" aria-hidden="true">
+                <Image src="/partners/openclaw.svg" alt="" width={512} height={512} className="gf-agent-handoff__mark gf-agent-handoff__mark--right-first" />
+                <Image src="/partners/claude-code.svg" alt="" width={24} height={24} className="gf-agent-handoff__mark gf-agent-handoff__mark--right-second gf-agent-handoff__mark--claude" />
+                <Image src="/partners/opencode.svg" alt="" width={24} height={24} className="gf-agent-handoff__mark gf-agent-handoff__mark--right-last" />
+              </span>
+            </AgentHandoffMotion>
           </div>
         </section>
 

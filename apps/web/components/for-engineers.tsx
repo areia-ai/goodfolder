@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import { CheckIcon, FolderIcon, LockIcon, ShieldIcon, TerminalIcon } from "@/components/icons";
 
 /**
@@ -23,23 +25,23 @@ import { CheckIcon, FolderIcon, LockIcon, ShieldIcon, TerminalIcon } from "@/com
 const FACTS = [
   {
     Glyph: FolderIcon,
-    term: "There is nothing to be locked into",
-    body: "A protected folder is an ordinary Git repository sitting on your colleague's own machine. Any Git client opens it and reads the whole history. That stays true if they stop paying us, and if we stop existing.",
+    term: "Your folder stays portable",
+    body: "A protected folder remains an ordinary Git repository on its owner's machine. Any Git client can open it and read the whole history, even if you stop paying us or we stop existing.",
   },
   {
     Glyph: ShieldIcon,
-    term: "You can read all of it",
-    body: "Every part is open source under the AGPL: the code that touches the files, the dashboard, and the server behind them. Run the whole thing on your own infrastructure if that is the easier conversation internally.",
+    term: "You can inspect every layer",
+    body: "The file client, dashboard, and server are open source under the AGPL. Run the complete system on your own infrastructure when that is the right fit for your company.",
   },
   {
     Glyph: LockIcon,
-    term: "The permission boundary is ours, not the engine's",
-    body: "Every access check runs in GoodFolder's own code. The service that moves the bytes underneath is given no trust, publishes no ports, and never sees a credential belonging to one of your people.",
+    term: "Access is enforced before anything moves",
+    body: "Every access check runs in GoodFolder's own code. The service that moves the bytes has no public ports, is given no trust, and never sees a credential belonging to one of your people.",
   },
   {
     Glyph: TerminalIcon,
-    term: "And yes, it will hold code",
-    body: "A folder with an app in it is still a folder. It saves, syncs and restores like any other, source files read in the browser, and an assistant can propose a change for a person to accept. Downloaded packages and build output stay out of a Save, and so does anything shaped like a credential, so nobody hands us their .env by accident.",
+    term: "Code stays an ordinary folder",
+    body: "A folder with an app in it saves, syncs, and restores like any other. Source files stay available in the browser, while an assistant prepares a Change Proposal for a person to accept. Downloaded packages, build output, and credential-shaped files stay out of a Save.",
   },
 ];
 
@@ -47,17 +49,27 @@ export function ForEngineers({ sourceUrl }: { sourceUrl: string }) {
   return (
     <section id="engine" className="gf-band scroll-mt-16">
       <div className="gf-wrap">
-        <div className="gf-head">
-          <p className="gf-eyebrow">For the people who already know how this works</p>
-          <h2 className="gf-h2 mt-4">Underneath, it is Git.</h2>
-          <p className="gf-lead mt-5">
-            GoodFolder did not invent a way to keep versions of a folder. It uses the one your engineers already
-            trust, and keeps every word of that vocabulary away from the people who were never going to learn it.{" "}
-            <a href={sourceUrl} className="gf-accent underline underline-offset-2">
-              Read the code
-            </a>{" "}
-            before you believe any of this.
-          </p>
+        <div className="gf-head grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-10">
+          <div>
+            <p className="gf-eyebrow">For the people who need to inspect the foundation</p>
+            <h2 className="gf-h2 mt-4">Git underneath. A clear way back on top.</h2>
+            <p className="gf-lead mt-5">
+              GoodFolder puts Save, Sync, Timeline, and Restore around an ordinary folder. Underneath, its history
+              stays in a standard Git repository your engineers can inspect, while everyone else gets a clear way to
+              keep work safe. {" "}
+              <a href={sourceUrl} className="gf-accent underline underline-offset-2">
+                Read the code
+              </a>{" "}
+              before you believe any of this.
+            </p>
+          </div>
+          <Image
+            src="/brand/mascot/mascot-nerd-glasses-v2.png"
+            alt="GoodFolder mark wearing thick glasses"
+            width={1536}
+            height={1024}
+            className="mx-auto w-[200px] rounded-xl lg:w-full"
+          />
         </div>
 
         <ul className="mt-9 grid gap-x-14 gap-y-7 sm:grid-cols-2">
@@ -78,19 +90,19 @@ export function ForEngineers({ sourceUrl }: { sourceUrl: string }) {
 
         <div className="gf-panel-dark mt-10 p-7">
           <h3 className="text-[18px] font-bold tracking-[-.02em]">
-            Your engineers have had a way back since 2005.
+            The safety net is real, even when the product gets out of the way.
           </h3>
           <p className="gf-on-dark mt-4 max-w-3xl text-[14.5px] leading-relaxed">
-            Everyone else in the company just got AI that edits their real files, with nothing underneath it. They
-            are not going to learn a tool built for programmers to fix that, and asking them to is how this usually
-            fails. GoodFolder gives them the same safety net with none of the words attached.
+            People working in recordings, budgets, and code should not need to learn the machinery underneath their
+            folders. GoodFolder makes that protection legible to them, while giving your technical team a foundation
+            they can audit, run themselves, and leave without losing the history.
           </p>
           <ul className="mt-6 grid gap-2.5 sm:grid-cols-2">
             {[
-              "No accounts to provision on a developer platform",
-              "No new file format, and no move off the folders they use",
-              "Set up per folder, by the person who owns it",
-              "Self-host it, or let us run it",
+              "The folder stays where its owner already works",
+              "No new file format or developer platform",
+              "Access checks stay in GoodFolder, not the transport",
+              "Run it yourself or use the hosted service",
             ].map((line) => (
               <li key={line} className="flex gap-2.5">
                 <CheckIcon className="gf-check" />

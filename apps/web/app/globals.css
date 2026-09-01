@@ -561,6 +561,35 @@ img, svg { max-width: 100%; }
   .gf-relay-arrow svg { transform: rotate(90deg); }
 }
 
+/* GoodFolder is the fixed handoff point. One sign changes at a time, making
+   the handoff combinations legible instead of replacing both agents at once. */
+.gf-agent-handoff { position: relative; width: 100%; max-width: 620px; margin: 0 auto; }
+.gf-agent-handoff__mascot { display: block; width: 100%; height: auto; }
+.gf-agent-handoff__sign { position: absolute; top: 27%; display: grid; width: 17%; aspect-ratio: 1; place-items: center; transform: translate(-50%, -50%); }
+.gf-agent-handoff__sign--left { left: 17%; }
+.gf-agent-handoff__sign--right { left: 83%; }
+.gf-agent-handoff__mark { position: absolute; width: 78%; height: 78%; object-fit: contain; opacity: 0; transform: translateY(5px) scale(.9); }
+.gf-agent-handoff__mark--left-first { animation: gf-agent-handoff-left-first 20s cubic-bezier(.22, 1, .36, 1) infinite both paused; }
+.gf-agent-handoff__mark--left-second { animation: gf-agent-handoff-left-second 20s cubic-bezier(.22, 1, .36, 1) infinite both paused; }
+.gf-agent-handoff__mark--left-last { animation: gf-agent-handoff-left-last 20s cubic-bezier(.22, 1, .36, 1) infinite both paused; }
+.gf-agent-handoff__mark--right-first { animation: gf-agent-handoff-right-first 20s cubic-bezier(.22, 1, .36, 1) infinite both paused; }
+.gf-agent-handoff__mark--right-second { animation: gf-agent-handoff-right-second 20s cubic-bezier(.22, 1, .36, 1) infinite both paused; }
+.gf-agent-handoff__mark--right-last { animation: gf-agent-handoff-right-last 20s cubic-bezier(.22, 1, .36, 1) infinite both paused; }
+.gf-agent-handoff.is-animating .gf-agent-handoff__mark { animation-play-state: running; }
+.gf-agent-handoff__mark--pi-agent { width: 84%; height: 84%; }
+.gf-agent-handoff__mark--claude { width: 82%; height: 82%; }
+@keyframes gf-agent-handoff-left-first { 0%, 18% { opacity: 1; transform: translateY(0) scale(1); } 22%, 100% { opacity: 0; transform: translateY(-5px) scale(.94); } }
+@keyframes gf-agent-handoff-left-second { 0%, 18% { opacity: 0; transform: translateY(5px) scale(.9); } 22%, 58% { opacity: 1; transform: translateY(0) scale(1); } 62%, 100% { opacity: 0; transform: translateY(-5px) scale(.94); } }
+@keyframes gf-agent-handoff-left-last { 0%, 58% { opacity: 0; transform: translateY(5px) scale(.9); } 62%, 100% { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes gf-agent-handoff-right-first { 0%, 38% { opacity: 1; transform: translateY(0) scale(1); } 42%, 100% { opacity: 0; transform: translateY(-5px) scale(.94); } }
+@keyframes gf-agent-handoff-right-second { 0%, 38% { opacity: 0; transform: translateY(5px) scale(.9); } 42%, 78% { opacity: 1; transform: translateY(0) scale(1); } 82%, 100% { opacity: 0; transform: translateY(-5px) scale(.94); } }
+@keyframes gf-agent-handoff-right-last { 0%, 78% { opacity: 0; transform: translateY(5px) scale(.9); } 82%, 100% { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .gf-agent-handoff__mark { animation: none; }
+  .gf-agent-handoff__mark--left-first,
+  .gf-agent-handoff__mark--right-first { opacity: 1; transform: none; }
+}
+
 /* --- Landing: the window, drawn ------------------------------------------ */
 /* The same shape the dashboard actually has — places down the left, a toolbar
    across the top, a panel about what is selected, a path and a count at the
