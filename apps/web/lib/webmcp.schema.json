@@ -1,0 +1,546 @@
+{
+  "$generatedBy": "apps/web/lib/webmcp-schema.ts — run `pnpm webmcp:schema` after changing a tool",
+  "tools": [
+    {
+      "name": "comment_on_change_proposal",
+      "description": "Add a comment to a Change Proposal for the people reviewing it. This adds discussion but does not change any document.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string",
+            "description": "Change Proposal id."
+          },
+          "comment": {
+            "type": "string",
+            "description": "Comment, at most 4,000 characters."
+          }
+        },
+        "required": [
+          "proposalId",
+          "comment"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "comment_on_document",
+      "description": "Leave a review comment on a selected passage in the open document. This does not change the document.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "quotedText": {
+            "type": "string",
+            "description": "Exact selected passage, at most 20,000 characters."
+          },
+          "comment": {
+            "type": "string",
+            "description": "Comment, at most 4,000 characters."
+          }
+        },
+        "required": [
+          "quotedText",
+          "comment"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "explain_change_proposal",
+      "description": "Explain one Change Proposal with the exact before and suggested text for human review.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string",
+            "description": "Change Proposal id."
+          }
+        },
+        "required": [
+          "proposalId"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "explain_save",
+      "description": "Explain one save in plain language: who made it, when, what changed, and which files were involved.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "number",
+            "description": "The save's number from the timeline."
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder name. Leave off for the first folder."
+          }
+        },
+        "required": [
+          "number"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "find_saves",
+      "description": "Search one folder's timeline by text in a save's label or by file path. Answers like “when did we touch the invoice?”.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Text to look for in labels or file paths."
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder name. Leave off for the first folder."
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "get_document_history",
+      "description": "Read saves that mention the document currently open, newest first.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "Maximum entries, default 10 and at most 25."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "get_timeline",
+      "description": "Read a folder's timeline of saves, newest first. Each entry says who saved it, what changed in plain language, and which files mattered most.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "folder": {
+            "type": "string",
+            "description": "Folder name. Leave off for the first folder."
+          },
+          "limit": {
+            "type": "number",
+            "description": "How many entries (default 10, max 25)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "get_workspace_context",
+      "description": "Read which GoodFolder, document, and Change Proposal the person currently has open.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "list_change_proposals",
+      "description": "List Change Proposals for the GoodFolder currently open, including their review status and affected documents.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Optional status: open, accepted, rejected, or needs-review."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "list_files",
+      "description": "List every file in the GoodFolder currently open, including which documents can be read or edited in the dashboard.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "list_folders",
+      "description": "List the person's GoodFolder folders with protection status and when each was last saved.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "preview_restore",
+      "description": "Preview going back to an earlier save: which files would be brought back, and the exact command to run on the person's computer. This never changes anything by itself.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "number",
+            "description": "The save number to go back to."
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder name. Leave off for the first folder."
+          }
+        },
+        "required": [
+          "number"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "propose_document_change",
+      "description": "Compatibility alias for propose_file_change with the text_replace operation. This does not change the document; only the folder owner can accept it.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string",
+            "description": "Document path in the current GoodFolder."
+          },
+          "section": {
+            "type": "string",
+            "description": "Selected passage or named section."
+          },
+          "originalText": {
+            "type": "string",
+            "description": "Exact current text, at most 20,000 characters."
+          },
+          "replacementText": {
+            "type": "string",
+            "description": "Suggested replacement, at most 20,000 characters."
+          },
+          "explanation": {
+            "type": "string",
+            "description": "Short reason for the suggestion, at most 500 characters."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short Change Proposal title."
+          }
+        },
+        "required": [
+          "document",
+          "section",
+          "originalText",
+          "replacementText",
+          "explanation",
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "propose_document_media",
+      "description": "Create one reviewable Change Proposal that adds generated media and inserts its Markdown or HTML reference into a text document. The bytes wait outside the folder; accepting the whole proposal adds the media and edits the document in one Save. This never changes the folder by itself.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string",
+            "description": "Exact path of the text document in the open GoodFolder."
+          },
+          "assetPath": {
+            "type": "string",
+            "description": "New path the image, video, or audio file will have if accepted, including its extension."
+          },
+          "assetDataUrl": {
+            "type": "string",
+            "description": "The generated image, video, or audio as a base64 data URL. Inline media is limited to 25 MB."
+          },
+          "anchorText": {
+            "type": "string",
+            "description": "Exact existing document text to anchor the insertion, at most 20,000 characters."
+          },
+          "insertionText": {
+            "type": "string",
+            "description": "Markdown or HTML that refers to assetPath, at most 20,000 characters."
+          },
+          "placement": {
+            "type": "string",
+            "enum": [
+              "before",
+              "after"
+            ],
+            "description": "Put insertionText before or after anchorText."
+          },
+          "section": {
+            "type": "string",
+            "description": "Optional section name shown during review."
+          },
+          "explanation": {
+            "type": "string",
+            "description": "Why the media belongs here, at most 500 characters."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short Change Proposal title."
+          }
+        },
+        "required": [
+          "document",
+          "assetPath",
+          "assetDataUrl",
+          "anchorText",
+          "insertionText",
+          "placement",
+          "explanation",
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "propose_file_change",
+      "description": "Create a reviewable one-file suggestion. text_replace works on any file readable as text, source files included; table_update takes exact CSV/TSV cells; asset_replace puts a file somebody already sent up in place of this one. This never changes the file; only the folder owner can accept it.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string",
+            "description": "Exact file path in the current GoodFolder."
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "text_replace",
+              "table_update",
+              "asset_replace"
+            ],
+            "description": "The kind of reviewable change."
+          },
+          "section": {
+            "type": "string",
+            "description": "Optional named section or context for a text replacement."
+          },
+          "originalText": {
+            "type": "string",
+            "description": "Exact current text for text_replace, at most 20,000 characters."
+          },
+          "replacementText": {
+            "type": "string",
+            "description": "Suggested text for text_replace, at most 20,000 characters."
+          },
+          "changes": {
+            "type": "array",
+            "maxItems": 100,
+            "description": "Exact CSV/TSV cell changes for table_update.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "before": {
+                  "type": "string"
+                },
+                "replacement": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "before",
+                "replacement"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "stagingAssetId": {
+            "type": "string",
+            "description": "Short-lived temporary upload id for a later asset_replace operation."
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "Uploaded asset MIME type for a later asset_replace operation."
+          },
+          "extension": {
+            "type": "string",
+            "description": "Uploaded asset extension for a later asset_replace operation."
+          },
+          "explanation": {
+            "type": "string",
+            "description": "Why the change is useful, at most 500 characters."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short Change Proposal title."
+          }
+        },
+        "required": [
+          "document",
+          "operation",
+          "explanation",
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "read_document_outline",
+      "description": "Read the headings and structure of the document currently open. This does not change the document.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "read_file_context",
+      "description": "Read a bounded line range from the open text file or a named text file. This never changes the file.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string",
+            "description": "Optional file path; defaults to the file currently open."
+          },
+          "startLine": {
+            "type": "number",
+            "description": "One-based first line, default 1."
+          },
+          "lineCount": {
+            "type": "number",
+            "description": "Number of lines, default 80 and at most 200."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "read_selected_text",
+      "description": "Read the passage the person has selected in the open document. Returns no text when there is no active selection.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "read_table_range",
+      "description": "Read a bounded, structured range from a CSV or TSV file, including cell addresses and values. This never changes the table.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string",
+            "description": "Optional CSV or TSV path; defaults to the file currently open."
+          },
+          "startRow": {
+            "type": "number",
+            "description": "One-based first row, default 1 and at most 200."
+          },
+          "startColumn": {
+            "type": "number",
+            "description": "One-based first column, default 1 and at most 40."
+          },
+          "rowCount": {
+            "type": "number",
+            "description": "Number of rows, default 25."
+          },
+          "columnCount": {
+            "type": "number",
+            "description": "Number of columns, default 12."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    }
+  ]
+}

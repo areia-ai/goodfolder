@@ -4,7 +4,7 @@
 #   - Typecheck across every workspace
 #   - Vocabulary gate: engine vocabulary must never reach a user-facing surface
 #   - Brand SVG validation and contrast check
-#   - The site-tools unit test
+#   - The site-tools unit tests, including the WebMCP schema/eval-suite gate
 
 name: ci
 
@@ -44,4 +44,7 @@ jobs:
         run: node tools/check-contrast.mjs
 
       - name: Unit tests (site tools logic)
-        run: node --experimental-transform-types --test apps/web/lib/webmcp.test.ts
+        run: >
+          node --experimental-transform-types --test
+          apps/web/lib/webmcp.test.ts
+          apps/web/lib/webmcp.evals.test.ts

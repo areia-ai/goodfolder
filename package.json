@@ -15,6 +15,8 @@
     "brand:validate": "node tools/validate-brand.mjs",
     "contrast:check": "node tools/check-contrast.mjs",
     "package:smoke": "node tools/package-smoke.mjs",
+    "webmcp:schema": "node --experimental-transform-types tools/gen-webmcp-schema.ts",
+    "webmcp:evals": "webmcp-evals local -t apps/web/lib/webmcp.schema.json -e apps/web/lib/webmcp.evals.json -b vercel --max-steps 1",
     "test": "pnpm -r --if-present test",
     "gate": "pnpm typecheck && pnpm vocab"
   },

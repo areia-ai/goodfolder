@@ -1,0 +1,85 @@
+# Scored WebMCP tool-selection evals — Google's webmcp-evals `local` runner
+# against apps/web/lib/webmcp.schema.json + webmcp.evals.json.
+#
+# This is NOT a merge gate: it calls a hosted model, so it is non-deterministic
+# and needs a key. The deterministic half (schema drift, suite validity) runs in
+# ci.yml on every push. Run this by hand from the Actions tab, or let the weekly
+# schedule catch model regressions.
+#
+# `local` mode gives every tool a mock result, so it measures FIRST-tool routing
+# with `--max-steps 1`: does the model reach for the right tool from the prompt
+# alone. A capable model that orients with get_workspace_context first will
+# "miss" some read cases — that is expected, not a description bug. What the
+# suite is really watching for is wrong-sibling routing (propose_file_change vs
+# propose_document_change, read_file_context vs read_table_range) and any reach
+# for an accept/save/delete tool that must never exist.
+#
+# Requires a repository secret OPENROUTER_API_KEY. Without it the job reports
+# skipped rather than failing. Any OpenAI-compatible endpoint works — set
+# OPENAI_BASE_URL / OPENAI_API_KEY and an `openai:<slug>` model instead.
+
+name: webmcp-evals
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "OpenRouter model slug (prefixed with openai: for the compat client)"
+        default: "openai:openai/gpt-4o"
+      runs:
+        description: Runs per case
+        default: "3"
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  scored:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for a model key
+        id: key
+        run: |
+          if [ -n "${{ secrets.OPENROUTER_API_KEY }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::OPENROUTER_API_KEY secret is not set — skipping the scored eval run."
+          fi
+
+      - name: Run webmcp-evals local
+        if: steps.key.outputs.present == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_BASE_URL: https://openrouter.ai/api/v1
+        run: >
+          npx --yes webmcp-evals@latest local
+          -t apps/web/lib/webmcp.schema.json
+          -e apps/web/lib/webmcp.evals.json
+          -b vercel
+          -m "${{ github.event.inputs.model || 'openai:openai/gpt-4o' }}"
+          -r "${{ github.event.inputs.runs || '3' }}"
+          --max-steps 1
+          --reporter console json html
+          -o .evals
+
+      - name: Upload report
+        if: steps.key.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: webmcp-evals-report
+          path: .evals/
+          if-no-files-found: warn

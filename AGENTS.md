@@ -92,13 +92,32 @@ node tools/check-contrast.mjs
 Tests are plain files run with the Node test runner, not a `test` script:
 
 ```bash
-node --experimental-transform-types --test apps/web/lib/webmcp.test.ts
+node --experimental-transform-types --test apps/web/lib/webmcp.test.ts apps/web/lib/webmcp.evals.test.ts
 ```
 
 Run the ones near what you changed (`apps/control-plane/src/*.test.ts`,
 `apps/web/lib/*.test.ts`, `apps/cli/src/undo.test.ts`, and
 `apps/cli/src/{skip,nested}.test.ts`, which build real folders in a temporary
-directory and clean up after themselves). CI runs the webmcp one.
+directory and clean up after themselves). CI runs the webmcp ones.
+
+The dashboard's WebMCP tools are also captured as a plain schema for Google's
+`webmcp-evals` runner. After changing any tool in `apps/web/lib/webmcp.ts`, run
+`pnpm webmcp:schema` and commit `apps/web/lib/webmcp.schema.json` —
+`webmcp.evals.test.ts` fails CI when it drifts, and also checks that
+`apps/web/lib/webmcp.evals.json` (the tool-selection suite) only names real
+tools. To score the suite against a model:
+
+```bash
+OPENAI_API_KEY=<openrouter key> OPENAI_BASE_URL=https://openrouter.ai/api/v1 \
+  pnpm webmcp:evals -m openai:openai/gpt-4o -r 3
+```
+
+`local` mode mocks every tool result, so this measures first-tool routing
+(`--max-steps 1`): a capable model that orients with `get_workspace_context`
+first will "miss" some read cases, which is fine — the suite is really watching
+for wrong-sibling routing and any reach for an accept/save tool. The
+`webmcp-evals` workflow runs it weekly and on demand (needs an
+`OPENROUTER_API_KEY` secret).
 `apps/mcp/flow-test.mts` and `test-mcp.mts` hit a live server and create real
 folders and storage rows, so only run them against a server you control, with a
 plan to clean up after.

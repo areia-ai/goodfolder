@@ -1,0 +1,212 @@
+[
+  {
+    "name": "Recent activity routes to get_timeline",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Using the folder's timeline, what changed recently?" }
+    ],
+    "expectedCall": [
+      { "functionName": "get_timeline", "arguments": {} }
+    ]
+  },
+  {
+    "name": "Named folder timeline passes the folder name",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Show me the last 5 saves in the folder named Marketing." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "get_timeline",
+        "arguments": { "folder": { "$contains": "Marketing" }, "limit": { "$lte": 5 } }
+      }
+    ]
+  },
+  {
+    "name": "A question about one file's past routes to find_saves",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Search the timeline for the save where we last touched the invoice." }
+    ],
+    "expectedCall": [
+      { "functionName": "find_saves", "arguments": { "query": { "$contains": "invoice" } } }
+    ]
+  },
+  {
+    "name": "Explaining a specific save number",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Explain save number 7." }
+    ],
+    "expectedCall": [
+      { "functionName": "explain_save", "arguments": { "number": 7 } }
+    ]
+  },
+  {
+    "name": "Rollback impact routes to preview_restore, never a write",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Preview what going back to save 4 would change. Don't restore anything." }
+    ],
+    "expectedCall": [
+      { "functionName": "preview_restore", "arguments": { "number": 4 } }
+    ]
+  },
+  {
+    "name": "Orienting reads workspace context",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Which folder, document and change proposal do I currently have open?" }
+    ],
+    "expectedCall": [
+      { "functionName": "get_workspace_context", "arguments": {} }
+    ]
+  },
+  {
+    "name": "Listing the open folder's files",
+    "messages": [
+      { "role": "user", "type": "message", "content": "List the files in the folder I have open." }
+    ],
+    "expectedCall": [
+      { "functionName": "list_files", "arguments": {} }
+    ]
+  },
+  {
+    "name": "Reading a range of a text file does not edit it",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Read lines 1 to 40 of notes.md." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "read_file_context",
+        "arguments": { "document": { "$contains": "notes.md" }, "lineCount": { "$lte": 40 } }
+      }
+    ]
+  },
+  {
+    "name": "A CSV question routes to the structured range reader",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Read the top-left range of budget.csv with cell addresses." }
+    ],
+    "expectedCall": [
+      { "functionName": "read_table_range", "arguments": { "document": { "$contains": "budget.csv" } } }
+    ]
+  },
+  {
+    "name": "A prose fix is proposed as text_replace, not applied",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Propose a change to notes.md that replaces the exact text 'teh report' with 'the report'. Title it and explain it."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "propose_file_change",
+        "arguments": {
+          "document": { "$contains": "notes.md" },
+          "operation": "text_replace",
+          "originalText": { "$contains": "teh" },
+          "replacementText": { "$contains": "the" },
+          "title": { "$type": "string" },
+          "explanation": { "$type": "string" }
+        }
+      }
+    ]
+  },
+  {
+    "name": "A single-cell CSV edit routes to table_update",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Propose a change to work.csv setting cell B2 from 'open' to 'done'. Title it and explain it."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "propose_file_change",
+        "arguments": {
+          "document": { "$contains": "work.csv" },
+          "operation": "table_update",
+          "changes": [
+            { "address": { "$pattern": "^B2$" }, "replacement": { "$contains": "done" } }
+          ],
+          "title": { "$type": "string" },
+          "explanation": { "$type": "string" }
+        }
+      }
+    ]
+  },
+  {
+    "name": "Adding media to a document routes to propose_document_media",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Here is a base64 image data URL: data:image/png;base64,iVBORw0KGgo=. Propose adding it to recipe.md as images/dish.png, placed before the exact text '## Steps', with Markdown that references it. Title it and explain it."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "propose_document_media",
+        "arguments": {
+          "document": { "$contains": "recipe.md" },
+          "assetPath": { "$contains": "dish.png" },
+          "placement": "before",
+          "anchorText": { "$contains": "Steps" },
+          "insertionText": { "$type": "string" },
+          "title": { "$type": "string" },
+          "explanation": { "$type": "string" }
+        }
+      }
+    ]
+  },
+  {
+    "name": "Feedback without an edit routes to comment_on_document",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Leave a review comment (do not edit) on the exact passage 'Our intro paragraph.' in the open document, saying it needs a source."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "comment_on_document",
+        "arguments": { "quotedText": { "$contains": "intro" }, "comment": { "$contains": "source" } }
+      }
+    ]
+  },
+  {
+    "name": "Reviewing an existing proposal reads it, does not accept it",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Explain change proposal cp_1839 with its before and after text." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "explain_change_proposal",
+        "arguments": { "proposalId": { "$contains": "cp_1839" } }
+      }
+    ]
+  },
+  {
+    "name": "Commenting on a proposal by id",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Add a comment to change proposal cp_42 asking them to keep the old heading." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "comment_on_change_proposal",
+        "arguments": { "proposalId": { "$contains": "cp_42" }, "comment": { "$type": "string" } }
+      }
+    ]
+  },
+  {
+    "name": "Listing proposals that are still open",
+    "messages": [
+      { "role": "user", "type": "message", "content": "List this folder's change proposals with status open." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "list_change_proposals",
+        "arguments": { "status": { "$contains": "open" } }
+      }
+    ]
+  }
+]
