@@ -11,18 +11,18 @@ import {
 
 /** The on-screen story. Keeping the lines here makes the motion follow a script. */
 export const HERO_AGENT_DEMO_SCRIPT = {
-  durationSeconds: 20,
+  durationSeconds: 26,
   codex: {
-    prompt: "Set up GoodFolder for this folder so another agent can use its history.",
-    reply: "Q3 Report is connected. The files stay on this Mac.",
+    prompt: "Save the Q3 Board Pack so I can pick it up on my other computer.",
+    reply: "Saved Q3 Board Pack as Save #24. 2 files changed: summary.md and figures/revenue.csv.",
   },
   handoff: {
-    folder: "Q3 Report",
-    route: "MCP on this Mac",
+    folder: "Q3 Board Pack",
+    route: "Ready for the next agent",
   },
   telegram: {
-    prompt: "What changed in Q3 Report since the last Save?",
-    reply: "Codex changed 3 files. The summary is updated, and 1 Change Proposal is waiting for you.",
+    prompt: "Sync Q3 Board Pack and show me the latest Save.",
+    reply: "Brought in 1 change. Latest Save #24: Rewrote the summary and refreshed the August figure.",
   },
 } as const;
 
@@ -60,7 +60,7 @@ function CodexWindow() {
       <div className="gf-demo-codex__titlebar">
         <WindowDots />
         <span className="gf-demo-codex__toolbar-icon"><CodexNavIcon name="sidebar" /></span>
-        <span className="gf-demo-codex__crumb"><FolderIcon /> Open Q3 Report</span>
+        <span className="gf-demo-codex__crumb"><FolderIcon /> Open Q3 Board Pack</span>
         <span className="gf-demo-codex__toolbar-spacer" />
         <span className="gf-demo-codex__quiet">Share</span>
         <span className="gf-demo-codex__toolbar-icon"><TimelineIcon /></span>
@@ -78,7 +78,7 @@ function CodexWindow() {
           </nav>
           <div className="gf-demo-codex__projects">
             <small>Projects</small>
-            {['goodfolder', 'atlas-notes', 'northstar', 'studio-kit'].map((project, index) => (
+            {['q3-board-pack', 'atlas-notes', 'northstar', 'studio-kit'].map((project, index) => (
               <span className={index === 0 ? 'is-active' : ''} key={project}><CodexNavIcon name="folder" />{project}</span>
             ))}
           </div>
@@ -99,14 +99,14 @@ function CodexWindow() {
             <div className="gf-demo-codex__worked">Worked for 8s <span>›</span></div>
             <div className="gf-demo-codex__answer-rule" />
             <p className="gf-demo-codex__stream">
-              {"Done. Q3 Report is connected to GoodFolder. The files stay on this Mac, and its history is available to the other agent through MCP.".split(" ").map((word, index) => (
+              {HERO_AGENT_DEMO_SCRIPT.codex.reply.split(" ").map((word, index) => (
                 <span key={`${word}-${index}`} style={{ animationDelay: `${index * 55}ms` }}>{word} </span>
               ))}
             </p>
             <div className="gf-demo-codex__checks">
-              <span><CheckIcon /> 7 files found</span>
-              <span><SaveIcon /> Save #1 ready</span>
-              <span><SyncIcon /> MCP available</span>
+              <span><CheckIcon /> 2 files changed</span>
+              <span><SaveIcon /> Save #24</span>
+              <span><SyncIcon /> Ready to Sync</span>
             </div>
           </div>
 
@@ -124,7 +124,7 @@ function CodexWindow() {
                 <span className="gf-demo-codex__model-dot" />
                 <span className="gf-demo-codex__model"><b>5.6 Sol</b><small>Light</small><em>⌄</em></span>
                 <svg className="gf-demo-codex__mic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-3 0h6"/></svg>
-                <i className="gf-demo-codex__send">↑</i>
+                <i className="gf-demo-codex__send"><span className="gf-demo-codex__send-arrow">↑</span><span className="gf-demo-codex__send-stop" /></i>
               </div>
             </div>
           </div>
@@ -133,7 +133,7 @@ function CodexWindow() {
         <aside className="gf-demo-codex__environment">
           <div className="gf-demo-codex__environment-head"><span>Environment</span><b>+</b></div>
           <div className="gf-demo-codex__environment-row"><ComputerIcon /><span>Local</span><b>⌄</b></div>
-          <div className="gf-demo-codex__environment-row"><FolderIcon /><span>Q3 Report</span></div>
+          <div className="gf-demo-codex__environment-row"><FolderIcon /><span>Q3 Board Pack</span></div>
           <div className="gf-demo-codex__environment-row is-connected"><BrandMark size={18} title="" /><span>GoodFolder</span><b>Connected</b></div>
           <div className="gf-demo-codex__environment-rule" />
           <small>Background</small>
@@ -214,14 +214,18 @@ function TelegramWindow() {
                   <span>{HERO_AGENT_DEMO_SCRIPT.telegram.prompt}</span>
                 </div>
                 <p>{HERO_AGENT_DEMO_SCRIPT.telegram.reply}</p>
-                <div className="gf-demo-telegram__tool"><TimelineIcon /><span>get_timeline · Q3 Report</span><CheckIcon /></div>
+                <div className="gf-demo-telegram__tool"><SyncIcon /><span>goodfolder_sync · Q3 Board Pack</span><CheckIcon /></div>
+                <div className="gf-demo-telegram__tool"><TimelineIcon /><span>goodfolder_log · Q3 Board Pack</span><CheckIcon /></div>
                 <small>10:42</small>
               </div>
             </div>
 
             <div className="gf-demo-telegram__composer">
-              <b>Menu</b><span>⌕</span>
+              <b>Menu</b>
+              <svg className="gf-demo-telegram__paperclip" viewBox="0 0 24 24" aria-hidden="true"><path d="m20.5 11.5-8.8 8.8a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.75 3.75 0 0 1 5.3 5.3l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
               <p><span className="gf-demo-telegram__composer-placeholder">Write a message…</span><span className="gf-demo-telegram__composer-typed">{HERO_AGENT_DEMO_SCRIPT.telegram.prompt}</span></p>
+              <svg className="gf-demo-telegram__emoji" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="9" cy="10" r=".8" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r=".8" fill="currentColor" stroke="none"/><path d="M8.5 14.5c1.9 1.7 5.1 1.7 7 0"/></svg>
+              <svg className="gf-demo-telegram__mic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-3 0h6"/></svg>
               <i className="gf-demo-telegram__send"><TelegramMark /></i>
             </div>
           </div>
@@ -236,11 +240,11 @@ export function HeroAgentDemo() {
     <div
       className="gf-hero-demo"
       role="img"
-      aria-label="An animated example showing Codex connecting the Q3 Report folder to GoodFolder on a Mac, then OpenClaw reading the same GoodFolder history through Telegram and MCP."
+      aria-label="An animated example showing Codex saving the Q3 Board Pack folder on a Mac, then OpenClaw syncing it and reading its timeline through Telegram."
     >
       <span className="sr-only">
-        Codex connects Q3 Report to GoodFolder on the computer holding the files. GoodFolder exposes that folder history
-        through MCP, allowing OpenClaw in Telegram to answer what changed without moving the folder to the cloud.
+        Codex saves Q3 Board Pack on the computer holding the files. GoodFolder exposes that folder history
+        so OpenClaw in Telegram can sync it and read the latest Save without moving the folder to the cloud.
       </span>
       <div className="gf-hero-demo__ambient" aria-hidden="true"><i /><i /><i /></div>
       <CodexWindow />

@@ -14,12 +14,9 @@ import {
   CheckIcon,
   ClockIcon,
   ComputerIcon,
-  CrossCircleIcon,
   DocumentIcon,
-  FolderIcon,
   GitHubIcon,
   ImageIcon,
-  LockIcon,
   NoteIcon,
   PdfIcon,
   RestoreIcon,
@@ -141,55 +138,11 @@ const ACTIONS = [
   },
 ];
 
-const AGENT_CAN = [
-  "Read any file in the folder you have open",
-  "Explain any Save in the timeline",
-  "Pull out an outline, a passage, or a range of cells",
-  "Show what Restore would change before it runs",
-  "Leave a comment or send a Change Proposal",
-];
-
-const ONLY_YOU_CAN = [
-  "Save work straight into the folder",
-  "Accept or reject a Change Proposal",
-  "Invite people or change who has access",
-  "Restore or undo from the computer where the folder lives",
-  "Take anything out of the folder",
-];
-
 const SOURCE_PARTS = [
   "The command-line tool on your computer",
   "The agent server and all nineteen WebMCP tools",
   "The dashboard and hosted-service code",
   "The storage service and Docker setup",
-];
-
-/** The facts a serious visitor needs before handing over a real folder. */
-const DETAILS: {
-  Glyph: (props: { className?: string }) => React.JSX.Element;
-  term: string;
-  body: string;
-}[] = [
-  {
-    Glyph: ComputerIcon,
-    term: "What you need",
-    body: "A folder on your own computer, and either an agent that speaks the Model Context Protocol or a terminal you’re willing to type one line into. The dashboard itself needs nothing but a browser.",
-  },
-  {
-    Glyph: FolderIcon,
-    term: "Where your files sit",
-    body: "Where they already are, in the formats they already have. GoodFolder keeps a copy of the folder’s history so the same folder can open on your other computers.",
-  },
-  {
-    Glyph: CrossCircleIcon,
-    term: "What it isn’t",
-    body: "It isn’t a cloud drive and it isn’t a backup service. It remembers what happened inside a working folder. Keep the backup you already trust.",
-  },
-  {
-    Glyph: ClockIcon,
-    term: "How early it is",
-    body: "Early. There’s no installer and no desktop app yet, so a folder is set up from the computer it lives on. It has had the most use on macOS. After setup, the dashboard works in any browser.",
-  },
 ];
 
 const QUESTIONS: FaqItem[] = [
@@ -199,6 +152,13 @@ const QUESTIONS: FaqItem[] = [
     answer: [
       "You give an email address and we send a one-time sign-in link. There’s no password to make up and nothing to install.",
       "Once you’re in, you’ll see the folders you own and any folder someone has shared with you. If a colleague invited you, sign in with the address they used.",
+    ],
+  },
+  {
+    question: "What do I need to get started?",
+    answer: [
+      "You need a folder on your computer. Ask a compatible agent to set it up, or run one command yourself.",
+      "There’s no desktop app or installer yet, so setup happens on the computer where the folder lives. After that, the dashboard works in any browser.",
     ],
   },
   {
@@ -530,42 +490,33 @@ export default function Landing() {
               <div className="mt-7 rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-[var(--gf-blue-wash)] p-5">
                 <b className="block text-[15px]">Wherever the agent runs.</b>
                 <p className="gf-body mt-2 text-[14px]">
-                  Codex, Claude Code, OpenClaw and Hermes Agent all speak MCP. Each one connects to GoodFolder on a
-                  computer that has the folder, and gets the same actions and the same timeline.
+                  Codex, Claude Code and OpenClaw can all work with GoodFolder. Each one connects to the computer
+                  that has the folder, and gets the same actions and the same timeline.
                 </p>
               </div>
             </div>
-            <div>
-              {/* Agent, folder, agent. The two ends change; the middle is what
-                  makes the handoff possible, so it is the one drawn in blue.
-                  Only marks from a project's own public material are used —
-                  the agents without one get an honest glyph instead. */}
-              <div className="gf-relay">
-                <div className="gf-relay-node">
-                  <span className="gf-relay-mark gf-relay-mark-dark"><TerminalIcon /></span>
-                  <b>Codex</b>
-                  <small>On your laptop</small>
-                </div>
-                <span className="gf-relay-arrow" aria-hidden="true"><ArrowRightIcon /></span>
-                <div className="gf-relay-node gf-relay-hub">
-                  <span className="gf-relay-mark"><BrandMark size={42} title="GoodFolder" /></span>
-                  <b>Q3 Report</b>
-                  <small>24 Saves, in order</small>
-                </div>
-                <span className="gf-relay-arrow" aria-hidden="true"><ArrowRightIcon /></span>
-                <div className="gf-relay-node">
-                  <span className="gf-relay-pair">
-                    <a href="https://openclaw.ai/" aria-label="OpenClaw">
-                      <Image src="/partners/openclaw.svg" alt="" aria-hidden="true" width={42} height={42} />
-                    </a>
-                    <a href="https://hermes-agent.nousresearch.com/" aria-label="Hermes Agent">
-                      <Image src="/partners/hermes-agent.png" alt="" aria-hidden="true" width={42} height={42} />
-                    </a>
-                  </span>
-                  <b>OpenClaw, Hermes Agent</b>
-                  <small>In the cloud, through MCP</small>
-                </div>
-              </div>
+            <div className="relative mx-auto w-full max-w-[620px]">
+              <Image
+                src="/brand/mascot/mascot-agent-handoff-v2.png"
+                alt="GoodFolder mascot holding Codex and OpenClaw"
+                width={1383}
+                height={1137}
+                className="h-auto w-full"
+              />
+              <Image
+                src="/partners/codex-app.png"
+                alt="Codex"
+                width={108}
+                height={108}
+                className="absolute left-[17%] top-[27%] w-[16%] -translate-x-1/2 -translate-y-1/2 rounded-[24%] shadow-sm"
+              />
+              <a
+                href="https://openclaw.ai/"
+                aria-label="OpenClaw"
+                className="absolute left-[83%] top-[27%] block w-[17%] -translate-x-1/2 -translate-y-1/2 rounded-full p-0 transition-transform duration-150 hover:scale-105"
+              >
+                <Image src="/partners/openclaw.svg" alt="" aria-hidden="true" width={184} height={184} className="h-auto w-full" />
+              </a>
             </div>
           </div>
         </section>
@@ -573,33 +524,36 @@ export default function Landing() {
         {/* --------------------------------------------------------------- WebMCP */}
         <section id="webmcp" className="gf-band gf-band-tint scroll-mt-16">
           <div className="gf-wrap">
-            <div className="max-w-2xl">
+            <div className="max-w-3xl">
               <p className="gf-eyebrow">No copy and paste</p>
-              <h2 className="gf-h2 mt-4">WebMCP gives your assistant 19 tools for the folder you have open.</h2>
+              <h2 className="gf-h2 mt-4">Your assistant can work with the folder you have open.</h2>
               <p className="gf-lead mt-5">
-                Ask in normal language. Nothing is uploaded to a chat — the assistant reads the folder already in
-                front of you.
+                Ask in normal language. It reads the files and history already in front of you, then prepares a
+                <span className="font-medium text-[var(--gf-blue-ink)]"> change proposal</span> when it wants to
+                change something.
               </p>
 
-              {/* The counts are the permission story, and the only numbers in
-                  this section that a reader can check. The three numbered
-                  steps that used to sit above them said what the sentence
-                  above already says. */}
-              <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <div className="mt-8 grid gap-3 md:grid-cols-3">
                 <div className="rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white p-5">
-                  <b className="flex items-baseline gap-2 text-[16px]">
-                    <span className="gf-figure-num text-[2rem]">14</span> read and explain
-                  </b>
+                  <h3 className="text-[16px] font-bold tracking-[-.02em]">Read the folder</h3>
                   <p className="gf-body mt-2 text-[13.5px]">
-                    Files, tables, Saves, proposals, Restore previews. Nothing changes.
+                    Files, tables, <span className="font-medium text-[var(--gf-blue-ink)]">saves</span> and{" "}
+                    <span className="font-medium text-[var(--gf-blue-ink)]">restore</span> previews all stay in
+                    GoodFolder.
                   </p>
                 </div>
                 <div className="rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white p-5">
-                  <b className="flex items-baseline gap-2 text-[16px]">
-                    <span className="gf-figure-num text-[2rem]">4</span> comment or propose
-                  </b>
+                  <h3 className="text-[16px] font-bold tracking-[-.02em]">Prepare the work</h3>
                   <p className="gf-body mt-2 text-[13.5px]">
-                    Comments and Change Proposals. They never approve themselves.
+                    It can leave comments or draft a{" "}
+                    <span className="font-medium text-[var(--gf-blue-ink)]">change proposal</span> for you to
+                    review.
+                  </p>
+                </div>
+                <div className="rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-[var(--gf-blue-wash)] p-5">
+                  <h3 className="text-[16px] font-bold tracking-[-.02em]">You decide</h3>
+                  <p className="gf-body mt-2 text-[13.5px]">
+                    Nothing changes until a person accepts the proposal in GoodFolder.
                   </p>
                 </div>
               </div>
@@ -620,7 +574,7 @@ export default function Landing() {
               <figure className="overflow-hidden rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white shadow-[var(--gf-shadow)]">
                 <figcaption className="flex items-center gap-2 border-b border-[var(--gf-line)] px-4 py-3 text-[13px] font-semibold">
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--gf-blue-ink)] text-[11px] text-white">1</span>
-                  The assistant prepares a Change Proposal
+                  The assistant prepares a <span className="text-[var(--gf-blue-ink)]">change proposal</span>
                 </figcaption>
                 <Image
                   src="/shots/webmcp-proposal.png"
@@ -633,7 +587,7 @@ export default function Landing() {
               <figure className="overflow-hidden rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white shadow-[var(--gf-shadow)]">
                 <figcaption className="flex items-center gap-2 border-b border-[var(--gf-line)] px-4 py-3 text-[13px] font-semibold">
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--gf-blue-ink)] text-[11px] text-white">2</span>
-                  The person accepts it, and the result appears inline
+                  You accept it in GoodFolder, and the result appears inline
                 </figcaption>
                 <Image
                   src="/shots/webmcp-result.png"
@@ -644,64 +598,6 @@ export default function Landing() {
                 />
               </figure>
             </div>
-          </div>
-        </section>
-
-        {/* ------------------------------------------------------ Human approval */}
-        <section id="agents" className="gf-band scroll-mt-16">
-          <div className="gf-wrap">
-            <div className="gf-head">
-              <p className="gf-eyebrow">Human approval stays in GoodFolder</p>
-              <h2 className="gf-h2 mt-4">The assistant can prepare the work. You decide what changes.</h2>
-              <p className="gf-lead mt-5">
-                Comments and Change Proposals can arrive from the browser. The actions that change a real folder stay
-                with the person who owns it.
-              </p>
-            </div>
-
-            <div className="mt-10 grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_220px_minmax(0,.9fr)] lg:gap-10">
-              <div>
-                <div className="flex items-center gap-3">
-                  <span className="gf-feature-icon"><SparklesIcon /></span>
-                  <h3 className="text-[18px] font-bold tracking-[-.02em]">The assistant can</h3>
-                </div>
-                <ul className="mt-5 grid gap-2.5">
-                  {AGENT_CAN.map((line) => (
-                    <li key={line} className="flex gap-2.5 border-t border-[var(--gf-line)] pt-2.5">
-                      <CheckIcon className="gf-check" />
-                      <span className="gf-body text-[14.5px]">{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <MascotPose pose="review" className="mx-auto w-[170px] sm:w-[200px] lg:w-[220px]" />
-
-              <div className="gf-panel-dark p-7">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-[10px] border border-[var(--gf-line-on-dark)]">
-                    <LockIcon className="h-5 w-5" />
-                  </span>
-                  <h3 className="text-[18px] font-bold tracking-[-.02em]">Only you can</h3>
-                </div>
-                <ul className="mt-5 grid gap-2.5">
-                  {ONLY_YOU_CAN.map((line) => (
-                    <li key={line} className="flex gap-2.5">
-                      <CheckIcon className="gf-check" />
-                      <span className="gf-on-dark text-[14.5px] leading-relaxed">{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <p className="gf-notice mt-9 text-[15px] font-semibold">
-              A suggestion waits as a Change Proposal. Your folder stays unchanged until you accept it.
-            </p>
-            <p className="gf-faint mt-4 max-w-2xl text-[12.5px] leading-relaxed">
-              People you invite work in the browser. They read, comment and send Change Proposals; the folder itself
-              stays on your own computers.
-            </p>
           </div>
         </section>
 
@@ -753,27 +649,6 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ----------------------------------------------------- Decision details */}
-        <section className="gf-band">
-          <div className="gf-wrap">
-            <div className="gf-head">
-              <p className="gf-eyebrow">Before you hand over a real folder</p>
-              <h2 className="gf-h2 mt-4">What you need, and where this is today.</h2>
-            </div>
-            <div className="mt-9 max-w-4xl">
-              {DETAILS.map(({ Glyph, term, body }) => (
-                <div key={term} className="gf-verb">
-                  <h3 className="gf-verb-name">
-                    <Glyph />
-                    {term}
-                  </h3>
-                  <p className="gf-body text-[14.5px]">{body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
         {/* --------------------------------------------------- What it is underneath */}
         {/* Deliberately this far down, and deliberately the only block that
             names the engine. The reader here is the person a colleague has to
@@ -794,8 +669,10 @@ export default function Landing() {
         {/* -------------------------------------------------------------- Final CTA */}
         <section className="gf-wrap py-[var(--gf-section-y)]">
           <div className="gf-panel-dark flex flex-col items-center px-6 py-14 text-center sm:px-14 sm:py-20">
-            <span className="grid h-[190px] w-[190px] place-items-center rounded-full bg-white p-2">
-              <MascotPose pose="wave" className="w-[180px]" />
+            <span className="gf-cta-scope" aria-hidden="true">
+              <span className="gf-cta-scope-window">
+                <MascotPose pose="wave" className="gf-cta-mascot" />
+              </span>
             </span>
             <h2 className="gf-h2 mt-7 max-w-2xl">Start with a folder you already use.</h2>
             <p className="gf-on-dark mt-5 max-w-lg text-[16px] leading-relaxed">
