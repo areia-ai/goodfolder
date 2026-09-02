@@ -183,9 +183,135 @@ img, svg { max-width: 100%; }
 .gf-panel-dark .gf-button-secondary:hover { background: color-mix(in srgb, var(--gf-white) 12%, transparent); border-color: var(--gf-white); }
 .gf-panel-dark :where(a, button):focus-visible { box-shadow: 0 0 0 2px var(--gf-black), 0 0 0 4px var(--gf-white); }
 
-/* The final CTA opens like a telescope, settles on the mascot, then leaves
-   room for the copy. The source pose already has a raised hand; the small
-   bob and turn make that greeting feel alive without competing with the CTA. */
+/* Each changed digit rolls through the numbers between its old and new
+   values. Full glyph layers keep the smooth roll while avoiding hard crops. */
+.gf-price-amount {
+  display: inline-flex;
+  align-items: center;
+  height: 1em;
+  line-height: 1;
+}
+
+.gf-price-currency {
+  display: inline-block;
+  line-height: 1;
+}
+
+.gf-price-digits {
+  display: inline-flex;
+  align-items: center;
+  column-gap: .16em;
+  height: 1em;
+  line-height: 1;
+}
+
+.gf-price-digits-compact {
+  column-gap: .12em;
+}
+
+.gf-price-digit,
+.gf-price-digit-window {
+  display: inline-block;
+  width: .64ch;
+  height: 1.24em;
+  overflow: visible;
+  line-height: 1.24;
+  margin-block: -.12em;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.gf-price-digit-window {
+  position: relative;
+  perspective: 520px;
+}
+
+.gf-price-digit-frame {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  height: 1.24em;
+  line-height: 1.24;
+  opacity: 0;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.gf-price-digit-frame.is-increasing {
+  animation: gf-price-digit-frame-up .18s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.gf-price-digit-frame.is-decreasing {
+  animation: gf-price-digit-frame-down .18s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.gf-price-digit-frame.is-increasing.is-first,
+.gf-price-digit-frame.is-decreasing.is-first {
+  opacity: 1;
+}
+
+.gf-price-digit-frame.is-increasing.is-first {
+  animation-name: gf-price-digit-frame-up-first;
+}
+
+.gf-price-digit-frame.is-decreasing.is-first {
+  animation-name: gf-price-digit-frame-down-first;
+}
+
+.gf-price-digit-frame.is-increasing.is-last {
+  animation-name: gf-price-digit-frame-up-last;
+}
+
+.gf-price-digit-frame.is-decreasing.is-last {
+  animation-name: gf-price-digit-frame-down-last;
+}
+
+@keyframes gf-price-digit-frame-up {
+  0% { opacity: 0; transform: translateY(.22em) rotateX(-14deg); }
+  45% { opacity: 1; transform: translateY(0) rotateX(0); }
+  100% { opacity: 0; transform: translateY(-.22em) rotateX(14deg); }
+}
+
+@keyframes gf-price-digit-frame-up-first {
+  0%, 45% { opacity: 1; transform: translateY(0) rotateX(0); }
+  100% { opacity: 0; transform: translateY(-.22em) rotateX(14deg); }
+}
+
+@keyframes gf-price-digit-frame-up-last {
+  0% { opacity: 0; transform: translateY(.22em) rotateX(-14deg); }
+  45%, 100% { opacity: 1; transform: translateY(0) rotateX(0); }
+}
+
+@keyframes gf-price-digit-frame-down {
+  0% { opacity: 0; transform: translateY(-.22em) rotateX(14deg); }
+  45% { opacity: 1; transform: translateY(0) rotateX(0); }
+  100% { opacity: 0; transform: translateY(.22em) rotateX(-14deg); }
+}
+
+@keyframes gf-price-digit-frame-down-first {
+  0%, 45% { opacity: 1; transform: translateY(0) rotateX(0); }
+  100% { opacity: 0; transform: translateY(.22em) rotateX(-14deg); }
+}
+
+@keyframes gf-price-digit-frame-down-last {
+  0% { opacity: 0; transform: translateY(-.22em) rotateX(14deg); }
+  45%, 100% { opacity: 1; transform: translateY(0) rotateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gf-price-digit-frame.is-increasing,
+  .gf-price-digit-frame.is-decreasing {
+    animation: none;
+    opacity: 0;
+    transform: none;
+  }
+
+  .gf-price-digit-frame.is-last { opacity: 1; }
+}
+
+/* The final CTA opens like a telescope when it enters the viewport. The mascot
+   only scales, so the focus change stays quiet and easy to read. */
 .gf-cta-scope {
   position: relative;
   display: grid;
@@ -193,17 +319,6 @@ img, svg { max-width: 100%; }
   width: 220px;
   height: 220px;
   margin-bottom: 8px;
-}
-
-.gf-cta-scope::before {
-  content: "";
-  position: absolute;
-  inset: 8px;
-  border: 2px solid var(--gf-blue);
-  border-radius: 999px;
-  opacity: 0;
-  transform: scale(.72);
-  animation: gf-cta-scope-ring 8s cubic-bezier(.22, 1, .36, 1) infinite;
 }
 
 .gf-cta-scope-window {
@@ -215,47 +330,48 @@ img, svg { max-width: 100%; }
   border-radius: 999px;
   background: var(--gf-white);
   transform: scale(.84);
-  animation: gf-cta-scope-focus 8s cubic-bezier(.22, 1, .36, 1) infinite;
   will-change: transform;
 }
 
 .gf-cta-mascot {
   display: block;
   width: 180px;
-  transform-origin: 54% 78%;
-  animation: gf-cta-mascot-wave 8s ease-in-out infinite;
+  transform-origin: center;
+  transform: scale(1);
   will-change: transform;
 }
 
-@keyframes gf-cta-scope-ring {
-  0%, 8% { opacity: 0; transform: scale(.72); }
-  18% { opacity: .8; transform: scale(1.04); }
-  32% { opacity: .45; transform: scale(.88); }
-  42%, 100% { opacity: 0; transform: scale(.88); }
+.gf-cta-scope.is-visible .gf-cta-scope-window {
+  animation: gf-cta-scope-focus 2.8s cubic-bezier(.22, 1, .36, 1) both;
 }
 
 @keyframes gf-cta-scope-focus {
-  0%, 8% { transform: scale(.84); }
-  18% { transform: scale(1.08); }
-  32% { transform: scale(.9); }
-  42%, 100% { transform: scale(1); }
+  0% { transform: scale(.7); }
+  28% { transform: scale(1.06); }
+  50% { transform: scale(1); }
+  72% { transform: scale(.8); }
+  100% { transform: scale(.84); }
 }
 
-@keyframes gf-cta-mascot-wave {
-  0%, 18% { transform: translateY(8px) rotate(-3deg) scale(.94); }
-  32% { transform: translateY(1px) rotate(2deg) scale(1.01); }
-  39% { transform: translateY(0) rotate(-2deg) scale(1); }
-  46% { transform: translateY(-2px) rotate(2deg) scale(1.01); }
-  53% { transform: translateY(0) rotate(-1deg) scale(1); }
-  60%, 100% { transform: translateY(0) rotate(0) scale(1); }
+@keyframes gf-cta-mascot-focus {
+  0% { transform: scale(.98); }
+  28% { transform: scale(.88); }
+  50% { transform: scale(.92); }
+  72% { transform: scale(1.08); }
+  86% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+.gf-cta-scope.is-visible .gf-cta-mascot {
+  animation: gf-cta-mascot-focus 2.8s cubic-bezier(.22, 1, .36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gf-cta-scope::before,
   .gf-cta-scope-window,
   .gf-cta-mascot { animation: none; }
 
   .gf-cta-scope-window { transform: scale(1); }
+  .gf-cta-mascot { transform: scale(1); }
 }
 
 .gf-icon-button {

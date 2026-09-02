@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { BrandLockup, BrandMark } from "@/components/brand";
 import { AgentHandoffMotion } from "@/components/agent-handoff-motion";
+import { CtaScope } from "@/components/cta-scope";
 import { Faq, type FaqItem } from "@/components/faq";
 import { MascotPose } from "@/components/folder-mascot";
 import { ForEngineers } from "@/components/for-engineers";
@@ -469,18 +470,17 @@ export default function Landing() {
         <section className="gf-band">
           <div className="gf-wrap grid items-center gap-12 lg:grid-cols-[minmax(0,.92fr)_minmax(0,1fr)] lg:gap-16">
             <div>
-              <p className="gf-eyebrow">One folder, every agent</p>
-              <h2 className="gf-h2 mt-4">Change agents without starting over.</h2>
+              <p className="gf-eyebrow">One folder, wherever you work</p>
+              <h2 className="gf-h2 mt-4">Change computers without starting over.</h2>
               <p className="gf-lead mt-5">
-                An agent remembers nothing about last week. The folder does — every Save in order, with the name of
-                whoever made it. Point the next one at the same folder and it reads what happened before it touches
-                anything.
+                Your work shouldn’t be stranded on the machine where you started it. Sync the same folder to another
+                laptop or PC and its history comes along, ready for you, a teammate, or an AI agent to pick up.
               </p>
               <ul className="mt-6 grid gap-2.5">
                 {[
-                  "Codex finishes on your laptop. Tomorrow another agent carries on, already knowing what changed",
-                  "The drafts, the notes and the decisions live in the folder, not inside one agent’s memory",
-                  "Nothing is quietly overwritten, and no strange markers are left inside your files",
+                  "Finish on your laptop, open the same folder on your desktop, and pick up with its history intact",
+                  "Work alone, with other people, or with an AI agent; everyone starts from the same files and context",
+                  "The drafts, notes, and decisions stay with the folder, so changing computers never means starting over",
                 ].map((line) => (
                   <li key={line} className="flex gap-2.5">
                     <CheckIcon className="gf-check" />
@@ -489,10 +489,10 @@ export default function Landing() {
                 ))}
               </ul>
               <div className="mt-7 rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-[var(--gf-blue-wash)] p-5">
-                <b className="block text-[15px]">Wherever the agent runs.</b>
+                <b className="block text-[15px]">Your work, wherever you sit down.</b>
                 <p className="gf-body mt-2 text-[14px]">
-                  GoodFolder keeps the same folder history legible when a different agent harness picks up the work.
-                  The folder stays on the computer that has it.
+                  GoodFolder keeps one readable history around the folder, so you can continue yourself, hand it to a
+                  teammate, or let another agent carry on without losing the thread.
                 </p>
               </div>
             </div>
@@ -522,41 +522,51 @@ export default function Landing() {
         <section id="webmcp" className="gf-band gf-band-tint scroll-mt-16">
           <div className="gf-wrap">
             <div className="max-w-3xl">
-              <p className="gf-eyebrow">No copy and paste</p>
-              <h2 className="gf-h2 mt-4">Your assistant can work with the folder you have open.</h2>
+              <p className="gf-eyebrow">WebMCP · the missing piece</p>
+              <h2 className="gf-h2 mt-4">Bring the agent into the work, even when it isn’t code.</h2>
               <p className="gf-lead mt-5">
-                Ask in normal language. It reads the files and history already in front of you, then prepares a
-                <span className="font-medium text-[var(--gf-blue-ink)]"> change proposal</span> when it wants to
-                change something.
+                GoodFolder began with a simple idea: people who work with documents, numbers, and ideas should have the
+                same versioned history and way back that coders rely on. AI agents already fit that pattern for code:
+                they make changes, record a Save, and hand the work back. Spreadsheets, images, and documents with
+                images need one more step; people need to see the result in context. WebMCP brings the agent into the
+                GoodFolder dashboard, where people and agents can work side by side, review the result, and decide what
+                becomes the next Save.
               </p>
 
               <div className="mt-8 grid gap-3 md:grid-cols-3">
                 <div className="rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white p-5">
-                  <h3 className="text-[16px] font-bold tracking-[-.02em]">Read the folder</h3>
+                  <h3 className="text-[16px] font-bold tracking-[-.02em]">Read what’s open</h3>
                   <p className="gf-body mt-2 text-[13.5px]">
-                    Files, tables, <span className="font-medium text-[var(--gf-blue-ink)]">saves</span> and{" "}
-                    <span className="font-medium text-[var(--gf-blue-ink)]">restore</span> previews all stay in
-                    GoodFolder.
+                    WebMCP gives the assistant structured access to the current folder, document, table, selection, and
+                    <span className="font-medium text-[var(--gf-blue-ink)]"> history</span>. No copy and paste.
                   </p>
                 </div>
                 <div className="rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white p-5">
-                  <h3 className="text-[16px] font-bold tracking-[-.02em]">Prepare the work</h3>
+                  <h3 className="text-[16px] font-bold tracking-[-.02em]">Prepare work you can see</h3>
                   <p className="gf-body mt-2 text-[13.5px]">
-                    It can leave comments or draft a{" "}
-                    <span className="font-medium text-[var(--gf-blue-ink)]">change proposal</span> for you to
-                    review.
+                    It can suggest text, update a table, add media to a document, or leave a comment. GoodFolder shows
+                    the <span className="font-medium text-[var(--gf-blue-ink)]">proposal</span> beside the file.
                   </p>
                 </div>
-                <div className="rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-[var(--gf-blue-wash)] p-5">
-                  <h3 className="text-[16px] font-bold tracking-[-.02em]">You decide</h3>
+                <div className="rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white p-5">
+                  <h3 className="text-[16px] font-bold tracking-[-.02em]">People decide what lands</h3>
                   <p className="gf-body mt-2 text-[13.5px]">
-                    Nothing changes until a person accepts the proposal in GoodFolder.
+                    You and your collaborators review the exact change in the dashboard. Accepting it creates the next
+                    Save; until then, the folder stays unchanged.
                   </p>
                 </div>
               </div>
 
+              <div className="mt-7 rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-[var(--gf-blue-wash)] p-5">
+                <b className="block text-[15px]">GoodFolder ships with MCP from day one.</b>
+                <p className="gf-body mt-2 text-[14px]">
+                  Agents can work with the folder where it lives through MCP, while browser assistants use WebMCP beside
+                  the people reviewing it; both meet in the same files and history, with one clear review boundary.
+                </p>
+              </div>
+
               <p className="gf-faint mt-6 max-w-xl text-[12.5px] leading-relaxed">
-                ChatGPT’s built-in browser, ChatGPT Work and Codex find these as{" "}
+                In compatible browsers, ChatGPT’s built-in browser, ChatGPT Work and Codex find these as{" "}
                 <a href="https://learn.chatgpt.com/docs/webmcp" className="underline underline-offset-2">
                   Site tools
                 </a>
@@ -571,7 +581,7 @@ export default function Landing() {
               <figure className="overflow-hidden rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white shadow-[var(--gf-shadow)]">
                 <figcaption className="flex items-center gap-2 border-b border-[var(--gf-line)] px-4 py-3 text-[13px] font-semibold">
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--gf-blue-ink)] text-[11px] text-white">1</span>
-                  The assistant prepares a <span className="text-[var(--gf-blue-ink)]">change proposal</span>
+                  WebMCP prepares a <span className="text-[var(--gf-blue-ink)]">Change Proposal</span>
                 </figcaption>
                 <Image
                   src="/shots/webmcp-proposal.png"
@@ -584,7 +594,7 @@ export default function Landing() {
               <figure className="overflow-hidden rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white shadow-[var(--gf-shadow)]">
                 <figcaption className="flex items-center gap-2 border-b border-[var(--gf-line)] px-4 py-3 text-[13px] font-semibold">
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--gf-blue-ink)] text-[11px] text-white">2</span>
-                  You accept it in GoodFolder, and the result appears inline
+                  You review and accept it in GoodFolder
                 </figcaption>
                 <Image
                   src="/shots/webmcp-result.png"
@@ -666,11 +676,11 @@ export default function Landing() {
         {/* -------------------------------------------------------------- Final CTA */}
         <section className="gf-wrap py-[var(--gf-section-y)]">
           <div className="gf-panel-dark flex flex-col items-center px-6 py-14 text-center sm:px-14 sm:py-20">
-            <span className="gf-cta-scope" aria-hidden="true">
+            <CtaScope>
               <span className="gf-cta-scope-window">
                 <MascotPose pose="wave" className="gf-cta-mascot" />
               </span>
-            </span>
+            </CtaScope>
             <h2 className="gf-h2 mt-7 max-w-2xl">Start with a folder you already use.</h2>
             <p className="gf-on-dark mt-5 max-w-lg text-[16px] leading-relaxed">
               Sign in and look around first. When you’re ready, one sentence to Codex or Claude Code protects a folder

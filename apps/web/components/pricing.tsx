@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { CheckIcon, ArrowRightIcon } from "@/components/icons";
 
@@ -35,8 +35,78 @@ const TIERS: Tier[] = [
   },
 ];
 
+const ROLL_STEP_MS = 100;
+const ROLL_FRAME_MS = 180;
+
+function RollingPrice({
+  from,
+  to,
+  transitionKey,
+  compact = false,
+}: {
+  from: number;
+  to: number;
+  transitionKey: number;
+  compact?: boolean;
+}) {
+  const width = Math.max(String(from).length, String(to).length);
+  const fromDigits = String(from).padStart(width, " ");
+  const toDigits = String(to).padStart(width, " ");
+  const shouldAnimate = transitionKey > 0 && from !== to;
+
+  return (
+    <strong aria-label={`$${to}`} className="gf-price-amount text-[38px] tracking-[-.04em]">
+      <span className="gf-price-currency" aria-hidden="true">$</span>
+      <span className={`gf-price-digits ${compact ? "gf-price-digits-compact" : ""}`} aria-hidden="true">
+        {toDigits.split("").map((digit, index) => {
+          const fromDigit = fromDigits[index];
+          const fromNumber = Number(fromDigit);
+          const toNumber = Number(digit);
+
+          if (!shouldAnimate || fromDigit === digit || Number.isNaN(fromNumber) || Number.isNaN(toNumber)) {
+            return (
+              <span key={`${transitionKey}-${index}`} className="gf-price-digit">
+                {digit}
+              </span>
+            );
+          }
+
+          const increasing = toNumber > fromNumber;
+          const sequence = Array.from(
+            { length: Math.abs(toNumber - fromNumber) + 1 },
+            (_, offset) => fromNumber + (increasing ? offset : -offset),
+          );
+          const rollStyle = {
+            animationDuration: `${ROLL_FRAME_MS}ms`,
+          } as CSSProperties;
+
+          return (
+            <span key={`${transitionKey}-${index}`} className="gf-price-digit-window">
+              {sequence.map((value, sequenceIndex) => (
+                <span
+                  key={value}
+                  className={`gf-price-digit-frame ${increasing ? "is-increasing" : "is-decreasing"} ${
+                    sequenceIndex === 0 ? "is-first" : ""
+                  } ${sequenceIndex === sequence.length - 1 ? "is-last" : ""}`}
+                  style={{
+                    ...rollStyle,
+                    animationDelay: `${sequenceIndex * ROLL_STEP_MS}ms`,
+                  }}
+                >
+                  {value}
+                </span>
+              ))}
+            </span>
+          );
+        })}
+      </span>
+    </strong>
+  );
+}
+
 export function PricingTiers({ selfHostUrl }: { selfHostUrl: string }) {
   const [interval, setInterval] = useState<"month" | "year">("month");
+  const [transitionKey, setTransitionKey] = useState(0);
 
   return (
     <div>
@@ -48,12 +118,29 @@ export function PricingTiers({ selfHostUrl }: { selfHostUrl: string }) {
               type="button"
               role="tab"
               aria-selected={interval === value}
-              onClick={() => setInterval(value)}
+              onClick={() => {
+                if (value === interval) return;
+                setInterval(value);
+                setTransitionKey((key) => key + 1);
+              }}
               className={`rounded-full px-4 py-1.5 text-[13.5px] font-medium transition ${
                 interval === value ? "bg-[var(--gf-ink)] text-white" : "text-[var(--gf-ink-soft)]"
               }`}
             >
-              {value === "month" ? "Monthly" : "Annual, save 20%"}
+              {value === "month" ? (
+                "Monthly"
+              ) : (
+                <>
+                  <span>Yearly</span>
+                  <span
+                    className={`ml-1 align-middle text-[11px] font-semibold ${
+                      interval === value ? "text-[var(--gf-blue)]" : "text-[var(--gf-blue-ink)]"
+                    }`}
+                  >
+                    -20%
+                  </span>
+                </>
+              )}
             </button>
           ))}
         </div>
@@ -62,6 +149,7 @@ export function PricingTiers({ selfHostUrl }: { selfHostUrl: string }) {
       <div className="mt-8 grid gap-5 lg:grid-cols-3">
         {TIERS.map((tier) => {
           const price = interval === "month" ? tier.monthly : Math.round(tier.annual / 12);
+          const previousPrice = interval === "month" ? Math.round(tier.annual / 12) : tier.monthly;
           return (
             <article
               key={tier.code}
@@ -73,15 +161,15 @@ export function PricingTiers({ selfHostUrl }: { selfHostUrl: string }) {
                 </span>
               )}
               <p className={tier.highlight ? "gf-eyebrow gf-on-dark-faint" : "gf-eyebrow"}>{tier.name}</p>
-              <div className="mt-4 flex items-end gap-2">
-                <strong className="text-[38px] leading-none tracking-[-.04em]">${price}</strong>
+              <div className="mt-4 flex items-end gap-3">
+                <RollingPrice
+                  from={previousPrice}
+                  to={price}
+                  transitionKey={transitionKey}
+                  compact={tier.code === "starter"}
+                />
                 <span className={`pb-1 text-[14px] ${tier.highlight ? "gf-on-dark-faint" : "gf-faint"}`}>a month</span>
               </div>
-              {interval === "year" && (
-                <p className={`mt-1 text-[12.5px] ${tier.highlight ? "gf-on-dark-faint" : "gf-faint"}`}>
-                  ${tier.annual} billed annually
-                </p>
-              )}
               <p className={`mt-5 text-[14.5px] leading-relaxed ${tier.highlight ? "gf-on-dark" : "gf-body"}`}>{tier.blurb}</p>
               <ul className="mt-6 grid gap-2.5">
                 {tier.features.map((line) => (
