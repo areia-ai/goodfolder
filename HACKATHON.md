@@ -8,7 +8,7 @@ from the WebMCP work added during the submission period.
 
 WebMCP support began in [`516a4fb`](https://github.com/areia-ai/goodfolder/commit/516a4fb)
 on August 26, 2026, with five read-only dashboard tools. The dashboard then
-grew into a nineteen-tool human-and-agent workspace:
+grew into a twenty-one-tool human-and-agent workspace:
 
 - [`5ceea29`](https://github.com/areia-ai/goodfolder/commit/5ceea29) added
   reviewable Change Proposals.
@@ -18,11 +18,14 @@ grew into a nineteen-tool human-and-agent workspace:
   media proposals that wait outside the folder until a person reviews them.
 - [`d10ec13`](https://github.com/areia-ai/goodfolder/commit/d10ec13) added a
   checked-in site-tool schema and deterministic evaluation suite.
+- `propose_generated_file` lets an agent prepare a Word document, spreadsheet,
+  PDF, PowerPoint deck, or bitmap image for review. Its bytes stay outside the
+  folder until the owner previews and accepts the proposal.
 
 The current tool set lives in
 [`apps/web/lib/webmcp.ts`](apps/web/lib/webmcp.ts). It registers with
-`navigator.modelContext` when a browser supports WebMCP. Fourteen tools read
-the workspace, its files, history, and proposals. Five tools create a Change
+`navigator.modelContext` when a browser supports WebMCP. Fifteen tools read
+the workspace, its files, history, proposals, and a bounded bitmap logo. Six tools create a Change
 Proposal or a comment for review. The tools do not expose acceptance, direct
 save, restore, invitation, deletion, or access-control actions.
 

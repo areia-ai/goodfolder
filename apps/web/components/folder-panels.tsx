@@ -5,12 +5,14 @@ import {
   addProposalComment,
   changesTheFolder,
   inviteContributor,
+  readProposalAssetPreview,
   reviewProposal,
   type ChangeProposal,
   type Folder,
   type ProposalSuggestion,
 } from "@/lib/gf-api";
-import { formatBytes } from "@/lib/preview";
+import { formatBytes, previewKindFor } from "@/lib/preview";
+import { FilePreview } from "@/components/file-preview";
 import { PeopleIcon, ProposalIcon } from "@/components/icons";
 import { Badge, EmptyState, ReviewBadge, done, problem } from "@/components/ui";
 import type { Notify, Role } from "@/components/document-surface";
@@ -102,7 +104,7 @@ export function ProposalList({
                     <ReviewBadge status={suggestion.status} />
                   </div>
                   {changesTheFolder(suggestion.kind) ? (
-                    <FolderChange suggestion={suggestion} />
+                    <FolderChange folderId={folder.id} proposalId={proposal.id} suggestion={suggestion} />
                   ) : suggestion.kind === "table_update" ? (
                     <div className="mt-3 rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white p-3">
                       <span className="gf-change-label">Cell changes</span>
@@ -203,7 +205,7 @@ export function ProposalList({
  * The one about adding says how big the waiting file is, because that is the
  * question an owner actually has about a file they cannot see yet.
  */
-function FolderChange({ suggestion }: { suggestion: ProposalSuggestion }) {
+function FolderChange({ folderId, proposalId, suggestion }: { folderId: string; proposalId: string; suggestion: ProposalSuggestion }) {
   const name = suggestion.path.split("/").pop() || suggestion.path;
   const to = suggestion.operation?.to ?? "";
   const size = suggestion.operation?.sizeBytes;
@@ -237,11 +239,52 @@ function FolderChange({ suggestion }: { suggestion: ProposalSuggestion }) {
         </p>
       )}
       {suggestion.kind === "asset_replace" && (
-        <p className="text-[13px]">
-          Add <b className="font-mono text-[12.5px]">{name}</b>
-          {typeof size === "number" ? <> — {formatBytes(size)}</> : null}. Nothing is in the folder until you accept it.
-        </p>
+        <>
+          <p className="text-[13px]">
+            {suggestion.baseFileSha ? "Replace" : "Add"} <b className="font-mono text-[12.5px]">{name}</b>
+            {typeof size === "number" ? <> — {formatBytes(size)}</> : null}. Nothing is in the folder until you accept it.
+          </p>
+          {previewKindFor(suggestion.path) && (
+            <ProposedFilePreview folderId={folderId} proposalId={proposalId} suggestion={suggestion} />
+          )}
+        </>
       )}
+    </div>
+  );
+}
+
+function ProposedFilePreview({ folderId, proposalId, suggestion }: {
+  folderId: string;
+  proposalId: string;
+  suggestion: ProposalSuggestion;
+}) {
+  const [blob, setBlob] = useState<Blob | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  async function openPreview() {
+    setLoading(true);
+    setError("");
+    try {
+      setBlob(await readProposalAssetPreview(folderId, proposalId, suggestion.id));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  if (blob) {
+    return (
+      <div className="mt-3 overflow-hidden rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white">
+        <FilePreview file={{ path: suggestion.path, sha: "waiting-for-review", size: blob.size, kind: previewKindFor(suggestion.path), blob, mimeType: suggestion.operation?.mimeType ?? null, storedForDevice: false }} />
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <button type="button" className="gf-button-secondary" disabled={loading} onClick={openPreview}>
+        {loading ? "Opening proposed file…" : "Preview proposed file"}
+      </button>
+      {error && <p className="text-[12.5px] text-[var(--gf-red-ink)]">{error}</p>}
     </div>
   );
 }

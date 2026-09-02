@@ -394,6 +394,30 @@ export async function stageFile(
   return json as { ok: true; stagingId: string; size: number };
 }
 
+/** Ask the server to build a reviewable file outside the folder. */
+export const createGeneratedFile = (folderId: string, input: {
+  path: string;
+  artifactType: "document" | "spreadsheet" | "pdf" | "presentation" | "image";
+  content: Record<string, unknown>;
+  brand?: { name?: string; backgroundColor?: string; accentColor?: string; logoDataUrl?: string };
+}) => send<{ ok: true; stagingId: string; size: number }>(`/api/projects/${folderId}/generated-files`, input);
+
+/** Read bytes still waiting inside one visible Change Proposal for review. */
+export async function readProposalAssetPreview(
+  folderId: string,
+  proposalId: string,
+  suggestionId: string,
+): Promise<Blob> {
+  const res = await fetch(`${API}/api/projects/${folderId}/proposals/${proposalId}/suggestions/${suggestionId}/preview`, {
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
+    throw new Error(body.error?.message ?? `GoodFolder request failed (${res.status})`);
+  }
+  return res.blob();
+}
+
 export const renameFile = (folderId: string, input: { from: string; to: string; baseHead: string | null }) =>
   send<{ ok: true; from: string; to: string; head: string; saveNumber: number }>(`/api/projects/${folderId}/files/rename`, input);
 

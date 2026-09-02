@@ -158,6 +158,67 @@
     ]
   },
   {
+    "name": "Reading a bitmap logo routes to read_image",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Read logo.png from this folder so I can use the exact logo in a reviewable presentation."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "read_image",
+        "arguments": {
+          "path": { "$contains": "logo.png" }
+        }
+      }
+    ]
+  },
+  {
+    "name": "Creating a presentation routes to propose_generated_file",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Create a short Real Smooth presentation from the open brand guide. Use a warm cream background and orange accent, prepare it as real-smooth-deck.pptx for my review, then title and explain the proposal."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "propose_generated_file",
+        "arguments": {
+          "path": { "$contains": "real-smooth-deck.pptx" },
+          "artifactType": { "$contains": "presentation" },
+          "content": { "$type": "object" },
+          "brand": { "$type": "object" },
+          "title": { "$type": "string" },
+          "explanation": { "$type": "string" }
+        }
+      }
+    ]
+  },
+  {
+    "name": "Creating a Word document routes to propose_generated_file",
+    "messages": [{ "role": "user", "type": "message", "content": "Prepare a one-page Word brief called launch-brief.docx from this folder's notes, with headings and bullets, for my review." }],
+    "expectedCall": [{ "functionName": "propose_generated_file", "arguments": { "path": { "$contains": "launch-brief.docx" }, "artifactType": { "$contains": "document" }, "content": { "$type": "object" } } }]
+  },
+  {
+    "name": "Creating a spreadsheet routes to propose_generated_file",
+    "messages": [{ "role": "user", "type": "message", "content": "Create a reviewable budget.xlsx with a Summary sheet, formulas, and the figures in this folder." }],
+    "expectedCall": [{ "functionName": "propose_generated_file", "arguments": { "path": { "$contains": "budget.xlsx" }, "artifactType": { "$contains": "spreadsheet" }, "content": { "$type": "object" } } }]
+  },
+  {
+    "name": "Creating a PDF routes to propose_generated_file",
+    "messages": [{ "role": "user", "type": "message", "content": "Prepare client-summary.pdf with the findings and a short table for my review." }],
+    "expectedCall": [{ "functionName": "propose_generated_file", "arguments": { "path": { "$contains": "client-summary.pdf" }, "artifactType": { "$contains": "pdf" }, "content": { "$type": "object" } } }]
+  },
+  {
+    "name": "Adding an image file routes to propose_generated_file",
+    "messages": [{ "role": "user", "type": "message", "content": "Use the PNG image you just generated to prepare hero.png as a reviewable file in this folder." }],
+    "expectedCall": [{ "functionName": "propose_generated_file", "arguments": { "path": { "$contains": "hero.png" }, "artifactType": { "$contains": "image" }, "content": { "$type": "object" } } }]
+  },
+  {
     "name": "Feedback without an edit routes to comment_on_document",
     "messages": [
       {

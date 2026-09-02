@@ -453,6 +453,58 @@
       }
     },
     {
+      "name": "propose_generated_file",
+      "description": "Create a reviewable DOCX, XLSX, PDF, PowerPoint, or bitmap image from structured content. The complete file waits outside the folder for the owner to preview and accept; this never changes the folder by itself.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "New or existing path in the open GoodFolder, with a matching .docx, .xlsx, .pdf, .pptx, .png, .jpg, .jpeg, or .webp extension."
+          },
+          "artifactType": {
+            "type": "string",
+            "enum": [
+              "document",
+              "spreadsheet",
+              "pdf",
+              "presentation",
+              "image"
+            ],
+            "description": "Type of complete file to prepare."
+          },
+          "content": {
+            "type": "object",
+            "description": "Structured file content: blocks for document/PDF, sheets for spreadsheet, slides for presentation, or a PNG/JPEG/WebP dataUrl for image."
+          },
+          "brand": {
+            "type": "object",
+            "description": "Optional common brand kit with name, backgroundColor, accentColor, and a PNG/JPEG/WebP logoDataUrl returned by read_image."
+          },
+          "explanation": {
+            "type": "string",
+            "description": "Why this complete file was prepared, at most 500 characters."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short Change Proposal title."
+          }
+        },
+        "required": [
+          "path",
+          "artifactType",
+          "content",
+          "explanation",
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      }
+    },
+    {
       "name": "read_document_outline",
       "description": "Read the headings and structure of the document currently open. This does not change the document.",
       "inputSchema": {
@@ -486,6 +538,27 @@
           }
         },
         "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "read_image",
+      "description": "Read a small image from the open GoodFolder as a data URL, so it can be used in a reviewable visual proposal. This never changes the folder.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Image path in the open GoodFolder."
+          }
+        },
+        "required": [
+          "path"
+        ],
         "additionalProperties": false
       },
       "annotations": {

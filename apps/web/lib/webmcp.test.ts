@@ -88,14 +88,16 @@ test("site tools expose suggestions but never human review powers", () => {
     "propose_file_change",
     "propose_document_change",
     "propose_document_media",
+    "propose_generated_file",
     "comment_on_change_proposal",
     "comment_on_document",
   ];
   const toolNames = Object.keys(DASHBOARD_TOOL_NAMES);
 
-  assert.equal(toolNames.length, 19);
-  assert.equal(reviewTools.length, 5);
-  assert.equal(toolNames.filter((name) => !reviewTools.includes(name)).length, 14);
+  assert.equal(toolNames.length, 21);
+  assert.equal(reviewTools.length, 6);
+  assert.equal(toolNames.filter((name) => !reviewTools.includes(name)).length, 15);
+  assert.equal(DASHBOARD_TOOL_NAMES.read_image, true);
   assert.equal(DASHBOARD_TOOL_NAMES.propose_document_change, true);
   assert.equal(DASHBOARD_TOOL_NAMES.propose_document_media, true);
   assert.equal(DASHBOARD_TOOL_NAMES.comment_on_document, true);
@@ -151,15 +153,21 @@ test("WebMCP registration is titled, idempotent, abort-aware, and reports state"
     const generic = calls.find((tool) => tool.name === "propose_file_change");
     const alias = calls.find((tool) => tool.name === "propose_document_change");
     const media = calls.find((tool) => tool.name === "propose_document_media");
+    const generatedFile = calls.find((tool) => tool.name === "propose_generated_file");
+    const image = calls.find((tool) => tool.name === "read_image");
     const read = calls.find((tool) => tool.name === "read_file_context");
     assert.ok(generic);
     assert.ok(alias);
     assert.ok(media);
+    assert.ok(generatedFile);
+    assert.ok(image);
     assert.ok(read);
     assert.deepEqual((generic.inputSchema as any).properties.operation.enum, ["text_replace", "table_update", "asset_replace"]);
     assert.equal((generic.annotations as any).untrustedContentHint, true);
     assert.equal((alias.annotations as any).untrustedContentHint, true);
     assert.equal((media.annotations as any).untrustedContentHint, true);
+    assert.equal((generatedFile.annotations as any).untrustedContentHint, true);
+    assert.equal((image.annotations as any).readOnlyHint, true);
     assert.equal((read.annotations as any).readOnlyHint, true);
     assert.equal((read.annotations as any).untrustedContentHint, true);
 
@@ -305,6 +313,112 @@ test("propose_document_media holds bytes outside the folder and creates one bund
     ]);
     assert.equal(body.suggestions[1].before, "## Steps");
     assert.equal(body.suggestions[1].replacement, "![Piña colada](images/drink.png)\n\n## Steps");
+  } finally {
+    await unregisterDashboardTools();
+    globalThis.fetch = previousFetch;
+    if (previousDocument === undefined) delete (globalThis as { document?: unknown }).document;
+    else Object.defineProperty(globalThis, "document", { configurable: true, value: previousDocument });
+    if (previousWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+  }
+});
+
+test("propose_generated_file holds every supported artifact for review without changing the folder", async () => {
+  const previousDocument = (globalThis as { document?: unknown }).document;
+  const previousWindow = (globalThis as { window?: unknown }).window;
+  const previousFetch = globalThis.fetch;
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const tools: Array<Record<string, any>> = [];
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { modelContext: { registerTool: async (tool: Record<string, unknown>) => tools.push(tool) }, body: { dataset: {} } },
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      location: { search: "?folder=qa-folder&file=guide.md" },
+      dispatchEvent: () => true,
+      getSelection: () => ({ toString: () => "" }),
+    },
+  });
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url.endsWith("/api/projects")) return new Response(JSON.stringify([{ id: "qa-folder", name: "QA" }]));
+    if (url.endsWith("/api/projects/qa-folder/files")) return new Response(JSON.stringify({ role: "owner", head: "head-before", files: [{ path: "guide.md", size: 40, sha: "file-before", proposable: true }] }));
+    if (url.endsWith("/api/projects/qa-folder/generated-files")) return new Response(JSON.stringify({ ok: true, stagingId: "staged-file", size: 5 }));
+    if (url.endsWith("/api/projects/qa-folder/proposals")) return new Response(JSON.stringify({ ok: true, proposalId: "proposal-deck", title: "Real Smooth presentation", suggestionCount: 1, url: "https://trygoodfolder.com/dashboard?folder=qa-folder&proposal=proposal-deck" }));
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  try {
+    await registerDashboardTools();
+    const tool = tools.find((item) => item.name === "propose_generated_file");
+    assert.ok(tool);
+    const result = await tool.execute({
+      path: "real-smooth-deck.pptx",
+      artifactType: "presentation",
+      content: { slides: [{ title: "Real Smooth", body: "Brand guide presentation" }] },
+      brand: { name: "Real Smooth", backgroundColor: "F7F1E8", accentColor: "E85D04", logoDataUrl: "data:image/png;base64,aGVsbG8=" },
+      explanation: "A short deck based on the current brand guide.",
+      title: "Real Smooth presentation",
+    });
+    assert.equal((result as any).changedDocument, false);
+    assert.equal((result as any).stagedOutsideFolder, true);
+    assert.equal((result as any).reviewRequired, true);
+    const generated = calls.find((call) => call.url.endsWith("/generated-files"));
+    assert.ok(generated);
+    const generatedBody = JSON.parse(String(generated!.init?.body));
+    assert.equal(generatedBody.artifactType, "presentation");
+    assert.equal(generatedBody.brand.name, "Real Smooth");
+    assert.equal(generatedBody.brand.logoDataUrl, "data:image/png;base64,aGVsbG8=");
+    assert.deepEqual(generatedBody.content.slides, [{ title: "Real Smooth", body: "Brand guide presentation" }]);
+    const proposal = calls.find((call) => call.url.endsWith("/proposals"));
+    assert.ok(proposal);
+    const body = JSON.parse(String(proposal!.init?.body));
+    assert.equal(body.operation.path, "real-smooth-deck.pptx");
+    assert.equal(body.operation.kind, "asset_replace");
+    assert.equal(body.operation.stagingId, "staged-file");
+  } finally {
+    await unregisterDashboardTools();
+    globalThis.fetch = previousFetch;
+    if (previousDocument === undefined) delete (globalThis as { document?: unknown }).document;
+    else Object.defineProperty(globalThis, "document", { configurable: true, value: previousDocument });
+    if (previousWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+  }
+});
+
+test("read_image returns a bounded bitmap from the active GoodFolder without changing it", async () => {
+  const previousDocument = (globalThis as { document?: unknown }).document;
+  const previousWindow = (globalThis as { window?: unknown }).window;
+  const previousFetch = globalThis.fetch;
+  const calls: string[] = [];
+  const tools: Array<Record<string, any>> = [];
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { modelContext: { registerTool: async (tool: Record<string, unknown>) => tools.push(tool) }, body: { dataset: {} } },
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { location: { search: "?folder=qa-folder" }, dispatchEvent: () => true, getSelection: () => ({ toString: () => "" }) },
+  });
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.endsWith("/api/projects")) return new Response(JSON.stringify([{ id: "qa-folder", name: "QA" }]));
+    if (url.endsWith("/api/projects/qa-folder/files")) return new Response(JSON.stringify({ role: "owner", files: [{ path: "logo.png", size: 5, sha: "logo", proposable: true }] }));
+    if (url.includes("/api/projects/qa-folder/file/raw?path=logo.png")) return new Response(new Uint8Array([104, 101, 108, 108, 111]), { headers: { "content-type": "image/png" } });
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  try {
+    await registerDashboardTools();
+    const tool = tools.find((item) => item.name === "read_image");
+    assert.ok(tool);
+    const result = await tool.execute({ path: "logo.png" });
+    assert.equal((result as any).path, "logo.png");
+    assert.equal((result as any).mimeType, "image/png");
+    assert.equal((result as any).dataUrl, "data:image/png;base64,aGVsbG8=");
+    assert.ok(!calls.some((url) => /\/proposals|generated-files/.test(url)));
   } finally {
     await unregisterDashboardTools();
     globalThis.fetch = previousFetch;

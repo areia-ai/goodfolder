@@ -14,6 +14,10 @@ import {
 } from "node:crypto";
 import { getRequestListener } from "@hono/node-server";
 import { Hono, type Context } from "hono";
+import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from "docx";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import PptxGenJS = require("pptxgenjs");
+import * as XLSX from "xlsx";
 import {
   tokenFromAuthHeader,
   loadConfig,
@@ -1773,6 +1777,151 @@ app.post("/api/projects/:id/staged-files", async (c) => {
     throw error;
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+/** Build a bounded office file or image, then hold its bytes for a person's review. */
+app.post("/api/projects/:id/generated-files", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const projectId = c.req.param("id") ?? "";
+  if (!await projectAccess(projectId, acct.accountId)) {
+    return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
+  }
+  const denied = await projectWriteAccessError(projectId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
+  type Block = { type?: unknown; text?: unknown; items?: unknown; rows?: unknown };
+  type Slide = { title?: unknown; body?: unknown };
+  type GeneratedBody = { path?: unknown; artifactType?: unknown; content?: unknown; brand?: unknown };
+  const body = await c.req.json<GeneratedBody>().catch(() => ({} as GeneratedBody));
+  const path = safeDocumentPath(typeof body.path === "string" ? body.path : "");
+  const artifactType = typeof body.artifactType === "string" ? body.artifactType : "";
+  const content = body.content && typeof body.content === "object" ? body.content as Record<string, unknown> : {};
+  const brand = body.brand && typeof body.brand === "object" ? body.brand as Record<string, unknown> : {};
+  const brandName = typeof brand.name === "string" ? brand.name.trim().slice(0, 80) : "";
+  const color = (value: unknown) => typeof value === "string" && /^[0-9a-f]{6}$/i.test(value.trim().replace(/^#/, ""))
+    ? value.trim().replace(/^#/, "").toUpperCase()
+    : null;
+  const background = color(brand.backgroundColor) ?? "FFFFFF";
+  const accent = color(brand.accentColor) ?? "1769AA";
+  const logoDataUrl = typeof brand.logoDataUrl === "string" ? brand.logoDataUrl.trim() : "";
+  if (logoDataUrl && (!/^data:image\/(png|jpeg|jpg|webp);base64,[a-z0-9+/=\r\n]+$/i.test(logoDataUrl) || Buffer.byteLength(logoDataUrl, "utf8") > 7_000_000)) {
+    return c.json({ error: { code: "generated-file", message: "The brand logo must be a PNG, JPEG, or WebP image under 5 MB." } }, 400);
+  }
+  const extensionForType: Record<string, string> = { document: "docx", spreadsheet: "xlsx", pdf: "pdf", presentation: "pptx", image: "" };
+  const allowedImage = Boolean(path && /\.(png|jpe?g|webp)$/i.test(path));
+  if (!path || !["document", "spreadsheet", "pdf", "presentation", "image"].includes(artifactType) ||
+      (artifactType === "image" ? !allowedImage : !path.toLowerCase().endsWith(`.${extensionForType[artifactType]}`))) {
+    return c.json({ error: { code: "generated-file", message: "Choose a safe path with the extension that matches the generated file type." } }, 400);
+  }
+  const slides = Array.isArray(content.slides) ? (content.slides as Slide[]).map((slide) => ({
+    title: typeof slide?.title === "string" ? slide.title.trim() : "",
+    body: typeof slide?.body === "string" ? slide.body.trim() : "",
+  })) : [];
+  const blocks = Array.isArray(content.blocks) ? (content.blocks as Block[]).slice(0, 80) : [];
+  const sheets = Array.isArray(content.sheets) ? content.sheets.slice(0, 12) as Array<{ name?: unknown; rows?: unknown }> : [];
+  const imageDataUrl = typeof content.dataUrl === "string" ? content.dataUrl.trim() : "";
+  if ((artifactType === "presentation" && (slides.length < 1 || slides.length > 12 || slides.some((slide) => !slide.title || slide.title.length > 140 || slide.body.length > 2_000))) ||
+      ((artifactType === "document" || artifactType === "pdf") && (blocks.length < 1 || !blocks.every((block) => ["heading", "paragraph", "bullets", "table"].includes(String(block?.type ?? ""))))) ||
+      (artifactType === "spreadsheet" && (sheets.length < 1 || sheets.some((sheet) => typeof sheet.name !== "string" || !sheet.name.trim() || !Array.isArray(sheet.rows) || sheet.rows.length > 500))) ||
+      (artifactType === "image" && (!/^data:image\/(png|jpeg|jpg|webp);base64,[a-z0-9+/=\r\n]+$/i.test(imageDataUrl) || Buffer.byteLength(imageDataUrl, "utf8") > 7_000_000))) {
+    return c.json({ error: { code: "generated-file", message: "The generated file content is missing, malformed, or exceeds its safe limits." } }, 400);
+  }
+  const tree = await repos.tree(projectId);
+  const waiting = await sql`
+    SELECT COUNT(*)::int AS count FROM staged_uploads
+    WHERE project_id = ${projectId} AND author_account_id = ${acct.accountId} AND expires_at > now()`;
+  if (Number(waiting[0]?.count ?? 0) >= STAGED_UPLOAD_LIMIT) {
+    return c.json({ error: { code: "too-many", message: `You already have ${STAGED_UPLOAD_LIMIT} files waiting for review here. Send those first.` } }, 429);
+  }
+  let generated: Buffer;
+  if (artifactType === "image") generated = Buffer.from(imageDataUrl.split(",")[1]!, "base64");
+  else if (artifactType === "presentation") {
+    const PptxConstructor = PptxGenJS as unknown as new () => any;
+    const pptx = new PptxConstructor(); pptx.layout = "LAYOUT_WIDE"; pptx.author = "GoodFolder"; pptx.title = slides[0]!.title;
+    for (const [index, slideContent] of slides.entries()) { const slide = pptx.addSlide(); slide.background = { color: background }; slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.333, h: 0.14, fill: { color: accent }, line: { color: accent } }); slide.addText(slideContent.title, { x: 0.8, y: 0.72, w: 10.7, h: 0.75, fontSize: index === 0 ? 32 : 27, bold: true, color: "111111", margin: 0 }); if (logoDataUrl) slide.addImage({ data: logoDataUrl, x: 11.75, y: 0.48, w: 0.85, h: 0.85 }); if (slideContent.body) slide.addText(slideContent.body, { x: 0.84, y: 1.78, w: 10.9, h: 4.55, fontSize: 18, color: "293241" }); slide.addText(brandName, { x: 0.84, y: 6.82, w: 2.5, h: 0.25, fontSize: 9, bold: true, color: accent }); }
+    generated = Buffer.from(await pptx.write({ outputType: "nodebuffer" }) as Uint8Array);
+  } else if (artifactType === "spreadsheet") {
+    const workbook = XLSX.utils.book_new();
+    for (const sheet of sheets) { const rows = (sheet.rows as unknown[]).slice(0, 500).map((row) => Array.isArray(row) ? row.slice(0, 80).map((cell) => typeof cell === "object" && cell && "formula" in cell ? { f: String((cell as { formula: unknown }).formula) } : cell) : []); const worksheet = XLSX.utils.aoa_to_sheet(rows); worksheet["!tabColor"] = { rgb: accent }; XLSX.utils.book_append_sheet(workbook, worksheet, String(sheet.name).trim().slice(0, 31)); }
+    generated = Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
+  } else if (artifactType === "document") {
+    const children = blocks.flatMap((block) => { const text = typeof block.text === "string" ? block.text.slice(0, 8_000) : ""; if (block.type === "heading") return [new Paragraph({ text, heading: HeadingLevel.HEADING_1 })]; if (block.type === "bullets" && Array.isArray(block.items)) return block.items.slice(0, 100).map((item) => new Paragraph({ text: String(item).slice(0, 2_000), bullet: { level: 0 } })); if (block.type === "table" && Array.isArray(block.rows)) return [new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: block.rows.slice(0, 100).map((row) => new TableRow({ children: (Array.isArray(row) ? row : []).slice(0, 20).map((cell) => new TableCell({ children: [new Paragraph(String(cell).slice(0, 2_000))] })) })) })]; return [new Paragraph({ children: [new TextRun(text)] })]; });
+    generated = Buffer.from(await Packer.toBuffer(new Document({ sections: [{ children: [new Paragraph({ text: brandName, heading: HeadingLevel.TITLE }), ...children] }] })));
+  } else {
+    const pdf = await PDFDocument.create(); const font = await pdf.embedFont(StandardFonts.Helvetica); const bold = await pdf.embedFont(StandardFonts.HelveticaBold); let page = pdf.addPage(); let y = 760; const add = (text: string, size: number, isBold = false) => { if (y < 60) { page = pdf.addPage(); y = 760; } page.drawText(text.replace(/[^\x20-\x7e]/g, "?").slice(0, 200), { x: 54, y, size, font: isBold ? bold : font, color: rgb(0.1, 0.1, 0.1) }); y -= size + 10; }; if (brandName) add(brandName, 12, true); for (const block of blocks) { if (block.type === "heading") add(String(block.text ?? ""), 18, true); else if (block.type === "bullets" && Array.isArray(block.items)) for (const item of block.items.slice(0, 100)) add(`- ${String(item)}`, 11); else if (block.type === "table" && Array.isArray(block.rows)) for (const row of block.rows.slice(0, 100)) add((Array.isArray(row) ? row : []).map(String).join("  |  "), 10); else add(String(block.text ?? ""), 11); }
+    generated = Buffer.from(await pdf.save());
+  }
+  if (generated.byteLength > PREVIEW_BYTE_CAP) return c.json({ error: { code: "too-large", message: "This generated file is too large to preview in the browser." } }, 413);
+  const mimeType = previewMimeFor(path);
+  if (!mimeType) return c.json({ error: { code: "generated-file", message: "That file type cannot be previewed." } }, 400);
+  const oid = createHash("sha256").update(generated).digest("hex");
+  await previewStorage.send(new PutObjectCommand({
+    Bucket: cfg.s3Bucket,
+    Key: stagingKey(projectId, oid),
+    Body: generated,
+    ContentLength: generated.byteLength,
+    ContentType: mimeType,
+  }));
+  const id = crypto.randomUUID();
+  await sql`
+    INSERT INTO staged_uploads (id, project_id, author_account_id, oid, size_bytes, file_name, mime_type, expires_at)
+    VALUES (${id}, ${projectId}, ${acct.accountId}, ${oid}, ${generated.byteLength}, ${fileName(path)}, ${mimeType},
+            now() + ${`${STAGED_UPLOAD_DAYS} days`}::interval)`;
+  return c.json({ ok: true, stagingId: id, size: generated.byteLength });
+});
+
+/**
+ * A proposed file has not entered the folder yet, but the person deciding on
+ * it must still be able to inspect its actual bytes. This route is
+ * deliberately scoped to one visible proposal suggestion; it never exposes a
+ * staging key or turns waiting bytes into a general file store.
+ */
+app.get("/api/projects/:id/proposals/:proposalId/suggestions/:suggestionId/preview", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const projectId = c.req.param("id");
+  if (!await projectAccess(projectId, acct.accountId)) {
+    return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
+  }
+  const proposalId = c.req.param("proposalId");
+  const suggestionId = c.req.param("suggestionId");
+  const rows = await sql`
+    SELECT ps.document_path AS path, ps.kind, su.oid, su.size_bytes AS "sizeBytes", su.mime_type AS "mimeType"
+    FROM proposal_suggestions ps
+    JOIN change_proposals cp ON cp.id = ps.proposal_id
+    JOIN staged_uploads su ON su.id::text = ps.operation->>'stagingId'
+    WHERE cp.project_id = ${projectId} AND cp.id = ${proposalId} AND ps.id = ${suggestionId}
+      AND ps.kind = 'asset' AND ps.status IN ('open', 'needs-review') AND su.expires_at > now()
+    LIMIT 1`;
+  const row = rows[0];
+  const path = row ? safeDocumentPath(String(row.path)) : null;
+  const size = Number(row?.sizeBytes ?? -1);
+  const mime = path ? previewMimeFor(path) : null;
+  if (!row || !path || !mime || !Number.isSafeInteger(size) || size < 0) {
+    return c.json({ error: { code: "not-found", message: "That proposed file is no longer available to preview." } }, 404);
+  }
+  if (size > PREVIEW_BYTE_CAP) {
+    return c.json({ error: { code: "too-large", message: "This proposed file is too large to preview in the browser." }, size }, 413);
+  }
+  try {
+    const object = await previewStorage.send(new GetObjectCommand({
+      Bucket: cfg.s3Bucket,
+      Key: stagingKey(projectId, String(row.oid)),
+    }));
+    const body = object.Body ? await object.Body.transformToWebStream() : null;
+    if (!body) throw new Error("empty object body");
+    return c.body(body, 200, {
+      "content-type": mime,
+      "content-length": String(object.ContentLength ?? size),
+      "cache-control": "private, no-store",
+      "x-content-type-options": "nosniff",
+    });
+  } catch (error) {
+    if ((error as { name?: string }).name === "NoSuchKey") {
+      return c.json({ error: { code: "missing", message: "The proposed file is no longer waiting for review." } }, 404);
+    }
+    throw error;
   }
 });
 

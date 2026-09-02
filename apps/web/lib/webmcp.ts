@@ -22,9 +22,11 @@ import {
   listFolders,
   listFiles,
   readFile,
+  readFileRaw,
   listProposals,
   createProposal,
   stageFile,
+  createGeneratedFile,
   addProposalComment,
   addDocumentComment,
   listSaves,
@@ -184,12 +186,14 @@ const TOOL_TITLES: Record<string, string> = {
   read_selected_text: "Read selection",
   read_file_context: "Read file context",
   read_table_range: "Read table range",
+  read_image: "Read image",
   get_document_history: "Read document history",
   list_change_proposals: "List Change Proposals",
   explain_change_proposal: "Explain Change Proposal",
   propose_file_change: "Propose file change",
   propose_document_change: "Propose document change",
   propose_document_media: "Propose media in document",
+  propose_generated_file: "Propose generated file",
   comment_on_change_proposal: "Comment on Change Proposal",
   comment_on_document: "Comment on document",
   get_timeline: "Read timeline",
@@ -283,6 +287,7 @@ const readOnly = { readOnlyHint: true, untrustedContentHint: true };
 const proposesOnly = { readOnlyHint: false, untrustedContentHint: true };
 const READ_CONTEXT_CHAR_CAP = 40_000;
 const READ_CELL_CHAR_CAP = 2_000;
+const WEBMCP_LOGO_BYTE_CAP = 5_000_000;
 
 function pageState(): { folderId: string | null; file: string | null; proposalId: string | null } {
   if (typeof window === "undefined") return { folderId: null, file: null, proposalId: null };
@@ -620,6 +625,70 @@ async function proposeDocumentMedia(args: ProposeDocumentMediaArgs): Promise<unk
   }
 }
 
+type ProposeGeneratedFileArgs = {
+  path: string;
+  artifactType: "document" | "spreadsheet" | "pdf" | "presentation" | "image";
+  content: Record<string, unknown>;
+  brand?: { name?: string; backgroundColor?: string; accentColor?: string; logoDataUrl?: string };
+  explanation: string;
+  title: string;
+};
+
+async function proposeGeneratedFile(args: ProposeGeneratedFileArgs): Promise<unknown> {
+  try {
+    const input = args && typeof args === "object" ? args : {} as ProposeGeneratedFileArgs;
+    const path = typeof input.path === "string" ? input.path.trim() : "";
+    const artifactType = input.artifactType;
+    const title = typeof input.title === "string" ? input.title.trim() : "";
+    const explanation = typeof input.explanation === "string" ? input.explanation.trim() : "";
+    const kinds = { document: "word", spreadsheet: "sheet", pdf: "pdf", presentation: "slides", image: "image" } as const;
+    if (!path || path.length > 512 || !artifactType || previewKindFor(path) !== kinds[artifactType]) return { error: "Choose a safe path with the extension that matches the generated file type." };
+    if (!title || title.length > 120 || !explanation || explanation.length > 500) {
+      return { error: "Give the proposal a short title and explanation." };
+    }
+    if (!input.content || typeof input.content !== "object") return { error: "Give the generated file structured content." };
+    const brand = input.brand && typeof input.brand === "object" ? input.brand : undefined;
+    const logo = typeof brand?.logoDataUrl === "string" && brand.logoDataUrl.trim() ? decodeMediaDataUrl(brand.logoDataUrl) : null;
+    if (logo && "error" in logo) return { error: "Use an image data URL for the optional logo." };
+    if (logo && !["image/png", "image/jpeg", "image/webp"].includes(logo.mimeType)) {
+      return { error: "Use a PNG, JPEG, or WebP image for the optional logo." };
+    }
+    const folder = await folderFromPage();
+    if (!folder) return { error: "Open a folder first." };
+    const waiting = await createGeneratedFile(folder.id, {
+      path,
+      artifactType,
+      content: input.content,
+      brand,
+    });
+    const result = await createProposal(folder.id, {
+      title,
+      explanation,
+      baseHead: null,
+      operation: {
+        path,
+        kind: "asset_replace",
+        stagingId: waiting.stagingId,
+        explanation,
+      },
+    });
+    announceProposalCreated({ folderId: folder.id, path, proposalId: result.proposalId });
+    return {
+      changedDocument: false,
+      stagedOutsideFolder: true,
+      reviewRequired: true,
+      folder: folder.name,
+      path,
+      artifactType,
+      generatedBytes: waiting.size,
+      proposalId: result.proposalId,
+      proposalUrl: result.url,
+    };
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
+}
+
 /** Register every dashboard tool. Safe to call repeatedly on mount after sign-in. */
 export async function registerDashboardTools(): Promise<string[]> {
   const rawMc = await modelContext();
@@ -817,6 +886,32 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
   });
 
   await mc.registerTool({
+    name: "read_image",
+    description: "Read a small image from the open GoodFolder as a data URL, so it can be used in a reviewable visual proposal. This never changes the folder.",
+    inputSchema: objSchema({ path: { type: "string", description: "Image path in the open GoodFolder." } }, ["path"]),
+    annotations: readOnly,
+    execute: async (args: { path: string }) => {
+      try {
+        const folder = await folderFromPage();
+        const path = typeof args.path === "string" ? args.path.trim() : "";
+        if (!folder || !path) return { error: "Open a folder and choose an image path first." };
+        const files = await listFiles(folder.id);
+        const file = files.files.find((item) => item.path === path);
+        if (!file || previewKindFor(path) !== "image") return { error: "Choose an image from the current GoodFolder." };
+        if (file.size > WEBMCP_LOGO_BYTE_CAP) return { error: "Choose an image under 5 MB for an agent-facing visual proposal." };
+        const raw = await readFileRaw(folder.id, path);
+        if (!raw.blob || !raw.mimeType || !["image/png", "image/jpeg", "image/webp"].includes(raw.mimeType)) {
+          return { error: "Choose a PNG, JPEG, or WebP image for a generated-file brand kit." };
+        }
+        const bytes = new Uint8Array(await raw.blob.arrayBuffer());
+        let binary = "";
+        for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+        return { folder: folder.name, path, mimeType: raw.mimeType, bytes: raw.blob.size, dataUrl: `data:${raw.mimeType};base64,${btoa(binary)}` };
+      } catch (error) { return { error: (error as Error).message }; }
+    },
+  });
+
+  await mc.registerTool({
     name: "get_document_history",
     description: "Read saves that mention the document currently open, newest first.",
     inputSchema: objSchema({ limit: { type: "number", description: "Maximum entries, default 10 and at most 25." } }), annotations: readOnly,
@@ -928,6 +1023,21 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
     }, ["document", "assetPath", "assetDataUrl", "anchorText", "insertionText", "placement", "explanation", "title"]),
     annotations: proposesOnly,
     execute: async (args: ProposeDocumentMediaArgs) => proposeDocumentMedia(args),
+  });
+
+  await mc.registerTool({
+    name: "propose_generated_file",
+    description: "Create a reviewable DOCX, XLSX, PDF, PowerPoint, or bitmap image from structured content. The complete file waits outside the folder for the owner to preview and accept; this never changes the folder by itself.",
+    inputSchema: objSchema({
+      path: { type: "string", description: "New or existing path in the open GoodFolder, with a matching .docx, .xlsx, .pdf, .pptx, .png, .jpg, .jpeg, or .webp extension." },
+      artifactType: { type: "string", enum: ["document", "spreadsheet", "pdf", "presentation", "image"], description: "Type of complete file to prepare." },
+      content: { type: "object", description: "Structured file content: blocks for document/PDF, sheets for spreadsheet, slides for presentation, or a PNG/JPEG/WebP dataUrl for image." },
+      brand: { type: "object", description: "Optional common brand kit with name, backgroundColor, accentColor, and a PNG/JPEG/WebP logoDataUrl returned by read_image." },
+      explanation: { type: "string", description: "Why this complete file was prepared, at most 500 characters." },
+      title: { type: "string", description: "Short Change Proposal title." },
+    }, ["path", "artifactType", "content", "explanation", "title"]),
+    annotations: proposesOnly,
+    execute: async (args: ProposeGeneratedFileArgs) => proposeGeneratedFile(args),
   });
 
   await mc.registerTool({
@@ -1117,12 +1227,14 @@ export const DASHBOARD_TOOL_NAMES = {
   read_selected_text: true,
   read_file_context: true,
   read_table_range: true,
+  read_image: true,
   get_document_history: true,
   list_change_proposals: true,
   explain_change_proposal: true,
   propose_file_change: true,
   propose_document_change: true,
   propose_document_media: true,
+  propose_generated_file: true,
   comment_on_change_proposal: true,
   comment_on_document: true,
 };

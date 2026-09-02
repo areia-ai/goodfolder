@@ -45,7 +45,7 @@ putting it behind a domain, and what each service does.
 | --- | --- |
 | `apps/cli` | The `goodfolder` command: connect, save, sync, log, restore, undo |
 | `apps/mcp` | Model Context Protocol server, so Codex, Claude Code and other agents can drive those actions |
-| `apps/web` | Dashboard and landing page, including nineteen WebMCP tools |
+| `apps/web` | Dashboard and landing page, including twenty-one WebMCP tools |
 | `apps/control-plane` | Accounts, folders, saves, permissions, the transport proxy |
 | `apps/lfs` | Large-file transfers against S3-compatible storage |
 | `packages/shared` | Domain types, the routing rule, the case-collision finder |
