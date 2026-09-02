@@ -1,5 +1,5 @@
 import { DEFAULT_API_URL, saveConfig, withCredentials, type FolderConfig } from "./config.ts";
-import { git } from "./git.ts";
+import { git, type GitResult } from "./git.ts";
 import { configureRepo } from "./perf.ts";
 import { applySkipRules } from "./skip.ts";
 
@@ -13,6 +13,19 @@ import { applySkipRules } from "./skip.ts";
  * itself leaves the default name free for whatever the person adds later.
  */
 export const GF_REMOTE = "goodfolder";
+
+/**
+ * Upload the currently checked-out work as GoodFolder's canonical history.
+ *
+ * A folder may already be managed by another tool on a branch with any name.
+ * Naming the local branch here made the first Save fail for those folders and
+ * tempted callers to rename a branch that belongs to the person. A refspec
+ * keeps the local branch untouched while giving GoodFolder its stable remote
+ * name.
+ */
+export function pushCurrentHistory(folder: string): GitResult {
+  return git(folder, ["push", GF_REMOTE, "HEAD:main"]);
+}
 
 /**
  * Bind a folder to its project: transport entry, large-file endpoint, local

@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   DEFAULT_API_URL,
   loadConfig,
@@ -98,7 +99,7 @@ export async function cmdConnect(
   };
   bindRepo(folder, gitDir!, cfg);
 
-  console.log(`✓ Connected "${name}" to GoodFolder.`);
+  console.log(`✓ Connected "${name}" at ${resolve(folder)} to GoodFolder.`);
   if (fresh) console.log("  (nothing visible changed — your folder just became protected)");
 
   // First import runs immediately so the folder is protected from minute one.

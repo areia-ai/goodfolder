@@ -2,7 +2,7 @@ import { CliError } from "./cli-error.ts";
 import { requireConnection } from "./connect.ts";
 import { git, gitOk } from "./git.ts";
 import { recordSave } from "./api.ts";
-import { GF_REMOTE } from "./repo-setup.ts";
+import { GF_REMOTE, pushCurrentHistory } from "./repo-setup.ts";
 
 export async function cmdSync(
   folder: string,
@@ -54,7 +54,7 @@ export async function cmdSync(
       );
     }
     const sha = git(folder, ["rev-parse", "HEAD"]).stdout.trim();
-    const push = git(folder, ["push", GF_REMOTE, "main"]);
+    const push = pushCurrentHistory(folder);
     if (push.code !== 0) {
       throw new CliError("✗ Combined locally but could not upload. Try again.", 1);
 

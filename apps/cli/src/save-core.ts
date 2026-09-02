@@ -14,7 +14,7 @@ import { git, gitOk, gitStream, gitAsync, findGitDir } from "./git.ts";
 import { trace, traceSync, renderTrace, snapshotMarks } from "./perf.ts";
 import type { GitResult } from "./git.ts";
 import { preflightSave } from "./api.ts";
-import { GF_REMOTE } from "./repo-setup.ts";
+import { pushCurrentHistory } from "./repo-setup.ts";
 import { absorbForeignHistories, foreignHistories, pathsInside } from "./nested.ts";
 import { credentialFilesLeftOut, skippedGroups } from "./skip.ts";
 
@@ -445,7 +445,7 @@ export async function runSavePipeline(
   let pushSkipped = opts.skipPush ?? false;
   if (!pushSkipped) {
     await trace("push", async () => {
-      const push = git(folder, ["push", GF_REMOTE, "main"]);
+      const push = pushCurrentHistory(folder);
       if (push.code !== 0) {
         if (/non-fast-forward|rejected/i.test(push.stderr)) {
           throw new CliError("✗ Another device saved first. Run: goodfolder sync");

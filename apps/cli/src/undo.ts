@@ -4,7 +4,7 @@ import { CliError } from "./cli-error.ts";
 import { requireConnection } from "./connect.ts";
 import { git, gitOk } from "./git.ts";
 import { listSaves, recordSave, type TimelineEntry } from "./api.ts";
-import { GF_REMOTE } from "./repo-setup.ts";
+import { GF_REMOTE, pushCurrentHistory } from "./repo-setup.ts";
 
 export interface UndoOptions {
   /** Skip the interactive preview and undo the single most recent save. */
@@ -281,7 +281,7 @@ export async function cmdUndo(folder: string, opts: UndoOptions = {}): Promise<v
   }
   const sha = git(folder, ["rev-parse", "HEAD"]).stdout.trim();
 
-  const push = git(folder, ["push", GF_REMOTE, "main"]);
+  const push = pushCurrentHistory(folder);
   if (push.code !== 0) {
     if (/non-fast-forward|rejected/i.test(push.stderr)) {
       throw new CliError(
