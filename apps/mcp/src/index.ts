@@ -15,6 +15,7 @@ import { cmdUndo } from "../../cli/src/undo.ts";
 import { cmdLog } from "../../cli/src/log.ts";
 import { cmdCreate } from "../../cli/src/create.ts";
 import { cmdClone } from "../../cli/src/clone.ts";
+import { cmdRename } from "../../cli/src/rename.ts";
 
 /** Capture console output of a command so it can be returned as tool text. */
 async function run(fn: () => Promise<void> | void): Promise<{
@@ -101,13 +102,25 @@ server.tool(
 
 server.tool(
   "goodfolder_connect",
-  "Connect a folder to GoodFolder so every future change can be saved, synced across devices, and restored. Safe to run on any folder; runs once and changes nothing you can see.",
+  "Connect a folder to GoodFolder so every future change can be saved, synced across devices, and restored. Its name stays exactly the same as the local folder name. Safe to run on any folder; runs once and changes nothing you can see.",
   {
     folder: z.string().describe("Absolute path to the folder to connect"),
-    name: z.string().optional().describe("A friendly name for the project"),
+  },
+  async ({ folder }) => {
+    const r = await run(() => cmdConnect(folder));
+    return { content: [{ type: "text", text: r.text }], isError: !!r.error };
+  },
+);
+
+server.tool(
+  "goodfolder_rename",
+  "Change the name shown for a connected GoodFolder. Use only when the user explicitly asks to rename the folder; connecting and saving preserve its local name.",
+  {
+    folder: z.string().describe("Absolute path to the connected folder"),
+    name: z.string().describe("The new name exactly as the user requested it"),
   },
   async ({ folder, name }) => {
-    const r = await run(() => cmdConnect(folder, { name }));
+    const r = await run(() => cmdRename(folder, name));
     return { content: [{ type: "text", text: r.text }], isError: !!r.error };
   },
 );

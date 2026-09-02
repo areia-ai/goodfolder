@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import {
   DEFAULT_API_URL,
   loadConfig,
@@ -46,10 +46,12 @@ export function enclosingManagedFolder(folder: string): string | null {
   return root || null;
 }
 
-export async function cmdConnect(
-  folder: string,
-  opts: { name?: string | undefined },
-): Promise<void> {
+/** The name shown in GoodFolder always starts as the literal folder name. */
+export function projectNameForFolder(folder: string): string {
+  return basename(resolve(folder));
+}
+
+export async function cmdConnect(folder: string): Promise<void> {
   if (!existsSync(folder)) {
     throw new CliError(`✗ No such folder: ${folder}`, 1);
 
@@ -80,7 +82,7 @@ export async function cmdConnect(
     return;
   }
 
-  const name = opts.name ?? folder.split("/").filter(Boolean).pop() ?? "My Folder";
+  const name = projectNameForFolder(folder);
 
   console.log("Connecting…");
   // First-time on this machine: opens the one-time browser approval.

@@ -947,8 +947,10 @@ app.post("/api/projects", async (c) => {
   const b = await c.req.json<{ name?: string; deviceName?: string }>().catch(
     () => ({}) as { name?: string; deviceName?: string },
   );
-  const name =
-    typeof b.name === "string" ? b.name.replace(/\s+/g, " ").trim().slice(0, 80) || "My Folder" : "My Folder";
+  const name = typeof b.name === "string" ? b.name : "My Folder";
+  if (name.length === 0 || name.trim().length === 0 || name.length > 80) {
+    return c.json({ error: { code: "name", message: "Folder names must contain text and be 80 characters or fewer." } }, 400);
+  }
   const deviceName =
     typeof b.deviceName === "string"
       ? b.deviceName.replace(/\s+/g, " ").trim().slice(0, 60) || "This device"
@@ -975,6 +977,28 @@ app.post("/api/projects", async (c) => {
     VALUES (${acct.email}, 'project.create', ${sql.json({ projectId, name, repo })})`;
 
   return c.json({ projectId, deviceId, token: tok.raw, repo });
+});
+
+/** Rename a folder only when its owner explicitly asks to. */
+app.patch("/api/projects/:id", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) {
+    return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  }
+  const projectId = c.req.param("id");
+  if (await projectAccess(projectId, acct.accountId) !== "owner") {
+    return c.json({ error: { code: "owner-only", message: "Only the folder owner can rename it." } }, 403);
+  }
+  const body = await c.req.json<{ name?: unknown }>().catch(() => ({} as { name?: unknown }));
+  const name = typeof body.name === "string" ? body.name : "";
+  if (name.length === 0 || name.trim().length === 0 || name.length > 80) {
+    return c.json({ error: { code: "name", message: "Folder names must contain text and be 80 characters or fewer." } }, 400);
+  }
+  await sql`UPDATE projects SET name = ${name} WHERE id = ${projectId}`;
+  await sql`
+    INSERT INTO audit_log (actor, action, detail)
+    VALUES (${acct.email}, 'project.rename', ${sql.json({ projectId, name })})`;
+  return c.json({ ok: true, projectId, name });
 });
 
 /** Permanently delete one owned GoodFolder after an exact-name confirmation. */

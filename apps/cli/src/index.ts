@@ -11,12 +11,14 @@ import { cmdCreate } from "./create.ts";
 import { cmdClone } from "./clone.ts";
 import { cmdLogin } from "./auth.ts";
 import { cmdProtect, cmdSkipped } from "./protect.ts";
+import { cmdRename } from "./rename.ts";
 
 const HELP = `goodfolder — keep your folder safe
 
   goodfolder create <name>        Start a brand-new GoodFolder on this machine
   goodfolder clone <name>         Download an existing GoodFolder to here
   goodfolder connect [folder]     Connect an existing folder (first time)
+  goodfolder rename <name>        Change the folder name shown in GoodFolder
   goodfolder save [-m note]       Save a point you can come back to
   goodfolder sync                 Bring in changes from your other devices
   goodfolder log                  Show the timeline
@@ -38,7 +40,6 @@ async function main() {
   const positional: string[] = [];
   for (let i = 1; i < argv.length; i++) {
     if (argv[i] === "-m" || argv[i] === "--message") flags.message = argv[++i] ?? "";
-    else if (argv[i] === "--name") flags.name = argv[++i] ?? "";
     else if (argv[i] === "--dest") flags.dest = argv[++i] ?? "";
     else if (argv[i] === "-y" || argv[i] === "--yes") bools.add("yes");
     else if (argv[i] === "--session") bools.add("session");
@@ -65,7 +66,7 @@ async function main() {
       // The help has always advertised `connect [folder]`, but the argument
       // was dropped and the current directory used instead, so following the
       // documented usage silently connected the wrong folder.
-      await cmdConnect(resolve(positional[0] ?? folder), opts(flags));
+      await cmdConnect(resolve(positional[0] ?? folder));
       break;
     case "skipped":
       cmdSkipped(folder);
@@ -81,6 +82,13 @@ async function main() {
       break;
     case "sync":
       await cmdSync(folder);
+      break;
+    case "rename":
+      if (!positional[0]) {
+        console.error("What should this folder be called? e.g.: goodfolder rename \"Trip Planning\"");
+        process.exit(1);
+      }
+      await cmdRename(folder, positional[0]);
       break;
     case "log":
       await cmdLog(folder);
@@ -102,12 +110,6 @@ async function main() {
         process.exit(1);
       }
   }
-}
-
-function opts(flags: Record<string, string>): { name?: string | undefined } {
-  return {
-    name: flags.name,
-  };
 }
 
 main().catch((e: unknown) => {

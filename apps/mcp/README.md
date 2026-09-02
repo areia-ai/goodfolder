@@ -4,6 +4,9 @@ The GoodFolder MCP server gives a compatible local agent the same folder
 actions as the GoodFolder CLI: connect, Save, Sync, Timeline, Restore, and
 Undo.
 
+Connecting keeps the folder's local name exactly as it is. Changing the name
+shown in GoodFolder is a separate, explicit `goodfolder_rename` action.
+
 When this package is released, install it with:
 
 ```bash
