@@ -262,6 +262,24 @@ export function GearIcon(props: IconProps) {
   );
 }
 
+export function HomeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m3.5 10 8.5-6.5 8.5 6.5v9.5H14v-6h-4v6H3.5z" />
+    </Icon>
+  );
+}
+
+export function MoreHorizontalIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="5" cy="12" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.25" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
+
 export function StarIcon(props: IconProps) {
   return <Icon {...props}><path d="m12 4.5 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4-3.9-3.8 5.4-.8z" /></Icon>;
 }

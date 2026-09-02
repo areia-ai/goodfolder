@@ -749,7 +749,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     <div className={`gf-win ${prefs.sidebarCollapsed ? "gf-win-collapsed" : ""}`}>
       <a href="#listing" className="gf-skip-link">Skip to the files</a>
 
-      <div className={`hidden ${prefs.sidebarCollapsed ? "" : "lg:block"}`}>
+      <div className={`hidden ${prefs.sidebarCollapsed ? "" : "md:block"}`}>
         <Sidebar
           folders={folders ?? []}
           location={location}
@@ -765,8 +765,8 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
 
       {sidebarSheet && (
         <>
-          <div className="gf-win-scrim lg:hidden" onClick={() => setSidebarSheet(false)} />
-          <div className="gf-win-sheet lg:hidden">
+          <div className="gf-win-scrim md:hidden" onClick={() => setSidebarSheet(false)} />
+          <div className="gf-win-sheet md:hidden">
             <Sidebar
               folders={folders ?? []}
               location={location}
@@ -801,9 +801,10 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             const up = parentLocation(location);
             if (up) go(up);
           }}
+          onHome={() => go({ folderId: null, dir: "", file: null, scope: "all" })}
           sidebarCollapsed={prefs.sidebarCollapsed}
           onToggleSidebar={() => {
-            if (window.matchMedia("(min-width: 1024px)").matches) {
+            if (window.matchMedia("(min-width: 768px)").matches) {
               setPrefs((current) => withSidebarCollapsed(current, !current.sidebarCollapsed));
             } else {
               setSidebarSheet((value) => !value);

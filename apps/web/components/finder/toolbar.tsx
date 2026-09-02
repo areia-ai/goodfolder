@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, CloseIcon, GearIcon,
+  ArrowLeftIcon, ArrowRightIcon, ChevronUpIcon, CloseIcon, HomeIcon, MoreHorizontalIcon,
   PeopleIcon, PlusIcon, SearchIcon, SidebarIcon, SortIcon, StarIcon, TimelineIcon,
   ViewColumnsIcon, ViewGalleryIcon, ViewIconsIcon, ViewListIcon,
 } from "@/components/icons";
@@ -45,6 +45,7 @@ export interface ToolbarProps {
   onBack: () => void;
   onForward: () => void;
   onUp: () => void;
+  onHome: () => void;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   search: string;
@@ -162,6 +163,9 @@ export function Toolbar(props: ToolbarProps) {
         >
           <ChevronUpIcon />
         </button>
+        <button type="button" className="gf-win-tool" aria-label="All folders" onClick={props.onHome}>
+          <HomeIcon />
+        </button>
       </div>
 
       <p className="gf-win-title gf-truncate flex-1">{props.title}</p>
@@ -244,7 +248,7 @@ export function Toolbar(props: ToolbarProps) {
         </button>
       )}
 
-      <Menu label="More actions" trigger={<GearIcon />} items={actionItems} />
+      <Menu label="More actions" trigger={<MoreHorizontalIcon />} items={actionItems} />
 
       {!showSearch && (
         <button

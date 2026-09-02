@@ -1796,7 +1796,24 @@ img, svg { max-width: 100%; }
   min-height: 100svh;
   background: var(--gf-surface);
 }
-@media (min-width: 1024px) {
+/* A Finder-like layout still needs web-native affordance. Rows, tiles, and
+   controls all act on a click, so a mouse should say so before someone tries
+   one. Keep text, disabled controls, and the current path's plain label out
+   of this rule. */
+@media (hover: hover) and (pointer: fine) {
+  .gf-win :where(
+    button:not(:disabled),
+    a[href],
+    [role="button"]:not([aria-disabled="true"]),
+    [role="menuitem"]:not([aria-disabled="true"]),
+    [role="menuitemradio"]:not([aria-disabled="true"]),
+    [role="tab"]:not([aria-disabled="true"]),
+    [role="option"]:not([aria-disabled="true"]),
+    .gf-win-row,
+    .gf-win-capacity
+  ) { cursor: pointer; }
+}
+@media (min-width: 768px) {
   /* Hiding the sidebar removes it from the grid entirely, so the collapsed
      window needs one track rather than a zero-width one — otherwise the main
      column inherits the empty track and everything is squeezed to nothing. */
@@ -1805,7 +1822,7 @@ img, svg { max-width: 100%; }
 }
 
 .gf-win-main { display: flex; min-width: 0; flex-direction: column; }
-@media (min-width: 1024px) { .gf-win-main { height: 100svh; overflow: hidden; } }
+@media (min-width: 768px) { .gf-win-main { height: 100svh; overflow: hidden; } }
 
 /* Sidebar ----------------------------------------------------------------- */
 
@@ -1936,9 +1953,10 @@ img, svg { max-width: 100%; }
   background: var(--gf-surface-sunken);
 }
 .gf-win-aside-open { display: block; }
-/* Narrower than this the panel cannot sit beside the listing without
-   squeezing it, so it comes over the top instead and can be dismissed. */
-@media (max-width: 1099px) {
+/* Keep the panel beside the listing on tablet and desktop widths. That leaves
+   the file area smaller, but readable, rather than hiding it behind a panel.
+   Only phone-sized windows need the temporary overlay treatment. */
+@media (max-width: 767px) {
   .gf-win-aside-open {
     position: fixed; inset: 0 0 0 auto; z-index: 55;
     width: min(384px, 92vw);
@@ -1949,7 +1967,7 @@ img, svg { max-width: 100%; }
   position: fixed; inset: 0; z-index: 50;
   background: color-mix(in srgb, var(--gf-black) 28%, transparent);
 }
-@media (min-width: 1100px) { .gf-win-scrim { display: none; } }
+@media (min-width: 768px) { .gf-win-scrim { display: none; } }
 
 .gf-win-dialog-scrim {
   position: fixed; inset: 0; z-index: 50;
