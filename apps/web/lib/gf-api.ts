@@ -169,6 +169,18 @@ async function put<T>(path: string, body: unknown): Promise<T> {
   return json;
 }
 
+async function destroy<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as T & { error?: { message?: string } };
+  if (!res.ok) throw Object.assign(new Error(json.error?.message ?? `GoodFolder request failed (${res.status})`), { status: res.status, payload: json });
+  return json;
+}
+
 export type PlanCode = "starter" | "plus" | "studio";
 export type BillingInterval = "month" | "year";
 
@@ -227,6 +239,10 @@ export const listFolders = () => get<Folder[]>("/api/projects");
 export const createFolder = (name: string) =>
   send<{ projectId: string }>("/api/projects", { name, deviceName: "Made in the browser" })
     .then((result) => ({ projectId: result.projectId }));
+
+/** Permanently remove one owned GoodFolder after an exact-name confirmation. */
+export const deleteFolder = (folderId: string, name: string) =>
+  destroy<{ ok: true; projectId: string; name: string }>(`/api/projects/${folderId}`, { name });
 
 export const listSaves = (folderId: string, full = false) =>
   get<SaveRow[]>(`/api/projects/${folderId}/saves${full ? "?paths=full" : ""}`);

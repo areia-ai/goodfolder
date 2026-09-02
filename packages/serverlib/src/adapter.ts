@@ -62,7 +62,7 @@ export class RepositoryAdapter {
     return res.ok;
   }
 
-  /** Remove one backing repository during an authorized retention cleanup. */
+  /** Remove one backing store during an authorized permanent cleanup. */
   async deleteRepo(projectId: string): Promise<void> {
     const res = await this.api(this.repoPath(projectId), { method: "DELETE" });
     if (res.status === 404 || res.status === 204) return;

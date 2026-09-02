@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  acceptInvitation, createFolder, getAccountPlan, listFolders, openFile as openFolderFile, redeemChallengeAccess,
+  acceptInvitation, createFolder, deleteFolder, getAccountPlan, listFolders, openFile as openFolderFile, redeemChallengeAccess,
   reviewProposal, type AccountPlan, type ChangeProposal, type Folder, type OpenedFile,
 } from "@/lib/gf-api";
 import { QuickLook } from "@/components/finder/quick-look";
@@ -37,7 +37,7 @@ import { useNavigation } from "@/components/finder/use-navigation";
 import { useFolderData } from "@/components/finder/use-folder-data";
 import { useSelection, type ClickModifiers } from "@/components/finder/use-selection";
 import { droppedFiles, useFileVerbs } from "@/components/finder/use-file-verbs";
-import { RemoveDialog, RenameDialog } from "@/components/finder/verb-dialogs";
+import { DeleteFolderDialog, RemoveDialog, RenameDialog } from "@/components/finder/verb-dialogs";
 
 /**
  * Everything with a path inside a folder — so, everything but a GoodFolder
@@ -73,6 +73,9 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   const [naming, setNaming] = useState(false);
   const [renaming, setRenaming] = useState<NamedNode | null>(null);
   const [removing, setRemoving] = useState<NamedNode[] | null>(null);
+  const [deletingFolder, setDeletingFolder] = useState<Folder | null>(null);
+  const [deletingFolderBusy, setDeletingFolderBusy] = useState(false);
+  const [deleteFolderError, setDeleteFolderError] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState(false);
   const [challengeCodeOpen, setChallengeCodeOpen] = useState(false);
   const [challengeCode, setChallengeCode] = useState("");
@@ -314,6 +317,29 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     if (location.folderId) await store.refresh(location.folderId);
     await loadFolders();
   }, [location.folderId, store, loadFolders]);
+
+  const permanentlyDeleteFolder = useCallback(async () => {
+    if (!deletingFolder) return;
+    setDeletingFolderBusy(true);
+    setDeleteFolderError(null);
+    try {
+      await deleteFolder(deletingFolder.id, deletingFolder.name);
+      setFolders((current) => current?.filter((entry) => entry.id !== deletingFolder.id) ?? []);
+      setPrefs((current) => current.pinned.includes(deletingFolder.id)
+        ? togglePinned(current, deletingFolder.id)
+        : current);
+      if (location.folderId === deletingFolder.id) {
+        nav.replace({ folderId: null, dir: "", file: null, scope: "all" });
+      }
+      selection.clear();
+      setDeletingFolder(null);
+      setNotice(done(`“${deletingFolder.name}” was permanently deleted from GoodFolder.`));
+    } catch (error) {
+      setDeleteFolderError((error as Error).message);
+    } finally {
+      setDeletingFolderBusy(false);
+    }
+  }, [deletingFolder, location.folderId, nav, selection]);
 
   /* --------------------------------------------------- Changing the folder */
 
@@ -573,7 +599,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
    */
   const elsewhere: MenuItem = {
     id: "elsewhere",
-    label: "Rename or take out",
+    label: "Rename",
     disabled: true,
     dividerBefore: true,
     note: "This happens on the computer where the folder lives.",
@@ -637,6 +663,16 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             onSelect: () => setPrefs((current) => togglePinned(current, node.folderId)),
           },
           elsewhere,
+          ...(node.folder.role === "owner" ? [{
+            id: "delete-folder",
+            label: "Delete GoodFolder…",
+            dividerBefore: true,
+            note: "Permanently deletes its saved history and stored files.",
+            onSelect: () => {
+              setDeleteFolderError(null);
+              setDeletingFolder(node.folder);
+            },
+          }] : []),
         ];
       }
       if (node.kind === "directory") {
@@ -954,6 +990,17 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             suggesting={suggesting}
             onCancel={() => setRemoving(null)}
             onRemove={doRemove}
+          />
+        )}
+        {deletingFolder && (
+          <DeleteFolderDialog
+            name={deletingFolder.name}
+            busy={deletingFolderBusy}
+            error={deleteFolderError}
+            onCancel={() => {
+              if (!deletingFolderBusy) setDeletingFolder(null);
+            }}
+            onDelete={() => void permanentlyDeleteFolder()}
           />
         )}
         {challengeCodeOpen && (

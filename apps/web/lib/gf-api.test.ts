@@ -1,6 +1,6 @@
 import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
-import { openFile, readFileRaw } from "./gf-api.ts";
+import { deleteFolder, openFile, readFileRaw } from "./gf-api.ts";
 
 const originalFetch = globalThis.fetch;
 
@@ -65,4 +65,36 @@ test("readFileRaw still throws unexpected server failures", async () => {
   });
 
   await assert.rejects(() => readFileRaw("folder", "photo.png"), /Unexpected failure/);
+});
+
+test("deleteFolder sends the exact name with a DELETE request", async () => {
+  const requests: Array<{ url: string; method?: string; body?: BodyInit | null }> = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: String(input), method: init?.method, body: init?.body });
+    return new Response(JSON.stringify({ ok: true, projectId: "folder-1", name: "recipes" }), {
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  assert.deepEqual(await deleteFolder("folder-1", "recipes"), {
+    ok: true,
+    projectId: "folder-1",
+    name: "recipes",
+  });
+  const request = requests[0];
+  assert.ok(request);
+  assert.equal(request.url.endsWith("/api/projects/folder-1"), true);
+  assert.equal(request.method, "DELETE");
+  assert.deepEqual(JSON.parse(String(request.body)), { name: "recipes" });
+});
+
+test("deleteFolder shows the server's confirmation failure", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    error: { code: "confirmation", message: "Type the folder's exact name to confirm permanent deletion." },
+  }), {
+    status: 409,
+    headers: { "content-type": "application/json" },
+  });
+
+  await assert.rejects(() => deleteFolder("folder-1", "Recipes"), /exact name/);
 });

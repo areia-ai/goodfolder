@@ -156,3 +156,61 @@ export function RemoveDialog(props: {
     </Scrim>
   );
 }
+
+export function DeleteFolderDialog(props: {
+  name: string;
+  busy: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onDelete: () => void;
+}) {
+  const [confirmation, setConfirmation] = useState("");
+  const cancel = useRef<HTMLButtonElement>(null);
+  useEscape(() => {
+    if (!props.busy) props.onCancel();
+  });
+  useEffect(() => cancel.current?.focus(), []);
+
+  const confirmed = confirmation === props.name;
+  return (
+    <Scrim onCancel={() => {
+      if (!props.busy) props.onCancel();
+    }}>
+      <form
+        className="gf-card gf-card-lg w-full max-w-[27rem] p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Delete ${props.name} forever`}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (confirmed && !props.busy) props.onDelete();
+        }}
+      >
+        <h2 className="text-[17px] font-bold tracking-[-.02em]">Delete “{props.name}” forever?</h2>
+        <p className="gf-body mt-1.5 text-[13px]">
+          This permanently deletes every Save, stored file, invitation, and comment in this GoodFolder. It does not
+          delete a local copy that still exists on a computer. This cannot be undone.
+        </p>
+        <label htmlFor="gf-delete-folder" className="gf-label mt-4">Type {props.name} to confirm</label>
+        <input
+          id="gf-delete-folder"
+          value={confirmation}
+          onChange={(event) => setConfirmation(event.target.value)}
+          className="gf-input"
+          autoComplete="off"
+          spellCheck={false}
+          disabled={props.busy}
+        />
+        {props.error && <p className="mt-2 text-[13px] font-semibold" role="alert">{props.error}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button ref={cancel} type="button" className="gf-button-secondary" onClick={props.onCancel} disabled={props.busy}>
+            Cancel
+          </button>
+          <button type="submit" className="gf-button-primary" disabled={!confirmed || props.busy}>
+            {props.busy ? "Deleting…" : "Delete forever"}
+          </button>
+        </div>
+      </form>
+    </Scrim>
+  );
+}

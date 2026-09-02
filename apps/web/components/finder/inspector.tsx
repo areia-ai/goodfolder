@@ -198,9 +198,13 @@ export function Inspector({
                   </div>
                 )}
                 <p className="gf-faint mt-4 border-t border-[var(--gf-line)] pt-3 text-[12px] leading-relaxed">
-                  {data?.role === "contributor"
-                    ? "You can suggest a new name for this file, or suggest taking it out. The folder's owner decides, and nothing changes until they accept."
-                    : "Renaming this file, or taking it out, happens here and reaches your own computers at the next Sync. Going back to an earlier Save brings it back."}
+                  {only.kind === "folder"
+                    ? only.folder.role === "contributor"
+                      ? "The folder's owner controls its name and can permanently delete it."
+                      : "Rename it on the computer where it lives. Deleting this GoodFolder here permanently removes its saved history and stored files, but not a local copy."
+                    : data?.role === "contributor"
+                      ? "You can suggest a new name for this file, or suggest taking it out. The folder's owner decides, and nothing changes until they accept."
+                      : "Renaming this file, or taking it out, happens here and reaches your own computers at the next Sync. Going back to an earlier Save brings it back."}
                 </p>
               </>
             ) : selection.length > 1 ? (

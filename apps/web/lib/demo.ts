@@ -466,6 +466,16 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
   const path = search.get("path") ?? "";
   const file = entry.files.find((item) => item.path === path);
 
+  if (rest === "" && method === "DELETE") {
+    if (entry.folder.role !== "owner") return fail(404, "not-found", "no such folder on this account");
+    if (body.name !== entry.folder.name) {
+      return fail(409, "confirmation", "Type the folder's exact name to confirm permanent deletion.");
+    }
+    const at = folders().indexOf(entry);
+    if (at >= 0) folders().splice(at, 1);
+    return json({ ok: true, projectId: entry.folder.id, name: entry.folder.name });
+  }
+
   if (rest === "files") {
     return json({ role: entry.folder.role ?? "owner", head: `demo-head-${entry.folder.lastSeq}`, files: entry.files.map(fileRow) });
   }

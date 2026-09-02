@@ -116,7 +116,7 @@ app.use("/api/*", async (c, next) => {
   if (origin && originAllowed(origin)) {
     c.header("Access-Control-Allow-Origin", origin);
     c.header("Vary", "Origin");
-    c.header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+    c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     c.header("Access-Control-Allow-Headers", "authorization, content-type");
     c.header("Access-Control-Allow-Credentials", "true");
     c.header("Access-Control-Max-Age", "86400");
@@ -975,6 +975,31 @@ app.post("/api/projects", async (c) => {
     VALUES (${acct.email}, 'project.create', ${sql.json({ projectId, name, repo })})`;
 
   return c.json({ projectId, deviceId, token: tok.raw, repo });
+});
+
+/** Permanently delete one owned GoodFolder after an exact-name confirmation. */
+app.delete("/api/projects/:id", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) {
+    return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  }
+  const projectId = c.req.param("id");
+  const body = await c.req.json<{ name?: unknown }>().catch(() => ({} as { name?: unknown }));
+  const result = await billing.deleteFolder(
+    acct.accountId,
+    projectId,
+    typeof body.name === "string" ? body.name : "",
+    acct.email,
+  );
+  if (result.status === "not-found") {
+    return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
+  }
+  if (result.status === "confirmation") {
+    return c.json({
+      error: { code: "confirmation", message: "Type the folder's exact name to confirm permanent deletion." },
+    }, 409);
+  }
+  return c.json({ ok: true, projectId, name: result.name });
 });
 
 /** Mint an extra folder token (second device / second machine). */

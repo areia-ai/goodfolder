@@ -387,26 +387,70 @@ export class HostedBilling {
     return submitted;
   }
 
+  private async deleteObjectPrefix(prefix: string): Promise<number> {
+    let objects = 0;
+    let continuationToken: string | undefined;
+    do {
+      const page = await this.storage.send(new ListObjectsV2Command({
+        Bucket: this.bucket,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      }));
+      const keys = (page.Contents ?? []).flatMap((item) => item.Key ? [{ Key: item.Key }] : []);
+      if (keys.length) {
+        await this.storage.send(new DeleteObjectsCommand({
+          Bucket: this.bucket,
+          Delete: { Objects: keys, Quiet: true },
+        }));
+        objects += keys.length;
+      }
+      continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (continuationToken);
+    return objects;
+  }
+
+  private async deleteProjectResources(projectId: string): Promise<number> {
+    const objects = await this.deleteObjectPrefix(`${projectId}/`)
+      + await this.deleteObjectPrefix(`staging/${projectId}/`);
+    await this.repos.deleteRepo(projectId);
+    return objects;
+  }
+
+  async deleteFolder(
+    accountId: string,
+    projectId: string,
+    confirmationName: string,
+    actor: string,
+  ): Promise<
+    | { status: "deleted"; name: string; objects: number }
+    | { status: "not-found" }
+    | { status: "confirmation" }
+  > {
+    const rows = await this.sql`
+      SELECT name FROM projects WHERE id = ${projectId} AND account_id = ${accountId} LIMIT 1`;
+    if (!rows.length) return { status: "not-found" };
+    const name = String(rows[0]?.name ?? "");
+    if (confirmationName !== name) return { status: "confirmation" };
+
+    const objects = await this.deleteProjectResources(projectId);
+    await this.sql.begin(async (tx) => {
+      await tx`DELETE FROM saves WHERE project_id = ${projectId}`;
+      await tx`DELETE FROM transfer_tokens WHERE device_id IN (SELECT id FROM devices WHERE project_id = ${projectId})`;
+      await tx`DELETE FROM devices WHERE project_id = ${projectId}`;
+      await tx`DELETE FROM projects WHERE id = ${projectId} AND account_id = ${accountId}`;
+      await tx`INSERT INTO audit_log (actor, action, detail)
+        VALUES (${actor}, 'project.delete', ${tx.json({ projectId, name, objects })})`;
+    });
+    await this.recordUsageSample(accountId, "folder-deletion");
+    return { status: "deleted", name, objects };
+  }
+
   async deleteProtectedData(accountId: string): Promise<{ folders: number; objects: number }> {
     const projects = await this.sql`SELECT id FROM projects WHERE account_id = ${accountId} ORDER BY id`;
     let objects = 0;
     for (const project of projects) {
       const projectId = String(project.id);
-      let continuationToken: string | undefined;
-      do {
-        const page = await this.storage.send(new ListObjectsV2Command({
-          Bucket: this.bucket,
-          Prefix: `${projectId}/`,
-          ContinuationToken: continuationToken,
-        }));
-        const keys = (page.Contents ?? []).flatMap((item) => item.Key ? [{ Key: item.Key }] : []);
-        if (keys.length) {
-          await this.storage.send(new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: keys, Quiet: true } }));
-          objects += keys.length;
-        }
-        continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
-      } while (continuationToken);
-      await this.repos.deleteRepo(projectId);
+      objects += await this.deleteProjectResources(projectId);
     }
     await this.sql.begin(async (tx) => {
       for (const project of projects) {
