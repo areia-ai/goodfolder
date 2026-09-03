@@ -435,6 +435,18 @@ const comments = new Map<string, Array<{ id: string; path: string; quotedText?: 
 /** Bytes an invited person has sent up that nobody has accepted yet. */
 const staged = new Map<string, { name: string; size: number }>();
 
+function generatedSize(content: unknown): number {
+  const dataUrl = content && typeof content === "object" && "dataUrl" in content
+    ? (content as { dataUrl?: unknown }).dataUrl
+    : null;
+  if (typeof dataUrl === "string") {
+    const encoded = dataUrl.slice(dataUrl.indexOf(",") + 1);
+    const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+    return Math.max(0, Math.floor((encoded.length * 3) / 4) - padding);
+  }
+  return new Blob([JSON.stringify(content ?? {})]).size;
+}
+
 async function handle(pathname: string, search: URLSearchParams, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? "GET").toUpperCase();
   // An added file arrives as bytes, not as JSON. Everything else is JSON.
@@ -495,6 +507,14 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
     const id = `demo-waiting-${staged.size + 1}`;
     staged.set(id, { name: search.get("name") ?? "file", size: dropped?.size ?? 0 });
     return json({ ok: true, stagingId: id, size: dropped?.size ?? 0 });
+  }
+  if (rest === "generated-files" && method === "POST") {
+    const path = String(body.path ?? "").trim();
+    if (!path) return fail(422, "invalid", "Give the generated file a path.");
+    const id = `demo-waiting-${staged.size + 1}`;
+    const size = generatedSize(body.content);
+    staged.set(id, { name: path.split("/").pop() || "generated-file", size });
+    return json({ ok: true, stagingId: id, size });
   }
   if (rest === "proposals" && method === "POST") {
     const operations = Array.isArray(body.suggestions)
