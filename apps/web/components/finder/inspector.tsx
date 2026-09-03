@@ -3,7 +3,7 @@
 import { ClockIcon, CloseIcon, DownloadIcon, ProposalIcon } from "@/components/icons";
 import { Badge } from "@/components/ui";
 import { Timeline } from "@/components/timeline";
-import { ProposalList, PeopleView } from "@/components/folder-panels";
+import { ProposalList, PeopleView, WorkspaceProposalList } from "@/components/folder-panels";
 import { NodeGlyph } from "@/components/finder/node-glyph";
 import { useThumbnail } from "@/components/finder/use-thumbnail";
 import { formatBytes, previewKindLabel } from "@/lib/preview";
@@ -11,6 +11,7 @@ import { directoryName, kindLabel } from "@/lib/vfs";
 import type { FolderData } from "@/components/finder/use-folder-data";
 import type { Folder, SaveRow, VfsNode } from "@/components/finder/types";
 import type { NoticeMessage } from "@/components/ui";
+import type { WorkspaceProposal } from "@/lib/gf-api";
 
 export type InspectorTab = "info" | "review" | "history" | "people";
 
@@ -97,6 +98,8 @@ export function Inspector({
   tab,
   onTab,
   focusedProposalId,
+  workspaceProposals,
+  onReviewWorkspaceProposal,
   onClose,
   folder,
   data,
@@ -110,6 +113,8 @@ export function Inspector({
   tab: InspectorTab;
   onTab: (next: InspectorTab) => void;
   focusedProposalId: string | null;
+  workspaceProposals: WorkspaceProposal[];
+  onReviewWorkspaceProposal: (proposalId: string, action: "accept" | "reject") => Promise<void>;
   onClose: () => void;
   folder: Folder | null;
   data: FolderData | null;
@@ -121,7 +126,7 @@ export function Inspector({
   onChanged: () => Promise<void>;
 }) {
   const only = selection.length === 1 ? selection[0]! : null;
-  const usable = folder ? TABS : TABS.filter((entry) => entry.id === "info");
+  const usable = folder ? TABS : TABS.filter((entry) => entry.id === "info" || entry.id === "review");
 
   return (
     <>
@@ -238,6 +243,10 @@ export function Inspector({
         )}
 
         {tab === "history" && <Timeline saves={data?.saves ?? null} />}
+
+        {tab === "review" && !folder && (
+          <WorkspaceProposalList proposals={workspaceProposals} onReview={onReviewWorkspaceProposal} onNotice={onNotice} />
+        )}
 
         {tab === "review" && folder && data && (
           <ProposalList

@@ -89,13 +89,14 @@ test("site tools expose suggestions but never human review powers", () => {
     "propose_document_change",
     "propose_document_media",
     "propose_generated_file",
+    "propose_new_goodfolder",
     "comment_on_change_proposal",
     "comment_on_document",
   ];
   const toolNames = Object.keys(DASHBOARD_TOOL_NAMES);
 
-  assert.equal(toolNames.length, 22);
-  assert.equal(reviewTools.length, 6);
+  assert.equal(toolNames.length, 23);
+  assert.equal(reviewTools.length, 7);
   assert.equal(toolNames.filter((name) => !reviewTools.includes(name)).length, 16);
   assert.equal(DASHBOARD_TOOL_NAMES.get_local_save_guidance, true);
   assert.equal(DASHBOARD_TOOL_NAMES.read_image, true);

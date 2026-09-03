@@ -19,7 +19,7 @@
 
 import { previewKindFor } from "./preview.ts";
 import type {
-  AccountPlan, ChangeProposal, Folder, FolderFile, PlanCode, PlanDefinition, SaveRow,
+  AccountPlan, ChangeProposal, Folder, FolderFile, PlanCode, PlanDefinition, SaveRow, WorkspaceProposal,
 } from "./gf-api.ts";
 
 /**
@@ -369,6 +369,7 @@ function countOpen(entry: DemoFolder): number {
 const comments = new Map<string, Array<{ id: string; path: string; quotedText?: string | null; body: string; createdAt: string; authorEmail: string }>>();
 /** Bytes an invited person has sent up that nobody has accepted yet. */
 const staged = new Map<string, { name: string; size: number }>();
+const workspaceProposals: WorkspaceProposal[] = [];
 
 function generatedSize(content: unknown): number {
   const dataUrl = content && typeof content === "object" && "dataUrl" in content
@@ -396,6 +397,29 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
   if (pathname === "/api/account/plan") return json(PLAN);
   if (pathname === "/api/projects" && method === "GET") {
     return json(folders().map((entry) => ({ ...entry.folder, openProposalCount: countOpen(entry) })));
+  }
+  if (pathname === "/api/workspace-proposals" && method === "GET") return json({ proposals: workspaceProposals });
+  if (pathname === "/api/workspace-proposals" && method === "POST") {
+    const name = String(body.name ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!name) return fail(422, "name", "Give the new folder a name.");
+    const id = `demo-workspace-${workspaceProposals.length + 1}`;
+    workspaceProposals.unshift({ id, name, explanation: String(body.explanation ?? "").slice(0, 1000), status: "open", createdAt: new Date().toISOString(), authorEmail: "assistant@example.com" });
+    return json({ ok: true, proposalId: id });
+  }
+  if (pathname.startsWith("/api/workspace-proposals/") && pathname.endsWith("/review") && method === "POST") {
+    const id = pathname.split("/")[3] ?? "";
+    const proposal = workspaceProposals.find((item) => item.id === id);
+    if (!proposal) return fail(404, "not-found", "no such workspace proposal");
+    const action = body.action === "accept" ? "accept" : body.action === "reject" ? "reject" : null;
+    if (!action) return fail(422, "action", "Choose accept or reject.");
+    proposal.status = action === "accept" ? "accepted" : "rejected";
+    if (action === "accept") {
+      const projectId = `demo-${Date.now()}`;
+      proposal.createdProjectId = projectId;
+      folders().unshift({ folder: { id: projectId, name: proposal.name, createdAt: new Date().toISOString(), lastSeq: 0, lastSaveAt: null, role: "owner", contributorCount: 0, openProposalCount: 0 }, files: [], saves: [], proposals: [], people: [{ email: "you@example.com", role: "owner" }] });
+      return json({ ok: true, status: proposal.status, projectId });
+    }
+    return json({ ok: true, status: proposal.status });
   }
   if (pathname === "/api/projects" && method === "POST") {
     const name = String(body.name ?? "New Folder").slice(0, 80) || "New Folder";

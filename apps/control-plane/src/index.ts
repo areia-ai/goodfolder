@@ -934,6 +934,57 @@ app.get("/api/projects", async (c) => {
   return c.json(rows);
 });
 
+app.get("/api/workspace-proposals", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const proposals = await sql`
+    SELECT wp.id, wp.name, wp.explanation, wp.status, wp.created_at::text AS "createdAt",
+           author.email AS "authorEmail", wp.created_project_id AS "createdProjectId"
+    FROM workspace_proposals wp JOIN accounts author ON author.id = wp.author_account_id
+    WHERE wp.account_id = ${acct.accountId} ORDER BY wp.created_at DESC LIMIT 100`;
+  return c.json({ proposals });
+});
+
+app.post("/api/workspace-proposals", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const denied = await writeAccessError(acct.accountId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
+  const body = await c.req.json<{ name?: string; explanation?: string }>().catch(() => ({} as { name?: string; explanation?: string }));
+  const name = body.name?.replace(/\s+/g, " ").trim().slice(0, 80) ?? "";
+  const explanation = body.explanation?.trim().slice(0, 1000) ?? "";
+  if (!name || !explanation) return c.json({ error: { code: "proposal", message: "Give the new folder a name and a reason." } }, 400);
+  const id = crypto.randomUUID();
+  await sql`INSERT INTO workspace_proposals (id, account_id, author_account_id, name, explanation)
+            VALUES (${id}, ${acct.accountId}, ${acct.accountId}, ${name}, ${explanation})`;
+  return c.json({ ok: true, proposalId: id });
+});
+
+app.post("/api/workspace-proposals/:id/review", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const body = await c.req.json<{ action?: "accept" | "reject" }>().catch(() => ({} as { action?: "accept" | "reject" }));
+  if (body.action !== "accept" && body.action !== "reject") return c.json({ error: { code: "action", message: "Choose accept or reject." } }, 400);
+  const rows = await sql`SELECT id, name, status FROM workspace_proposals WHERE id = ${c.req.param("id")} AND account_id = ${acct.accountId} FOR UPDATE`;
+  const proposal = rows[0] as { id: string; name: string; status: string } | undefined;
+  if (!proposal) return c.json({ error: { code: "not-found", message: "Workspace proposal not found." } }, 404);
+  if (proposal.status !== "open") return c.json({ ok: true, status: proposal.status });
+  if (body.action === "reject") {
+    await sql`UPDATE workspace_proposals SET status = 'rejected', reviewed_at = now(), reviewed_by = ${acct.accountId} WHERE id = ${proposal.id}`;
+    return c.json({ ok: true, status: "rejected" });
+  }
+  const projectId = crypto.randomUUID(); const deviceId = crypto.randomUUID(); const token = newToken();
+  await sql.begin(async (tx) => {
+    await tx`INSERT INTO projects (id, account_id, name) VALUES (${projectId}, ${acct.accountId}, ${proposal.name})`;
+    await tx`INSERT INTO devices (id, project_id, name, kind) VALUES (${deviceId}, ${projectId}, 'Made in the browser', 'user')`;
+    await tx`INSERT INTO transfer_tokens (token_hash, device_id, expires_at) VALUES (${token.hash}, ${deviceId}, now() + interval '30 days')`;
+    await tx`UPDATE workspace_proposals SET status = 'accepted', reviewed_at = now(), reviewed_by = ${acct.accountId}, created_project_id = ${projectId} WHERE id = ${proposal.id}`;
+  });
+  await repos.ensureRepo(projectId);
+  await sql`INSERT INTO audit_log (actor, action, detail) VALUES (${acct.email}, 'workspace-proposal.accept', ${sql.json({ proposalId: proposal.id, projectId, name: proposal.name })})`;
+  return c.json({ ok: true, status: "accepted", projectId });
+});
+
 /**
  * Create a folder on an approved account: project + transport device +
  * folder token in one transaction. The replacement for dev bootstrap.

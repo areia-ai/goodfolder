@@ -31,6 +31,7 @@ import {
   createGeneratedFile,
   addProposalComment,
   addDocumentComment,
+  createWorkspaceProposal,
   listSaves,
   whenLabel,
   type Folder,
@@ -193,6 +194,7 @@ const TOOL_TITLES: Record<string, string> = {
   get_document_history: "Read document history",
   list_change_proposals: "List Change Proposals",
   explain_change_proposal: "Explain Change Proposal",
+  propose_new_goodfolder: "Propose new GoodFolder",
   propose_file_change: "Propose file change",
   propose_document_change: "Propose document change",
   propose_document_media: "Propose media in document",
@@ -946,6 +948,25 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
   });
 
   await mc.registerTool({
+    name: "propose_new_goodfolder",
+    description: "Prepare a reviewable request for a brand-new empty GoodFolder. The owner must accept it in the dashboard before any folder is created. Never use this for an existing local folder.",
+    inputSchema: objSchema({
+      name: { type: "string", description: "Name for the brand-new empty GoodFolder, at most 80 characters." },
+      explanation: { type: "string", description: "Why this new workspace is needed, at most 1,000 characters." },
+    }, ["name", "explanation"]), annotations: proposesOnly,
+    execute: async (args: { name: string; explanation: string }) => {
+      const name = args.name.replace(/\s+/g, " ").trim().slice(0, 80);
+      const explanation = args.explanation.trim().slice(0, 1000);
+      if (!name || !explanation) return { error: "Give the new GoodFolder a name and a short reason." };
+      try {
+        const result = await createWorkspaceProposal({ name, explanation });
+        window.dispatchEvent(new CustomEvent("workspace-proposal-created", { detail: { proposalId: result.proposalId } }));
+        return { proposalId: result.proposalId, name, reviewRequired: true, createdFolder: false };
+      } catch (e) { return { error: (e as Error).message }; }
+    },
+  });
+
+  await mc.registerTool({
     name: "list_change_proposals",
     description: "List Change Proposals for the GoodFolder currently open, including their review status and affected documents.",
     inputSchema: objSchema({ status: { type: "string", description: "Optional status: open, accepted, rejected, or needs-review." } }), annotations: readOnly,
@@ -1251,6 +1272,7 @@ export const DASHBOARD_TOOL_NAMES = {
   get_document_history: true,
   list_change_proposals: true,
   explain_change_proposal: true,
+  propose_new_goodfolder: true,
   propose_file_change: true,
   propose_document_change: true,
   propose_document_media: true,

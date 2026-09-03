@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  acceptInvitation, createFolder, deleteFolder, getAccountPlan, listFolders, openFile as openFolderFile, redeemChallengeAccess,
+  acceptInvitation, createFolder, deleteFolder, getAccountPlan, listFolders, listWorkspaceProposals, openFile as openFolderFile, redeemChallengeAccess,
+  reviewWorkspaceProposal, type WorkspaceProposal,
   reviewProposal, type AccountPlan, type ChangeProposal, type Folder, type OpenedFile,
 } from "@/lib/gf-api";
 import { QuickLook } from "@/components/finder/quick-look";
@@ -63,6 +64,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   const [plan, setPlan] = useState<AccountPlan | null>(null);
   const [notice, setNotice] = useState<NoticeMessage | null>(null);
   const [agentReady, setAgentReady] = useState(false);
+  const [workspaceProposals, setWorkspaceProposals] = useState<WorkspaceProposal[]>([]);
 
   const [prefs, setPrefs] = useState<ViewPrefsState>(DEFAULT_STATE);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -102,9 +104,10 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
         const accepted = await acceptInvitation(invite);
         nav.replace({ folderId: accepted.projectId, dir: "", file: null, scope: "all" });
       }
-      const [rows, accountPlan] = await Promise.all([listFolders(), getAccountPlan().catch(() => null)]);
+      const [rows, accountPlan, workspace] = await Promise.all([listFolders(), getAccountPlan().catch(() => null), listWorkspaceProposals().catch(() => ({ proposals: [] }))]);
       setFolders(rows);
       setPlan(accountPlan);
+      setWorkspaceProposals(workspace.proposals);
       try {
         if (webMcpSupported()) setAgentReady((await registerDashboardTools()).length > 0);
       } catch {
@@ -474,6 +477,17 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     window.addEventListener("proposal-created", onProposalCreated);
     return () => window.removeEventListener("proposal-created", onProposalCreated);
   }, [location.folderId, nav, setPreference, store]);
+
+  useEffect(() => {
+    function onWorkspaceProposalCreated() {
+      setInspectorTab("review");
+      setPreference({ previewPane: true });
+      nav.go({ folderId: null, dir: "", file: null, scope: "all" });
+      void listWorkspaceProposals().then((result) => setWorkspaceProposals(result.proposals));
+    }
+    window.addEventListener("workspace-proposal-created", onWorkspaceProposalCreated);
+    return () => window.removeEventListener("workspace-proposal-created", onWorkspaceProposalCreated);
+  }, [nav, setPreference]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -1011,6 +1025,12 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
                   onDownload={(node) => void download(node)}
                   onNotice={setNotice}
                   onChanged={refresh}
+                  workspaceProposals={workspaceProposals}
+                  onReviewWorkspaceProposal={async (proposalId, action) => {
+                    await reviewWorkspaceProposal(proposalId, action);
+                    const [rows, workspace] = await Promise.all([listFolders(), listWorkspaceProposals()]);
+                    setFolders(rows); setWorkspaceProposals(workspace.proposals);
+                  }}
                 />
               </aside>
             </>

@@ -519,6 +519,32 @@
       }
     },
     {
+      "name": "propose_new_goodfolder",
+      "description": "Prepare a reviewable request for a brand-new empty GoodFolder. The owner must accept it in the dashboard before any folder is created. Never use this for an existing local folder.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name for the brand-new empty GoodFolder, at most 80 characters."
+          },
+          "explanation": {
+            "type": "string",
+            "description": "Why this new workspace is needed, at most 1,000 characters."
+          }
+        },
+        "required": [
+          "name",
+          "explanation"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      }
+    },
+    {
       "name": "read_document_outline",
       "description": "Read the headings and structure of the document currently open. This does not change the document.",
       "inputSchema": {

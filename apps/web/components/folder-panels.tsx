@@ -12,6 +12,7 @@ import {
   type ProposalSuggestion,
 } from "@/lib/gf-api";
 import { formatBytes, previewKindFor } from "@/lib/preview";
+import type { WorkspaceProposal } from "@/lib/gf-api";
 import { FilePreview } from "@/components/file-preview";
 import { PeopleIcon, ProposalIcon } from "@/components/icons";
 import { Badge, EmptyState, ReviewBadge, done, problem } from "@/components/ui";
@@ -24,6 +25,38 @@ import type { Notify, Role } from "@/components/document-surface";
 -------------------------------------------------------------------------- */
 
 /* -------------------------------------------------------------- Proposals */
+
+export function WorkspaceProposalList({ proposals, onReview, onNotice }: {
+  proposals: WorkspaceProposal[];
+  onReview: (proposalId: string, action: "accept" | "reject") => Promise<void>;
+  onNotice: Notify;
+}) {
+  return (
+    <Section title="New GoodFolders" description="An agent can prepare a new empty GoodFolder here. It exists only after you accept it.">
+      <div className="grid gap-3.5">
+        {proposals.map((proposal) => (
+          <article key={proposal.id} className="gf-card p-5">
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[16px] font-bold">{proposal.name}</h3>
+                <p className="gf-faint mt-1 text-[12px]">{proposal.authorEmail}</p>
+                <p className="gf-body mt-3 text-[14px]">{proposal.explanation}</p>
+              </div>
+              <ReviewBadge status={proposal.status} />
+            </div>
+            {proposal.status === "open" && (
+              <div className="mt-4 flex justify-end gap-2">
+                <button type="button" className="gf-button-secondary" onClick={() => void onReview(proposal.id, "reject").catch((error) => onNotice(problem((error as Error).message)))}>Reject</button>
+                <button type="button" className="gf-button-primary" onClick={() => void onReview(proposal.id, "accept").catch((error) => onNotice(problem((error as Error).message)))}>Create folder</button>
+              </div>
+            )}
+          </article>
+        ))}
+        {proposals.length === 0 && <EmptyState icon={<ProposalIcon />} title="No new folders waiting for review">When an agent proposes a new empty GoodFolder, it will appear here.</EmptyState>}
+      </div>
+    </Section>
+  );
+}
 
 export function ProposalList({
   folder,

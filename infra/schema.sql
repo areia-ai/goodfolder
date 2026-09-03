@@ -161,6 +161,24 @@ CREATE TABLE IF NOT EXISTS change_proposals (
 CREATE INDEX IF NOT EXISTS change_proposals_project
   ON change_proposals(project_id, created_at DESC);
 
+-- A proposed GoodFolder has no project yet, so it is reviewed at the account
+-- level. Accepting one creates the project; rejecting it leaves no folder.
+CREATE TABLE IF NOT EXISTS workspace_proposals (
+  id UUID PRIMARY KEY,
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  author_account_id UUID NOT NULL REFERENCES accounts(id),
+  name TEXT NOT NULL,
+  explanation TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'accepted', 'rejected')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reviewed_at TIMESTAMPTZ,
+  reviewed_by UUID REFERENCES accounts(id),
+  created_project_id UUID REFERENCES projects(id)
+);
+CREATE INDEX IF NOT EXISTS workspace_proposals_account
+  ON workspace_proposals(account_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS proposal_suggestions (
   id UUID PRIMARY KEY,
   proposal_id UUID NOT NULL REFERENCES change_proposals(id) ON DELETE CASCADE,

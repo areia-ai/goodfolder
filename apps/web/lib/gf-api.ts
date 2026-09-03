@@ -18,6 +18,16 @@ export interface Folder {
   openProposalCount?: number;
 }
 
+export interface WorkspaceProposal {
+  id: string;
+  name: string;
+  explanation: string;
+  status: "open" | "accepted" | "rejected";
+  createdAt: string;
+  authorEmail: string;
+  createdProjectId?: string | null;
+}
+
 export interface FolderFile {
   path: string;
   size: number;
@@ -227,6 +237,12 @@ export const redeemChallengeAccess = (code: string) =>
 export const me = () => get<{ id: string; email: string }>("/api/me");
 
 export const listFolders = () => get<Folder[]>("/api/projects");
+
+export const listWorkspaceProposals = () => get<{ proposals: WorkspaceProposal[] }>("/api/workspace-proposals");
+export const createWorkspaceProposal = (input: { name: string; explanation: string }) =>
+  send<{ ok: true; proposalId: string }>("/api/workspace-proposals", input);
+export const reviewWorkspaceProposal = (proposalId: string, action: "accept" | "reject") =>
+  send<{ ok: true; status: WorkspaceProposal["status"]; projectId?: string }>(`/api/workspace-proposals/${proposalId}/review`, { action });
 
 /**
  * Make a new GoodFolder.
