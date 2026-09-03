@@ -87,6 +87,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   const [challengeCodeOpen, setChallengeCodeOpen] = useState(false);
   const [challengeCode, setChallengeCode] = useState("");
   const [redeemingChallenge, setRedeemingChallenge] = useState(false);
+  const [challengeError, setChallengeError] = useState<string | null>(null);
 
   const listing = useRef<HTMLDivElement>(null);
   const chooser = useRef<HTMLInputElement>(null);
@@ -775,6 +776,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
 
   const redeemChallenge = async () => {
     setRedeemingChallenge(true);
+    setChallengeError(null);
     try {
       const result = await redeemChallengeAccess(challengeCode);
       setChallengeCodeOpen(false);
@@ -782,7 +784,11 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       setNotice(done(`Challenge access is active until ${new Date(result.expiresAt).toLocaleString()}.`));
       setPlan(await getAccountPlan().catch(() => null));
     } catch (error) {
-      setNotice(problem((error as Error).message));
+      // In the dialog, not as a toast: the dialog is modal, so it and its
+      // backdrop sit in the top layer, above anything the page can raise. A
+      // toast from here arrives dimmed behind the scrim, in the far corner,
+      // and cannot be clicked. The delete dialog already does it this way.
+      setChallengeError((error as Error).message);
     } finally {
       setRedeemingChallenge(false);
     }
@@ -1069,25 +1075,24 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
         {challengeCodeOpen && (
           <ChallengeCodeDialog
             code={challengeCode}
-            onCode={setChallengeCode}
+            onCode={(code) => { setChallengeCode(code); setChallengeError(null); }}
             busy={redeemingChallenge}
-            onCancel={() => setChallengeCodeOpen(false)}
+            error={challengeError}
+            onCancel={() => { setChallengeCodeOpen(false); setChallengeError(null); }}
             onRedeem={() => void redeemChallenge()}
           />
         )}
 
-        {(verbs.progress || notice) && (
-          <Toasts>
-            {verbs.progress && (
-              <ProgressToast
-                label={`${suggesting ? "Sending" : "Adding"} ${verbs.progress.name}`}
-                done={verbs.progress.done}
-                total={verbs.progress.total}
-              />
-            )}
-            {notice && <Toast key={notice.text} message={notice} onClose={() => setNotice(null)} />}
-          </Toasts>
-        )}
+        <Toasts>
+          {verbs.progress && (
+            <ProgressToast
+              label={`${suggesting ? "Sending" : "Adding"} ${verbs.progress.name}`}
+              done={verbs.progress.done}
+              total={verbs.progress.total}
+            />
+          )}
+          {notice && <Toast key={notice.id} message={notice} onClose={() => setNotice(null)} />}
+        </Toasts>
 
         <input
           ref={chooser}

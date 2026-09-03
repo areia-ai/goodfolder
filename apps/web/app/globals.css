@@ -800,7 +800,14 @@ img, svg { max-width: 100%; }
   pointer-events: auto;
   transition: opacity var(--gf-dur-enter) var(--gf-ease-out), transform var(--gf-dur-enter) var(--gf-ease-out);
 }
-.gf-toast[data-status="initial"] { opacity: 0; transform: translateY(12px) scale(.98); }
+/* The arrival is the browser's, not a frame callback's: @starting-style is the
+   style a toast transitions *from* the moment it is inserted. A window that is
+   hidden or covered runs no animation frames, and the toast used to depend on
+   one to become visible at all. This also gives the progress toast the same
+   arrival, which it never had. */
+@starting-style {
+  .gf-toast { opacity: 0; transform: translateY(12px) scale(.98); }
+}
 .gf-toast[data-status="close"] { opacity: 0; transform: translateY(6px) scale(.98); transition-duration: var(--gf-dur-exit); }
 .gf-toast > svg { height: 16px; width: 16px; flex: none; margin-top: 2px; color: var(--gf-blue-ink); }
 .gf-toast-problem > svg { color: var(--gf-black); }
@@ -818,6 +825,10 @@ img, svg { max-width: 100%; }
 .gf-toast-close > svg { height: 12px; width: 12px; }
 .gf-toast-bar { position: absolute; left: 12px; right: 12px; bottom: 6px; height: 2px; border-radius: 999px; background: var(--gf-blue-soft); overflow: hidden; }
 .gf-toast-bar > span { display: block; height: 100%; background: var(--gf-blue-ink); border-radius: 999px; transition: width var(--gf-dur-base) var(--gf-ease-out); }
+/* Progress arrives in jumps and eases between them. A countdown does not jump:
+   it is redrawn every 100ms, so each step has to run out exactly as the next
+   one starts, or the bar drifts behind the time it is meant to be showing. */
+.gf-toast-life > span { transition: width 100ms linear; }
 .gf-toast-progress { position: relative; padding-bottom: 14px; }
 
 /* A thin line of progress under the toolbar for anything that takes a while. */

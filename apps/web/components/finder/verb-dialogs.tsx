@@ -203,6 +203,7 @@ export function ChallengeCodeDialog(props: {
   code: string;
   onCode: (code: string) => void;
   busy: boolean;
+  error: string | null;
   onCancel: () => void;
   onRedeem: () => void;
 }) {
@@ -235,6 +236,7 @@ export function ChallengeCodeDialog(props: {
         onChange={(event) => props.onCode(event.target.value)}
         disabled={props.busy}
       />
+      {props.error && <p className="mt-2 text-[13px] font-semibold" role="alert">{props.error}</p>}
     </Dialog>
   );
 }

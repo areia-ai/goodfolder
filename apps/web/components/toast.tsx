@@ -39,7 +39,7 @@ export function Toasts({ children }: { children: ReactNode }) {
 export function Toast({ message, onClose }: { message: NoticeMessage; onClose: () => void }) {
   const element = useRef<HTMLDivElement>(null);
   const closing = useRef(false);
-  const [status, setStatus] = useState<"initial" | "open" | "close">("initial");
+  const [status, setStatus] = useState<"open" | "close">("open");
   const [life, setLife] = useState(1);
   const sticky = message.kind === "problem";
 
@@ -52,15 +52,14 @@ export function Toast({ message, onClose }: { message: NoticeMessage; onClose: (
   const closeRef = useRef(close);
   closeRef.current = close;
 
-  // Arrive on the next frame, so the enter transition has something to run from.
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setStatus("open"));
-    return () => cancelAnimationFrame(frame);
-  }, []);
-
+  // The arrival is CSS: @starting-style gives the transition something to run
+  // from. It used to be a requestAnimationFrame that flipped a state — which a
+  // browser does not run while the window is hidden or covered, so a toast
+  // raised then sat in the page at opacity 0 and its countdown never started.
+  //
   // The countdown for a result toast; a problem has none.
   useEffect(() => {
-    if (sticky || status !== "open") return;
+    if (sticky) return;
     let remaining = AUTO_DISMISS_MS;
     let last = performance.now();
     let paused = false;
@@ -76,7 +75,10 @@ export function Toast({ message, onClose }: { message: NoticeMessage; onClose: (
     node?.addEventListener("pointerleave", resume);
     const timer = window.setInterval(() => {
       const now = performance.now();
-      if (!paused) remaining -= now - last;
+      // A window nobody is looking at does not spend the six seconds. The
+      // arrival no longer waits for an animation frame, so without this a
+      // result would expire behind another window and be gone on return.
+      if (!paused && !document.hidden) remaining -= now - last;
       last = now;
       setLife(Math.max(0, remaining / AUTO_DISMISS_MS));
       if (remaining <= 0) {
@@ -89,7 +91,7 @@ export function Toast({ message, onClose }: { message: NoticeMessage; onClose: (
       node?.removeEventListener("pointerenter", pause);
       node?.removeEventListener("pointerleave", resume);
     };
-  }, [sticky, status]);
+  }, [sticky]);
 
   return (
     <div
@@ -106,7 +108,7 @@ export function Toast({ message, onClose }: { message: NoticeMessage; onClose: (
         <CloseIcon />
       </button>
       {!sticky && (
-        <span className="gf-toast-bar" aria-hidden="true">
+        <span className="gf-toast-bar gf-toast-life" aria-hidden="true">
           <span style={{ width: `${life * 100}%` }} />
         </span>
       )}

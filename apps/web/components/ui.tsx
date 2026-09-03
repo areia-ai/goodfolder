@@ -18,11 +18,22 @@ export type NoticeKind = "info" | "done" | "problem";
 export interface NoticeMessage {
   kind: NoticeKind;
   text: string;
+  /**
+   * One number per notice, because two of them can say the same words. Keying
+   * a toast by its text made the second rejection reuse the first one's toast:
+   * the countdown carried on from wherever it was, so the second confirmation
+   * showed for whatever was left of the six seconds, or — if the first was
+   * already leaving — never appeared at all.
+   */
+  id: number;
 }
 
-export const info = (text: string): NoticeMessage => ({ kind: "info", text });
-export const done = (text: string): NoticeMessage => ({ kind: "done", text });
-export const problem = (text: string): NoticeMessage => ({ kind: "problem", text });
+let noticeCount = 0;
+const nextNoticeId = () => (noticeCount += 1);
+
+export const info = (text: string): NoticeMessage => ({ kind: "info", text, id: nextNoticeId() });
+export const done = (text: string): NoticeMessage => ({ kind: "done", text, id: nextNoticeId() });
+export const problem = (text: string): NoticeMessage => ({ kind: "problem", text, id: nextNoticeId() });
 
 const NOTICE_LABEL: Record<NoticeKind, string> = {
   info: "Note",
