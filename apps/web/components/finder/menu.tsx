@@ -128,6 +128,10 @@ function useMenuBehaviour({
   const elements = useRef<Array<HTMLElement | null>>([]);
   const labels = useRef<Array<string | null>>([]);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  // The card, not the box that positions it: a menu too tall for the window
+  // scrolls inside its own rounded edge, and a cap on the outer box would cut
+  // the shadow off.
+  const card = useRef<HTMLDivElement | null>(null);
 
   const floating = useFloating({
     open,
@@ -140,9 +144,10 @@ function useMenuBehaviour({
       shift({ padding: 8 }),
       size({
         padding: 8,
-        apply({ availableHeight, elements: floatingElements }) {
-          floatingElements.floating.style.maxHeight = `${Math.max(160, availableHeight)}px`;
-          floatingElements.floating.style.overflowY = "auto";
+        apply({ availableHeight }) {
+          if (!card.current) return;
+          card.current.style.maxHeight = `${Math.max(160, availableHeight)}px`;
+          card.current.style.overflowY = "auto";
         },
       }),
     ],
@@ -176,7 +181,7 @@ function useMenuBehaviour({
       ? `top ${align === "start" ? "left" : align === "end" ? "right" : "center"}`
       : side === "left" ? "right center" : "left center";
 
-  return { floating, elements, labels, activeIndex, interactions, transition, origin };
+  return { floating, card, elements, labels, activeIndex, interactions, transition, origin };
 }
 
 /**
@@ -211,7 +216,7 @@ export function Menu({
   const [open, setOpen] = useState(false);
   const menuId = useId();
   const placement: Placement = `${direction === "up" ? "top" : "bottom"}-${align === "left" ? "start" : "end"}`;
-  const { floating, elements, labels, activeIndex, interactions, transition, origin } = useMenuBehaviour({
+  const { floating, card, elements, labels, activeIndex, interactions, transition, origin } = useMenuBehaviour({
     open,
     setOpen,
     placement,
@@ -249,21 +254,28 @@ export function Menu({
       )}
       {transition.isMounted && (
         <FloatingPortal>
-          <FloatingFocusManager context={floating.context} modal={false} returnFocus>
-            <div
-              ref={floating.refs.setFloating}
-              style={{ ...floating.floatingStyles, ["--gf-float-origin" as string]: origin }}
-              className="gf-menu gf-float-enter"
-              data-status={transition.status}
-              {...interactions.getFloatingProps()}
-            >
-              <MenuContext.Provider value={value}>
-                <FloatingList elementsRef={elements} labelsRef={labels}>
-                  <MenuList items={items} label={label} id={menuId} />
-                </FloatingList>
-              </MenuContext.Provider>
-            </div>
-          </FloatingFocusManager>
+          <div
+            ref={floating.refs.setFloating}
+            style={floating.floatingStyles}
+            className="gf-float gf-float-menu"
+            data-unplaced={(!floating.isPositioned && transition.status === "initial") || undefined}
+          >
+            <FloatingFocusManager context={floating.context} modal={false} returnFocus>
+              <div
+                ref={card}
+                style={{ ["--gf-float-origin" as string]: origin }}
+                className="gf-menu gf-float-enter"
+                data-status={transition.status}
+                {...interactions.getFloatingProps()}
+              >
+                <MenuContext.Provider value={value}>
+                  <FloatingList elementsRef={elements} labelsRef={labels}>
+                    <MenuList items={items} label={label} id={menuId} />
+                  </FloatingList>
+                </MenuContext.Provider>
+              </div>
+            </FloatingFocusManager>
+          </div>
         </FloatingPortal>
       )}
     </>
@@ -294,7 +306,7 @@ export function ContextMenu({ state, onClose }: { state: ContextMenuState; onClo
     if (!next) onClose();
   }, [onClose]);
 
-  const { floating, elements, labels, activeIndex, interactions, transition, origin } = useMenuBehaviour({
+  const { floating, card, elements, labels, activeIndex, interactions, transition, origin } = useMenuBehaviour({
     open,
     setOpen: setOpenAndClose,
     placement: "bottom-start",
@@ -325,21 +337,28 @@ export function ContextMenu({ state, onClose }: { state: ContextMenuState; onClo
 
   return (
     <FloatingPortal>
-      <FloatingFocusManager context={floating.context} modal={false} returnFocus initialFocus={-1}>
-        <div
-          ref={floating.refs.setFloating}
-          style={{ ...floating.floatingStyles, ["--gf-float-origin" as string]: origin }}
-          className="gf-menu gf-menu-context gf-float-enter"
-          data-status={transition.status}
-          {...interactions.getFloatingProps()}
-        >
-          <MenuContext.Provider value={value}>
-            <FloatingList elementsRef={elements} labelsRef={labels}>
-              <MenuList items={state.items} label="What you can do with this" id={menuId} />
-            </FloatingList>
-          </MenuContext.Provider>
-        </div>
-      </FloatingFocusManager>
+      <div
+        ref={floating.refs.setFloating}
+        style={floating.floatingStyles}
+        className="gf-float gf-float-menu gf-float-context"
+        data-unplaced={(!floating.isPositioned && transition.status === "initial") || undefined}
+      >
+        <FloatingFocusManager context={floating.context} modal={false} returnFocus initialFocus={-1}>
+          <div
+            ref={card}
+            style={{ ["--gf-float-origin" as string]: origin }}
+            className="gf-menu gf-float-enter"
+            data-status={transition.status}
+            {...interactions.getFloatingProps()}
+          >
+            <MenuContext.Provider value={value}>
+              <FloatingList elementsRef={elements} labelsRef={labels}>
+                <MenuList items={state.items} label="What you can do with this" id={menuId} />
+              </FloatingList>
+            </MenuContext.Provider>
+          </div>
+        </FloatingFocusManager>
+      </div>
     </FloatingPortal>
   );
 }

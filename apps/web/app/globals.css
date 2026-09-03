@@ -642,7 +642,29 @@ img, svg { max-width: 100%; }
 /* --- Things that float ---------------------------------------------------- */
 /* Menus, hints, and dialogs share one way of arriving: a small scale from the
    place they came from, with a fade. Floating UI hands each of them a
-   data-status of initial → open → close, and the CSS reads that. */
+   data-status of initial → open → close, and the CSS reads that.
+
+   A menu and a hint are two elements, always: `.gf-float` is put in place,
+   and the card or bubble inside it is what arrives. They cannot be the same
+   element. Floating UI writes the position into a `transform` on the element
+   it was given, and it writes it twice — first `translate(0, 0)`, before it
+   has measured anything, then the real place. A `transition` on that
+   element's transform therefore animates the correction, and the hint flies
+   in from the top-left corner of the window whenever the browser painted the
+   first value. It is also why the scale below never played: an inline
+   transform beats a class. So nothing here may transition, and nothing may
+   set a transform. `data-unplaced` hides the frames before the first
+   measurement — with visibility, not display, because an undisplayed element
+   cannot be measured. */
+
+.gf-float {
+  width: max-content;
+  transition: none;
+}
+.gf-float[data-unplaced] { visibility: hidden; }
+.gf-float-tooltip { z-index: var(--gf-z-tooltip); max-width: min(280px, calc(100vw - 16px)); pointer-events: none; }
+.gf-float-menu { z-index: var(--gf-z-menu); min-width: 184px; max-width: min(320px, calc(100vw - 16px)); }
+.gf-float-context { z-index: var(--gf-z-context); }
 
 .gf-float-enter {
   transform-origin: var(--gf-float-origin, top);
@@ -657,14 +679,11 @@ img, svg { max-width: 100%; }
 .gf-float-enter[data-status="open"] { opacity: 1; transform: none; }
 
 .gf-menu {
-  z-index: var(--gf-z-menu);
-  min-width: 184px; max-width: min(320px, calc(100vw - 16px));
   border-radius: var(--gf-radius);
   background: var(--gf-white); padding: var(--gf-space-2);
   box-shadow: var(--gf-elev-2);
   outline: none;
 }
-.gf-menu-context { z-index: var(--gf-z-context); }
 .gf-menu-item {
   display: flex; align-items: flex-start; gap: var(--gf-space-4);
   width: 100%; min-height: 32px;
@@ -688,14 +707,11 @@ img, svg { max-width: 100%; }
 }
 
 .gf-tooltip {
-  z-index: var(--gf-z-tooltip);
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--gf-space-3);
-  max-width: 280px;
   border-radius: var(--gf-radius-sm);
   background: var(--gf-black); color: var(--gf-white);
   padding: 5px 8px;
   font-size: var(--gf-text-sm); line-height: 1.35;
-  pointer-events: none;
   transform-origin: var(--gf-float-origin, center);
   transition: opacity var(--gf-dur-fast) var(--gf-ease-out), transform var(--gf-dur-fast) var(--gf-ease-out);
 }
@@ -704,6 +720,7 @@ img, svg { max-width: 100%; }
 .gf-tooltip[data-side="left"] { --gf-float-origin: right center; }
 .gf-tooltip[data-side="right"] { --gf-float-origin: left center; }
 .gf-tooltip[data-status="initial"], .gf-tooltip[data-status="close"] { opacity: 0; transform: translateY(2px) scale(.98); }
+.gf-tooltip[data-status="close"] { transition-duration: 80ms; }
 .gf-tooltip[data-side="bottom"][data-status="initial"], .gf-tooltip[data-side="bottom"][data-status="close"] { transform: translateY(-2px) scale(.98); }
 .gf-tooltip[data-status="open"] { opacity: 1; transform: none; }
 .gf-tooltip-label { font-weight: 600; }

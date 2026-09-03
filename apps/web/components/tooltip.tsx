@@ -57,7 +57,7 @@ export function Tooltip({
 }) {
   const [open, setOpen] = useState(false);
 
-  const { refs, floatingStyles, context } = useFloating({
+  const { refs, floatingStyles, context, isPositioned } = useFloating({
     open,
     onOpenChange: setOpen,
     placement,
@@ -93,17 +93,26 @@ export function Tooltip({
       {cloneElement(child, getReferenceProps({ ref, ...child.props }))}
       {isMounted && !disabled && (
         <FloatingPortal>
+          {/* Two elements on purpose: the outer one is placed, the inner one
+              arrives. See `.gf-float` in globals.css for why they can never be
+              the same element. `data-unplaced` covers the frames before the
+              first measurement, when the outer one is still at the corner. */}
           <div
             ref={refs.setFloating}
             style={floatingStyles}
-            className="gf-tooltip"
-            data-status={status}
-            data-side={context.placement.split("-")[0]}
-            {...getFloatingProps()}
+            className="gf-float gf-float-tooltip"
+            data-unplaced={(!isPositioned && status === "initial") || undefined}
           >
-            <span className="gf-tooltip-label">{label}</span>
-            {shortcut && <Kbd combo={shortcut} className="gf-tooltip-kbd" />}
-            {note && <span className="gf-tooltip-note">{note}</span>}
+            <div
+              className="gf-tooltip"
+              data-status={status}
+              data-side={context.placement.split("-")[0]}
+              {...getFloatingProps()}
+            >
+              <span className="gf-tooltip-label">{label}</span>
+              {shortcut && <Kbd combo={shortcut} className="gf-tooltip-kbd" />}
+              {note && <span className="gf-tooltip-note">{note}</span>}
+            </div>
           </div>
         </FloatingPortal>
       )}
