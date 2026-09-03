@@ -1141,7 +1141,7 @@ app.get("/api/projects/:id/saves", async (c) => {
   const wantFull = c.req.query("paths") === "full";
   const rows = await sql`
     SELECT s.seq, s.label, s.label_source AS "labelSource", s.collision,
-           s.created_at::text AS "createdAt",
+           s.created_at::text AS "createdAt", s.commit_sha AS "commitSha",
            s.added_count AS "addedCount", s.changed_count AS "changedCount",
            s.removed_count AS "removedCount",
            s.top_paths AS "topPaths",
@@ -1339,11 +1339,15 @@ app.get("/api/projects/:id/file/raw", async (c) => {
   if (!role) return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
   const path = safeDocumentPath(c.req.query("path"));
   if (!path) return c.json({ error: { code: "path", message: "valid file path required" } }, 400);
+  const ref = c.req.query("ref");
+  if (ref && !/^[a-f0-9]{7,64}$/i.test(ref)) {
+    return c.json({ error: { code: "save", message: "valid save reference required" } }, 400);
+  }
   const kind = previewKindFor(path);
   if (kind === "text") {
     return c.json({ error: { code: "unsupported", message: "Text files are read through the document endpoint." } }, 415);
   }
-  const file = await repos.readFile(projectId, path);
+  const file = await repos.readFile(projectId, path, ref || "main");
   if (!file) return c.json({ error: { code: "not-found", message: "file not found" } }, 404);
   const pointer = parseStoredFilePointer(file.content);
   const realSize = pointer ? pointer.size : file.size;

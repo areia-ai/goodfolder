@@ -135,6 +135,8 @@ export interface ChangeProposal {
 
 export interface SaveRow {
   seq: number;
+  /** Git commit captured for this save, used to retrieve a prior file version. */
+  commitSha?: string | null;
   label: string;
   labelSource?: string;
   collision?: string | null;
@@ -275,8 +277,10 @@ export const readFile = (folderId: string, path: string) =>
  * with a small descriptor explaining what the file is and where its bytes
  * live. Oversized files reject with a plain-language message.
  */
-export async function readFileRaw(folderId: string, path: string): Promise<RawFileResult> {
-  const res = await fetch(`${API}/api/projects/${folderId}/file/raw?path=${encodeURIComponent(path)}`, {
+export async function readFileRaw(folderId: string, path: string, ref?: string): Promise<RawFileResult> {
+  const query = new URLSearchParams({ path });
+  if (ref) query.set("ref", ref);
+  const res = await fetch(`${API}/api/projects/${folderId}/file/raw?${query}`, {
     credentials: "include",
   });
   if (!res.ok) {

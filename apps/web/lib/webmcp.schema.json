@@ -243,7 +243,7 @@
     },
     {
       "name": "preview_restore",
-      "description": "Preview going back to an earlier save: which files would be brought back, and the exact command to run on the person's computer. This never changes anything by itself.",
+      "description": "Preview going back to an earlier save: which files would be brought back. For one previewable file, use propose_restore_file to open a reviewable browser proposal; a connected computer can restore the whole folder. This never changes anything by itself.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -536,6 +536,36 @@
         "required": [
           "name",
           "explanation"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      }
+    },
+    {
+      "name": "propose_restore_file",
+      "description": "Prepare a reviewable replacement of one previewable file with its exact bytes from an earlier save. The folder changes only if its owner accepts the proposal.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Exact file path to bring back from the earlier save."
+          },
+          "number": {
+            "type": "number",
+            "description": "Earlier save number to use."
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder name. Leave off for the open folder."
+          }
+        },
+        "required": [
+          "path",
+          "number"
         ],
         "additionalProperties": false
       },

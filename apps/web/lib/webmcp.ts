@@ -123,7 +123,7 @@ export function computeRestorePreview(
         : `Since save #${number}, ${affected.size} file${affected.size === 1 ? " was" : "s were"} touched across ${laterCount} later save${laterCount === 1 ? "" : "s"}. Going back brings ${
             affected.size === 1 ? "it" : "all of them"
           } back to how it was then.${truncatedSource ? " (Some very large changes were only partially listed, so treat this as close to complete.)" : ""}`,
-    howToRestore: `On any computer with this folder: run  goodfolder restore ${number}`,
+    howToRestore: `For one previewable file in this browser, use propose_restore_file with its path and save #${number}; GoodFolder will open a review proposal. To restore the whole folder on a connected computer: run  goodfolder restore ${number}`,
     reversible: "Going back creates a new save itself, so even this can be undone.",
   };
 }
@@ -205,6 +205,7 @@ const TOOL_TITLES: Record<string, string> = {
   find_saves: "Find saves",
   explain_save: "Explain save",
   preview_restore: "Preview going back",
+  propose_restore_file: "Propose restoring a file",
 };
 
 /**
@@ -1182,7 +1183,7 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
   await mc.registerTool({
     name: "preview_restore",
     description:
-      "Preview going back to an earlier save: which files would be brought back, and the exact command to run on the person's computer. This never changes anything by itself.",
+      "Preview going back to an earlier save: which files would be brought back. For one previewable file, use propose_restore_file to open a reviewable browser proposal; a connected computer can restore the whole folder. This never changes anything by itself.",
     inputSchema: objSchema(
       {
         number: { type: "number", description: "The save number to go back to." },
@@ -1200,6 +1201,65 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
         return { folder: r.name, ...preview };
       } catch (e) {
         return { error: (e as Error).message };
+      }
+    },
+  });
+
+  await mc.registerTool({
+    name: "propose_restore_file",
+    description:
+      "Prepare a reviewable replacement of one previewable file with its exact bytes from an earlier save. The folder changes only if its owner accepts the proposal.",
+    inputSchema: objSchema(
+      {
+        path: { type: "string", description: "Exact file path to bring back from the earlier save." },
+        number: { type: "number", description: "Earlier save number to use." },
+        folder: { type: "string", description: "Folder name. Leave off for the open folder." },
+      },
+      ["path", "number"],
+    ),
+    annotations: proposesOnly,
+    execute: async (args: { path: string; number: number; folder?: string }) => {
+      try {
+        const path = args.path.trim();
+        const number = Math.floor(Number(args.number));
+        if (!path) return { error: "Choose the exact file path to bring back." };
+        const r = await resolve(args.folder, true);
+        if ("error" in r) return r;
+        const target = r.saves.find((save) => save.seq === number);
+        const commitSha = target?.commitSha;
+        if (!target || !commitSha) {
+          return { error: `Save #${number} is not available for a browser restore.` };
+        }
+        const folder = (await listFolders()).find((item) => item.name === r.name);
+        if (!folder) return { error: `Open “${r.name}” and try again.` };
+        const historical = await readFileRaw(folder.id, path, commitSha);
+        if (!historical.blob || !historical.mimeType) {
+          return { error: historical.message ?? `“${path}” cannot be brought back from save #${number} in the browser.` };
+        }
+        const staged = await stageFile(folder.id, { name: path, file: historical.blob });
+        const proposal = await createProposal(folder.id, {
+          title: `Bring back ${path.split("/").pop()} from save #${number}`,
+          explanation: `Restore this file to how it was in “${target.label}”.`,
+          baseHead: null,
+          operation: {
+            path,
+            kind: "asset_replace",
+            stagingId: staged.stagingId,
+            mimeType: historical.mimeType,
+            extension: extensionOfPath(path),
+          },
+        });
+        announceProposalCreated({ folderId: folder.id, path, proposalId: proposal.proposalId });
+        return {
+          folder: r.name,
+          path,
+          restoreNumber: number,
+          proposalId: proposal.proposalId,
+          reviewRequired: true,
+          changedDocument: false,
+        };
+      } catch (error) {
+        return { error: (error as Error).message };
       }
     },
   });
@@ -1262,6 +1322,7 @@ export const DASHBOARD_TOOL_NAMES = {
   find_saves: true,
   explain_save: true,
   preview_restore: true,
+  propose_restore_file: true,
   get_workspace_context: true,
   list_files: true,
   read_document_outline: true,

@@ -89,14 +89,15 @@ test("site tools expose suggestions but never human review powers", () => {
     "propose_document_change",
     "propose_document_media",
     "propose_generated_file",
+    "propose_restore_file",
     "propose_new_goodfolder",
     "comment_on_change_proposal",
     "comment_on_document",
   ];
   const toolNames = Object.keys(DASHBOARD_TOOL_NAMES);
 
-  assert.equal(toolNames.length, 23);
-  assert.equal(reviewTools.length, 7);
+  assert.equal(toolNames.length, 24);
+  assert.equal(reviewTools.length, 8);
   assert.equal(toolNames.filter((name) => !reviewTools.includes(name)).length, 16);
   assert.equal(DASHBOARD_TOOL_NAMES.get_local_save_guidance, true);
   assert.equal(DASHBOARD_TOOL_NAMES.read_image, true);
@@ -106,6 +107,59 @@ test("site tools expose suggestions but never human review powers", () => {
   assert.equal(DASHBOARD_TOOL_NAMES.comment_on_change_proposal, true);
   const names = toolNames.join(" ");
   assert.doesNotMatch(names, /accept|reject|invite|permission|delete|save_document/);
+});
+
+test("propose_restore_file holds an earlier image version for human review", async () => {
+  const previousDocument = (globalThis as { document?: unknown }).document;
+  const previousWindow = (globalThis as { window?: unknown }).window;
+  const previousFetch = globalThis.fetch;
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const tools: Array<Record<string, any>> = [];
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { modelContext: { registerTool: async (tool: Record<string, unknown>) => tools.push(tool) }, body: { dataset: {} } },
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { location: { search: "?folder=qa-folder&file=duck.png" }, dispatchEvent: () => true, getSelection: () => ({ toString: () => "" }) },
+  });
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url.endsWith("/api/projects")) return new Response(JSON.stringify([{ id: "qa-folder", name: "QA" }]));
+    if (url.endsWith("/api/projects/qa-folder/saves?paths=full")) {
+      return new Response(JSON.stringify([{ seq: 1, label: "Added duck", createdAt: "2026-09-03T10:00:00Z", commitSha: "deadbeef", changedPaths: ["duck.png"] }]));
+    }
+    if (url.includes("/api/projects/qa-folder/file/raw?path=duck.png&ref=deadbeef")) {
+      return new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "image/png" } });
+    }
+    if (url.includes("/api/projects/qa-folder/staged-files?name=duck.png")) return new Response(JSON.stringify({ stagingId: "staged-duck", size: 3 }));
+    if (url.endsWith("/api/projects/qa-folder/proposals")) return new Response(JSON.stringify({ proposalId: "proposal-restore", url: "https://trygoodfolder.com/dashboard?proposal=proposal-restore" }));
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  try {
+    await registerDashboardTools();
+    const tool = tools.find((item) => item.name === "propose_restore_file");
+    assert.ok(tool);
+    assert.equal((tool.annotations as any).readOnlyHint, false);
+    const result = await tool.execute({ path: "duck.png", number: 1 });
+    assert.equal((result as any).proposalId, "proposal-restore");
+    assert.equal((result as any).reviewRequired, true);
+    assert.equal((result as any).changedDocument, false);
+    const proposal = calls.find((call) => call.url.endsWith("/proposals"));
+    assert.ok(proposal);
+    const body = JSON.parse(String(proposal!.init?.body));
+    assert.equal(body.operation.path, "duck.png");
+    assert.equal(body.operation.kind, "asset_replace");
+    assert.equal(body.operation.stagingId, "staged-duck");
+  } finally {
+    await unregisterDashboardTools();
+    globalThis.fetch = previousFetch;
+    if (previousDocument === undefined) delete (globalThis as { document?: unknown }).document;
+    else Object.defineProperty(globalThis, "document", { configurable: true, value: previousDocument });
+    if (previousWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    else Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+  }
 });
 
 test("media data URLs accept bounded media and refuse other payloads", () => {
