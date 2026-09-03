@@ -49,10 +49,75 @@
                   0 24px 60px -34px color-mix(in srgb, var(--gf-black) 42%, transparent);
 
   --gf-radius: 12px;
+  --gf-radius-xs: 6px;
   --gf-radius-sm: 9px;
   --gf-radius-lg: 16px;
+  --gf-radius-pill: 999px;
   --gf-ring: 0 0 0 2px var(--gf-white), 0 0 0 4px var(--gf-blue-ink);
   --gf-section-y: clamp(56px, 7.5vw, 104px);
+
+  /* Type. Inter Variable is loaded by next/font in app/layout.tsx and lands
+     in --gf-font-sans; the stack after it is what draws while it arrives. */
+  --gf-font-sans: var(--font-inter, ui-sans-serif), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --gf-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --gf-text-2xs: 10.5px;
+  --gf-text-xs: 11.5px;
+  --gf-text-sm: 12.5px;
+  --gf-text-base: 13px;
+  --gf-text-md: 14px;
+  --gf-text-lg: 16px;
+  --gf-text-xl: 20px;
+  --gf-tracking-caps: .07em;
+
+  /* Spacing, for the window's chrome. Landing sections keep their clamps. */
+  --gf-space-1: 2px;
+  --gf-space-2: 4px;
+  --gf-space-3: 6px;
+  --gf-space-4: 8px;
+  --gf-space-5: 12px;
+  --gf-space-6: 16px;
+  --gf-space-7: 20px;
+  --gf-space-8: 24px;
+  --gf-space-9: 32px;
+  --gf-space-10: 40px;
+
+  /* Motion. Every transition in the window reads one of these, so the
+     reduced-motion rule at the foot of this file silences all of them at
+     once. Enter is a touch longer than exit: things arriving deserve a
+     beat, things leaving should get out of the way. */
+  --gf-dur-fast: 120ms;
+  --gf-dur-base: 180ms;
+  --gf-dur-slow: 260ms;
+  --gf-dur-enter: 200ms;
+  --gf-dur-exit: 140ms;
+  --gf-ease-out: cubic-bezier(.2, .8, .2, 1);
+  --gf-ease-in-out: cubic-bezier(.45, 0, .2, 1);
+  --gf-ease-spring: cubic-bezier(.34, 1.2, .64, 1);
+
+  /* Elevation. One tier per kind of thing that floats: a hint, a menu, a
+     dialog. Each carries its own hairline so the floating thing needs no
+     border of its own. */
+  --gf-elev-1: 0 0 0 1px color-mix(in srgb, var(--gf-black) 8%, transparent),
+               0 1px 2px color-mix(in srgb, var(--gf-black) 6%, transparent);
+  --gf-elev-2: 0 0 0 1px color-mix(in srgb, var(--gf-black) 9%, transparent),
+               0 2px 6px color-mix(in srgb, var(--gf-black) 6%, transparent),
+               0 12px 32px -12px color-mix(in srgb, var(--gf-black) 28%, transparent);
+  --gf-elev-3: 0 0 0 1px color-mix(in srgb, var(--gf-black) 8%, transparent),
+               0 4px 12px color-mix(in srgb, var(--gf-black) 8%, transparent),
+               0 32px 72px -24px color-mix(in srgb, var(--gf-black) 40%, transparent);
+
+  /* The stack, named. The order is the one the window already relied on. */
+  --gf-z-sidebar: 15;
+  --gf-z-toolbar: 20;
+  --gf-z-resizer: 25;
+  --gf-z-menu: 30;
+  --gf-z-scrim: 50;
+  --gf-z-sheet: 55;
+  --gf-z-skip: 60;
+  --gf-z-modal: 70;
+  --gf-z-context: 80;
+  --gf-z-toast: 90;
+  --gf-z-tooltip: 100;
 }
 
 @layer base {
@@ -61,7 +126,7 @@ html { background: var(--gf-white); -webkit-text-size-adjust: 100%; }
 body {
   color: var(--gf-ink);
   background: var(--gf-white);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--gf-font-sans);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -574,21 +639,182 @@ img, svg { max-width: 100%; }
 .gf-editor ul { margin: 0 0 19px; padding-left: 25px; list-style: disc; }
 .gf-editor a { color: var(--gf-blue-ink); text-decoration: underline; }
 
+/* --- Things that float ---------------------------------------------------- */
+/* Menus, hints, and dialogs share one way of arriving: a small scale from the
+   place they came from, with a fade. Floating UI hands each of them a
+   data-status of initial → open → close, and the CSS reads that. */
+
+.gf-float-enter {
+  transform-origin: var(--gf-float-origin, top);
+  transition-property: opacity, transform;
+  transition-duration: var(--gf-dur-enter);
+  transition-timing-function: var(--gf-ease-out);
+}
+.gf-float-enter[data-status="initial"], .gf-float-enter[data-status="close"] {
+  opacity: 0; transform: scale(.96);
+}
+.gf-float-enter[data-status="close"] { transition-duration: var(--gf-dur-exit); }
+.gf-float-enter[data-status="open"] { opacity: 1; transform: none; }
+
 .gf-menu {
-  position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
-  min-width: 176px;
-  border: 1px solid var(--gf-line-strong); border-radius: var(--gf-radius);
-  background: var(--gf-white); padding: 5px;
-  box-shadow: var(--gf-shadow-lg);
+  z-index: var(--gf-z-menu);
+  min-width: 184px; max-width: min(320px, calc(100vw - 16px));
+  border-radius: var(--gf-radius);
+  background: var(--gf-white); padding: var(--gf-space-2);
+  box-shadow: var(--gf-elev-2);
+  outline: none;
 }
-.gf-menu-up { top: auto; bottom: calc(100% + 4px); }
-.gf-menu-context { position: fixed; right: auto; z-index: 80; max-width: 268px; }
+.gf-menu-context { z-index: var(--gf-z-context); }
 .gf-menu-item {
-  display: block; width: 100%; min-height: 36px;
-  border-radius: 7px; padding: 8px 10px;
-  text-align: left; font-size: 13px; color: var(--gf-black); cursor: pointer;
+  display: flex; align-items: flex-start; gap: var(--gf-space-4);
+  width: 100%; min-height: 32px;
+  border-radius: var(--gf-radius-xs); padding: 7px 10px 7px 8px;
+  text-align: left; font-size: var(--gf-text-base); line-height: 1.35; color: var(--gf-black);
+  cursor: pointer; outline: none;
+  transition: background var(--gf-dur-fast) var(--gf-ease-out);
 }
-.gf-menu-item:hover { background: var(--gf-blue-soft); }
+.gf-menu-item > svg { height: 14px; width: 14px; flex: none; margin-top: 2px; }
+.gf-menu-item:hover, .gf-menu-item:focus-visible, .gf-menu-item[data-active="true"] { background: var(--gf-blue-soft); box-shadow: none; }
+.gf-menu-item:disabled { cursor: default; }
+.gf-menu-item:disabled > .gf-menu-item-label { color: var(--gf-ink-faint); }
+.gf-menu-item-body { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 1px; }
+.gf-menu-item-note { font-size: var(--gf-text-xs); line-height: 1.4; color: var(--gf-ink-faint); }
+.gf-menu-item-end { margin-left: auto; flex: none; align-self: center; padding-left: var(--gf-space-4); }
+.gf-menu-divider { margin: var(--gf-space-2) var(--gf-space-3); border-top: 1px solid var(--gf-line); }
+.gf-menu-heading {
+  padding: 7px 10px 3px;
+  font-size: var(--gf-text-2xs); font-weight: 700; letter-spacing: var(--gf-tracking-caps); text-transform: uppercase;
+  color: var(--gf-ink-faint);
+}
+
+.gf-tooltip {
+  z-index: var(--gf-z-tooltip);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--gf-space-3);
+  max-width: 280px;
+  border-radius: var(--gf-radius-sm);
+  background: var(--gf-black); color: var(--gf-white);
+  padding: 5px 8px;
+  font-size: var(--gf-text-sm); line-height: 1.35;
+  pointer-events: none;
+  transform-origin: var(--gf-float-origin, center);
+  transition: opacity var(--gf-dur-fast) var(--gf-ease-out), transform var(--gf-dur-fast) var(--gf-ease-out);
+}
+.gf-tooltip[data-side="top"] { --gf-float-origin: bottom center; }
+.gf-tooltip[data-side="bottom"] { --gf-float-origin: top center; }
+.gf-tooltip[data-side="left"] { --gf-float-origin: right center; }
+.gf-tooltip[data-side="right"] { --gf-float-origin: left center; }
+.gf-tooltip[data-status="initial"], .gf-tooltip[data-status="close"] { opacity: 0; transform: translateY(2px) scale(.98); }
+.gf-tooltip[data-side="bottom"][data-status="initial"], .gf-tooltip[data-side="bottom"][data-status="close"] { transform: translateY(-2px) scale(.98); }
+.gf-tooltip[data-status="open"] { opacity: 1; transform: none; }
+.gf-tooltip-label { font-weight: 600; }
+.gf-tooltip-note { flex-basis: 100%; color: var(--gf-on-dark); font-size: var(--gf-text-xs); }
+
+.gf-kbd {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-family: var(--gf-font-mono); font-size: var(--gf-text-2xs); font-weight: 600; line-height: 1;
+  color: var(--gf-ink-soft);
+}
+.gf-kbd > span {
+  display: inline-grid; place-items: center; min-width: 17px; height: 17px;
+  border-radius: 4px; padding: 0 4px;
+  background: color-mix(in srgb, var(--gf-black) 6%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--gf-black) 10%, transparent);
+}
+.gf-tooltip-kbd, .gf-tooltip-kbd > span { color: var(--gf-white); }
+.gf-tooltip-kbd > span { background: color-mix(in srgb, var(--gf-white) 16%, transparent); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--gf-white) 10%, transparent); }
+.gf-menu-item-end .gf-kbd { color: var(--gf-ink-faint); }
+
+/* Dialogs sit on the browser's own <dialog>, which gives the keyboard trap,
+   the inert page behind, and Escape for free. The backdrop and the card each
+   arrive on their own; both leave together. */
+.gf-dialog {
+  position: fixed; inset: 0; margin: auto;
+  width: min(var(--gf-dialog-width, 24rem), calc(100vw - 2rem));
+  max-height: min(92svh, calc(100vh - 2rem));
+  overflow: auto;
+  border: 0; border-radius: var(--gf-radius-lg);
+  background: var(--gf-white); color: var(--gf-black);
+  padding: 0;
+  box-shadow: var(--gf-elev-3);
+  opacity: 0; transform: translateY(12px) scale(.98);
+  transition: opacity var(--gf-dur-exit) var(--gf-ease-out), transform var(--gf-dur-exit) var(--gf-ease-out),
+              overlay var(--gf-dur-exit) allow-discrete, display var(--gf-dur-exit) allow-discrete;
+}
+.gf-dialog[open] {
+  opacity: 1; transform: none;
+  transition-duration: var(--gf-dur-enter);
+}
+@starting-style {
+  .gf-dialog[open] { opacity: 0; transform: translateY(12px) scale(.98); }
+}
+.gf-dialog::backdrop {
+  background: color-mix(in srgb, var(--gf-black) 36%, transparent);
+  opacity: 0;
+  transition: opacity var(--gf-dur-exit) var(--gf-ease-out), overlay var(--gf-dur-exit) allow-discrete, display var(--gf-dur-exit) allow-discrete;
+}
+.gf-dialog[open]::backdrop { opacity: 1; transition-duration: var(--gf-dur-enter); }
+@starting-style {
+  .gf-dialog[open]::backdrop { opacity: 0; }
+}
+.gf-dialog:focus-visible { box-shadow: var(--gf-elev-3); border-radius: var(--gf-radius-lg); }
+.gf-dialog-inner { padding: var(--gf-space-8); }
+.gf-dialog-title { font-size: 17px; font-weight: 700; letter-spacing: -.02em; line-height: 1.3; }
+.gf-dialog-body { margin-top: var(--gf-space-3); font-size: var(--gf-text-base); line-height: 1.55; color: var(--gf-ink-soft); text-wrap: pretty; }
+.gf-dialog-actions { display: flex; justify-content: flex-end; gap: var(--gf-space-4); margin-top: var(--gf-space-6); }
+
+/* Toasts: a short-lived line at the foot of the window for something that
+   just happened. They stack, they wait while the pointer rests on them, and
+   a problem stays until it is dismissed. */
+.gf-toasts {
+  position: fixed; inset: auto 16px 16px auto; z-index: var(--gf-z-toast);
+  display: flex; flex-direction: column; align-items: flex-end; gap: var(--gf-space-4);
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+@media (max-width: 640px) { .gf-toasts { inset: auto 16px 16px 16px; width: auto; align-items: stretch; } }
+.gf-toast {
+  display: flex; align-items: flex-start; gap: var(--gf-space-4);
+  width: 100%;
+  border-radius: var(--gf-radius);
+  background: var(--gf-white); color: var(--gf-black);
+  padding: 10px 10px 10px 12px;
+  font-size: var(--gf-text-base); line-height: 1.45;
+  box-shadow: var(--gf-elev-2);
+  pointer-events: auto;
+  transition: opacity var(--gf-dur-enter) var(--gf-ease-out), transform var(--gf-dur-enter) var(--gf-ease-out);
+}
+.gf-toast[data-status="initial"] { opacity: 0; transform: translateY(12px) scale(.98); }
+.gf-toast[data-status="close"] { opacity: 0; transform: translateY(6px) scale(.98); transition-duration: var(--gf-dur-exit); }
+.gf-toast > svg { height: 16px; width: 16px; flex: none; margin-top: 2px; color: var(--gf-blue-ink); }
+.gf-toast-problem > svg { color: var(--gf-black); }
+.gf-toast-problem { box-shadow: var(--gf-elev-2), inset 3px 0 0 var(--gf-black); }
+.gf-toast-body { min-width: 0; flex: 1; }
+.gf-toast-body b { font-weight: 700; }
+.gf-toast-action {
+  flex: none; align-self: center;
+  border-radius: var(--gf-radius-xs); padding: 4px 8px;
+  font-size: var(--gf-text-sm); font-weight: 650; color: var(--gf-blue-ink);
+}
+.gf-toast-action:hover { background: var(--gf-blue-soft); }
+.gf-toast-close { flex: none; display: inline-grid; place-items: center; height: 24px; width: 24px; border-radius: var(--gf-radius-xs); color: var(--gf-ink-faint); }
+.gf-toast-close:hover { background: var(--gf-blue-wash); color: var(--gf-black); }
+.gf-toast-close > svg { height: 12px; width: 12px; }
+.gf-toast-bar { position: absolute; left: 12px; right: 12px; bottom: 6px; height: 2px; border-radius: 999px; background: var(--gf-blue-soft); overflow: hidden; }
+.gf-toast-bar > span { display: block; height: 100%; background: var(--gf-blue-ink); border-radius: 999px; transition: width var(--gf-dur-base) var(--gf-ease-out); }
+.gf-toast-progress { position: relative; padding-bottom: 14px; }
+
+/* A thin line of progress under the toolbar for anything that takes a while. */
+.gf-progress {
+  position: relative; height: 3px; width: 100%; flex: none; overflow: hidden;
+  background: var(--gf-blue-soft);
+}
+.gf-progress > span {
+  position: absolute; inset: 0 auto 0 0; width: var(--gf-progress, 0%);
+  background: var(--gf-blue-ink); border-radius: 0 999px 999px 0;
+  transition: width var(--gf-dur-slow) var(--gf-ease-out);
+}
+.gf-progress-indeterminate > span { width: 40%; animation: gf-progress-slide 1.2s var(--gf-ease-in-out) infinite; }
+@keyframes gf-progress-slide { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
 .gf-toolbar { display: flex; flex-wrap: wrap; gap: 3px; }
 .gf-toolbar button {
   min-width: 34px; min-height: 32px;

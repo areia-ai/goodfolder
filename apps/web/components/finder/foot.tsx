@@ -82,7 +82,7 @@ export function StatusBar({
         <button
           type="button"
           onClick={onManagePlan}
-          className="gf-win-capacity ml-auto flex flex-none items-center gap-2 rounded-full px-2 py-0.5 hover:bg-[var(--gf-blue-soft)]"
+          className="gf-win-capacity ml-auto flex flex-none items-center gap-2 rounded-full px-2 py-0.5 hover:bg-[var(--gf-blue-soft)] max-[640px]:hidden"
         >
           <span className="gf-win-meter" aria-hidden="true">
             <span style={{ width: `${Math.max(capacity.percent > 0 ? 3 : 0, capacity.percent)}%` }} />

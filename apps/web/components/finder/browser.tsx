@@ -12,7 +12,8 @@ import type { MenuItem } from "@/components/finder/menu";
 import { useOpenedFile } from "@/components/finder/use-opened-file";
 import { useResizablePanel } from "@/components/use-resizable-panel";
 import { AlertIcon, FolderIcon, SearchIcon, SparklesIcon } from "@/components/icons";
-import { EmptyState, Notice, Skeleton, done, info, problem, type NoticeMessage } from "@/components/ui";
+import { EmptyState, Skeleton, done, problem, type NoticeMessage } from "@/components/ui";
+import { ProgressToast, Toast, Toasts } from "@/components/toast";
 import { DocumentSurface } from "@/components/document-surface";
 import { registerDashboardTools, webMcpSupported } from "@/lib/webmcp";
 import { formatBytes } from "@/lib/preview";
@@ -39,7 +40,9 @@ import { useNavigation } from "@/components/finder/use-navigation";
 import { useFolderData } from "@/components/finder/use-folder-data";
 import { useSelection, type ClickModifiers } from "@/components/finder/use-selection";
 import { droppedFiles, useFileVerbs } from "@/components/finder/use-file-verbs";
-import { DeleteFolderDialog, RemoveDialog, RenameDialog } from "@/components/finder/verb-dialogs";
+import {
+  ChallengeCodeDialog, DeleteFolderDialog, NameFolderDialog, RemoveDialog, RenameDialog,
+} from "@/components/finder/verb-dialogs";
 
 /**
  * Everything with a path inside a folder — so, everything but a GoodFolder
@@ -717,14 +720,14 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       }
       if (node.kind === "directory") {
         return [
-          { id: "open", label: "Open", onSelect: () => open(node) },
+          { id: "open", label: "Open", shortcut: "enter", onSelect: () => open(node) },
           { id: "info", label: "Get info", onSelect: () => openInspector("info") },
           ...changeItems(node),
         ];
       }
       return [
-        { id: "open", label: "Open", onSelect: () => open(node) },
-        { id: "glance", label: "Take a look", onSelect: () => setGlanceId(node.id) },
+        { id: "open", label: "Open", shortcut: "enter", onSelect: () => open(node) },
+        { id: "glance", label: "Take a look", shortcut: "space", onSelect: () => setGlanceId(node.id) },
         { id: "download", label: "Download a copy", onSelect: () => void download(node) },
         { id: "info", label: "What has happened to it", onSelect: () => openInspector("info") },
         ...changeItems(node),
@@ -892,7 +895,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             id="listing"
             ref={listing}
             aria-label={location.folderId ? `Inside ${title}` : title}
-            className={`gf-win-listing ${inlineDetail && !notice ? "gf-win-listing-fill" : ""} ${dropTarget ? "gf-win-dropping" : ""}`}
+            className={`gf-win-listing ${inlineDetail ? "gf-win-listing-fill" : ""} ${dropTarget ? "gf-win-dropping" : ""}`}
             tabIndex={0}
             onClick={(event) => {
               if (event.target === event.currentTarget) selection.clear();
@@ -930,25 +933,6 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
                     ? `Drop to add to ${title}`
                     : "Open one of your folders to add files"}
               </p>
-            )}
-
-            {verbs.progress && (
-              <div className="px-3 pt-3">
-                <Notice
-                  message={info(
-                    `${suggesting ? "Sending" : "Adding"} ${verbs.progress.name}${
-                      verbs.progress.total === 1
-                        ? ""
-                        : ` — ${verbs.progress.done + 1} of ${verbs.progress.total}`
-                    }…`,
-                  )}
-                />
-              </div>
-            )}
-            {notice && (
-              <div className="px-3 pt-3">
-                <Notice message={notice} />
-              </div>
             )}
 
             {agentReady && !location.folderId && !searching && (
@@ -1053,7 +1037,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
         )}
 
         {contextMenu && <ContextMenu state={contextMenu} onClose={() => setContextMenu(null)} />}
-        {naming && <NameFolder onCancel={() => setNaming(false)} onName={(name) => void makeFolder(name)} />}
+        {naming && <NameFolderDialog onCancel={() => setNaming(false)} onName={(name) => void makeFolder(name)} />}
         {renaming && (
           <RenameDialog
             name={renaming.name}
@@ -1083,15 +1067,26 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
           />
         )}
         {challengeCodeOpen && (
-          <div className="gf-win-dialog-scrim" role="presentation">
-            <form className="gf-card absolute left-1/2 top-1/2 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 p-5 shadow-xl" onSubmit={(event) => { event.preventDefault(); void redeemChallenge(); }}>
-              <h2 className="gf-h3">Redeem challenge code</h2>
-              <p className="gf-body mt-2 text-sm">This gives your account full access for the WebMCP Challenge. It ends October 1; your folders remain yours.</p>
-              <label className="mt-4 block text-sm font-semibold" htmlFor="challenge-code">Code</label>
-              <input id="challenge-code" autoFocus className="gf-input mt-1 w-full" value={challengeCode} onChange={(event) => setChallengeCode(event.target.value)} disabled={redeemingChallenge} />
-              <div className="mt-5 flex justify-end gap-2"><button type="button" className="gf-button-secondary" onClick={() => setChallengeCodeOpen(false)} disabled={redeemingChallenge}>Cancel</button><button type="submit" className="gf-button-primary" disabled={redeemingChallenge || !challengeCode.trim()}>{redeemingChallenge ? "Checking…" : "Redeem"}</button></div>
-            </form>
-          </div>
+          <ChallengeCodeDialog
+            code={challengeCode}
+            onCode={setChallengeCode}
+            busy={redeemingChallenge}
+            onCancel={() => setChallengeCodeOpen(false)}
+            onRedeem={() => void redeemChallenge()}
+          />
+        )}
+
+        {(verbs.progress || notice) && (
+          <Toasts>
+            {verbs.progress && (
+              <ProgressToast
+                label={`${suggesting ? "Sending" : "Adding"} ${verbs.progress.name}`}
+                done={verbs.progress.done}
+                total={verbs.progress.total}
+              />
+            )}
+            {notice && <Toast key={notice.text} message={notice} onClose={() => setNotice(null)} />}
+          </Toasts>
         )}
 
         <input
@@ -1347,68 +1342,5 @@ function FileSurface({
       onReviewProposal={onReviewProposal}
       onNotice={onNotice}
     />
-  );
-}
-
-/* ------------------------------------------------------------- New folder */
-
-/**
- * Naming a new GoodFolder.
- *
- * The dashboard could never make one before, which made the emptiest possible
- * first screen — no folders, and nothing to do about it. What comes back from
- * the server includes a credential for a computer; it is not read here and
- * never shown. The person is told the one command that brings the folder down
- * to the machine it should live on.
- */
-function NameFolder({ onCancel, onName }: { onCancel: () => void; onName: (name: string) => void }) {
-  const [name, setName] = useState("");
-  const field = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    field.current?.focus();
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onCancel();
-      }
-    }
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, [onCancel]);
-
-  return (
-    <div className="gf-win-glance-scrim" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onCancel();
-    }}>
-      <form
-        className="gf-card gf-card-lg w-full max-w-[24rem] p-6"
-        role="dialog"
-        aria-modal="true"
-        aria-label="New folder"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onName(name);
-        }}
-      >
-        <h2 className="text-[17px] font-bold tracking-[-.02em]">New folder</h2>
-        <p className="gf-body mt-1.5 text-[13px]">
-          Start a brand-new empty folder here, then bring it down to a computer. To protect an existing folder on this computer, use the GoodFolder MCP or CLI there instead.
-        </p>
-        <label htmlFor="gf-new-folder" className="gf-label mt-4">Name</label>
-        <input
-          id="gf-new-folder"
-          ref={field}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Q3 Report"
-          className="gf-input"
-        />
-        <div className="mt-4 flex justify-end gap-2">
-          <button type="button" className="gf-button-secondary" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="gf-button-primary" disabled={!name.trim()}>Create</button>
-        </div>
-      </form>
-    </div>
   );
 }

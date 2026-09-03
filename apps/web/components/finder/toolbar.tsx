@@ -7,6 +7,7 @@ import {
 } from "@/components/icons";
 import { useState } from "react";
 import { Menu, type MenuItem } from "@/components/finder/menu";
+import { Tooltip, TooltipGroup } from "@/components/tooltip";
 import { MAX_ICON_SIZE, MIN_ICON_SIZE } from "@/lib/view-prefs";
 import type {
   GroupKey, SortDirection, SortKey, ViewMode, ViewPreference,
@@ -125,47 +126,58 @@ export function Toolbar(props: ToolbarProps) {
 
   return (
     <div className="gf-win-toolbar" role="toolbar" aria-label="Window controls">
-      <button
-        type="button"
-        className="gf-win-tool"
-        aria-pressed={props.sidebarCollapsed}
-        aria-label={props.sidebarCollapsed ? "Show the places list" : "Hide the places list"}
-        onClick={props.onToggleSidebar}
-      >
-        <SidebarIcon />
-      </button>
+      <TooltipGroup>
+      <Tooltip label={props.sidebarCollapsed ? "Show the places list" : "Hide the places list"}>
+        <button
+          type="button"
+          className="gf-win-tool"
+          aria-pressed={props.sidebarCollapsed}
+          aria-label={props.sidebarCollapsed ? "Show the places list" : "Hide the places list"}
+          onClick={props.onToggleSidebar}
+        >
+          <SidebarIcon />
+        </button>
+      </Tooltip>
 
       <div className="flex flex-none items-center">
-        <button
-          type="button"
-          className="gf-win-tool"
-          aria-label="Back"
-          disabled={!props.canGoBack}
-          onClick={props.onBack}
-        >
-          <ArrowLeftIcon />
-        </button>
-        <button
-          type="button"
-          className="gf-win-tool"
-          aria-label="Forward"
-          disabled={!props.canGoForward}
-          onClick={props.onForward}
-        >
-          <ArrowRightIcon />
-        </button>
-        <button
-          type="button"
-          className="gf-win-tool gf-win-up"
-          aria-label="Up one level"
-          disabled={!props.canGoUp}
-          onClick={props.onUp}
-        >
-          <ChevronUpIcon />
-        </button>
-        <button type="button" className="gf-win-tool" aria-label="All folders" onClick={props.onHome}>
-          <HomeIcon />
-        </button>
+        <Tooltip label="Back">
+          <button
+            type="button"
+            className="gf-win-tool"
+            aria-label="Back"
+            disabled={!props.canGoBack}
+            onClick={props.onBack}
+          >
+            <ArrowLeftIcon />
+          </button>
+        </Tooltip>
+        <Tooltip label="Forward">
+          <button
+            type="button"
+            className="gf-win-tool"
+            aria-label="Forward"
+            disabled={!props.canGoForward}
+            onClick={props.onForward}
+          >
+            <ArrowRightIcon />
+          </button>
+        </Tooltip>
+        <Tooltip label="Up one level">
+          <button
+            type="button"
+            className="gf-win-tool gf-win-up"
+            aria-label="Up one level"
+            disabled={!props.canGoUp}
+            onClick={props.onUp}
+          >
+            <ChevronUpIcon />
+          </button>
+        </Tooltip>
+        <Tooltip label="All folders">
+          <button type="button" className="gf-win-tool" aria-label="All folders" onClick={props.onHome}>
+            <HomeIcon />
+          </button>
+        </Tooltip>
       </div>
 
       <p className="gf-win-title gf-truncate flex-1">{props.title}</p>
@@ -173,21 +185,21 @@ export function Toolbar(props: ToolbarProps) {
       {!props.reading && (
       <div className="gf-win-views" role="group" aria-label="How to show this">
         {VIEWS.map((view) => (
-          <button
-            key={view.id}
-            type="button"
-            aria-pressed={props.view === view.id}
-            aria-label={`${view.label} view`}
-            title={`${view.label} (⌘${view.hint})`}
-            onClick={() => props.onView(view.id)}
-          >
-            <view.Glyph />
-          </button>
+          <Tooltip key={view.id} label={`${view.label} view`} shortcut={`mod+${view.hint}`}>
+            <button
+              type="button"
+              aria-pressed={props.view === view.id}
+              aria-label={`${view.label} view`}
+              onClick={() => props.onView(view.id)}
+            >
+              <view.Glyph />
+            </button>
+          </Tooltip>
         ))}
       </div>
       )}
 
-      {!props.reading && <Menu label="Sort and group" trigger={<SortIcon />} items={sortItems} />}
+      {!props.reading && <Menu label="Sort and group" trigger={<SortIcon />} items={sortItems} tooltip />}
 
       {!props.reading && props.view === "icons" && (
         <label className="gf-win-size-slider hidden md:flex">
@@ -205,66 +217,78 @@ export function Toolbar(props: ToolbarProps) {
       )}
 
       {props.folderActions?.canShare && (
-        <button
-          type="button"
-          className="gf-win-tool hidden sm:inline-flex"
-          aria-label="Who can see this"
-          onClick={props.folderActions.onShare}
-        >
-          <PeopleIcon />
-        </button>
+        <Tooltip label="Who can see this">
+          <button
+            type="button"
+            className="gf-win-tool hidden sm:inline-flex"
+            aria-label="Who can see this"
+            onClick={props.folderActions.onShare}
+          >
+            <PeopleIcon />
+          </button>
+        </Tooltip>
       )}
       {props.folderActions && (
-        <button
-          type="button"
-          className="gf-win-tool hidden sm:inline-flex"
-          aria-label="What has happened here"
-          onClick={props.folderActions.onTimeline}
-        >
-          <TimelineIcon />
-        </button>
+        <Tooltip label="What has happened here">
+          <button
+            type="button"
+            className="gf-win-tool hidden sm:inline-flex"
+            aria-label="What has happened here"
+            onClick={props.folderActions.onTimeline}
+          >
+            <TimelineIcon />
+          </button>
+        </Tooltip>
       )}
       {props.folderActions && (
-        <button
-          type="button"
-          className="gf-win-tool hidden sm:inline-flex"
-          aria-pressed={props.folderActions.isPinned}
-          aria-label={props.folderActions.isPinned ? "Stop keeping this to hand" : "Keep this folder to hand"}
-          onClick={props.folderActions.onTogglePin}
-        >
-          <StarIcon />
-        </button>
+        <Tooltip label={props.folderActions.isPinned ? "Stop keeping this to hand" : "Keep this folder to hand"}>
+          <button
+            type="button"
+            className="gf-win-tool hidden sm:inline-flex"
+            aria-pressed={props.folderActions.isPinned}
+            aria-label={props.folderActions.isPinned ? "Stop keeping this to hand" : "Keep this folder to hand"}
+            onClick={props.folderActions.onTogglePin}
+          >
+            <StarIcon />
+          </button>
+        </Tooltip>
       )}
 
       {props.onNewFolder && !props.reading && (
-        <button type="button" className="gf-win-tool" aria-label="New folder" onClick={props.onNewFolder}>
-          <PlusIcon />
-        </button>
+        <Tooltip label="New folder">
+          <button type="button" className="gf-win-tool" aria-label="New folder" onClick={props.onNewFolder}>
+            <PlusIcon />
+          </button>
+        </Tooltip>
       )}
 
       {props.onAddFiles && !props.reading && (
-        <button type="button" className="gf-win-tool" aria-label="Add files" onClick={props.onAddFiles}>
-          <PlusIcon />
-        </button>
+        <Tooltip label="Add files">
+          <button type="button" className="gf-win-tool" aria-label="Add files" onClick={props.onAddFiles}>
+            <PlusIcon />
+          </button>
+        </Tooltip>
       )}
 
-      <Menu label="More actions" trigger={<MoreHorizontalIcon />} items={actionItems} />
+      <Menu label="More actions" trigger={<MoreHorizontalIcon />} items={actionItems} tooltip />
 
       {!showSearch && (
-        <button
-          type="button"
-          className="gf-win-tool sm:hidden"
-          aria-label={props.searchLabel}
-          aria-expanded={false}
-          onClick={() => {
-            setSearchOpen(true);
-            window.requestAnimationFrame(() =>
-              document.querySelector<HTMLInputElement>('[data-window-search="true"]')?.focus(),
-            );
-          }}
-        >
-          <SearchIcon />
-        </button>
+        <Tooltip label={props.searchLabel} shortcut="mod+f">
+          <button
+            type="button"
+            className="gf-win-tool sm:hidden"
+            aria-label={props.searchLabel}
+            aria-expanded={false}
+            onClick={() => {
+              setSearchOpen(true);
+              window.requestAnimationFrame(() =>
+                document.querySelector<HTMLInputElement>('[data-window-search="true"]')?.focus(),
+              );
+            }}
+          >
+            <SearchIcon />
+          </button>
+        </Tooltip>
       )}
 
       <label className={`gf-win-search ${showSearch ? "" : "hidden sm:flex"}`}>
@@ -286,6 +310,7 @@ export function Toolbar(props: ToolbarProps) {
           </button>
         )}
       </label>
+      </TooltipGroup>
     </div>
   );
 }
