@@ -51,20 +51,17 @@ email, billing, or model account to run.
 
 ## Judge access
 
-The live submission URL is `https://trygoodfolder.com/dashboard`.
+The live submission URL is `https://trygoodfolder.com/challenge`.
 
-During judging, use the email sign-in screen to create or enter an account.
-Then open the account menu in the lower-left corner of the dashboard and choose
-**Redeem challenge code**. The code will appear only in the Devpost testing
-instructions, not in this repository or the video.
+Open it in ChatGPT's in-app browser, or in Chrome with WebMCP enabled. The
+challenge workspace opens immediately: no account, email, password, billing,
+or access code is required. It uses invented, browser-isolated sample data and
+resets with the browser session, so it cannot affect a real GoodFolder.
 
-The code grants full hosted access, including folder creation and invitations,
-until October 1, 2026 at 00:00 Europe/Lisbon. It is free for judges. After that
-point, accounts stay available in read-and-export mode; nothing is deleted.
-
-To test WebMCP, open the signed-in dashboard in ChatGPT’s in-app browser, or
-in Chrome with WebMCP testing enabled. The page registers its Site tools only
-when the dashboard has an authenticated account.
+Try: **"Review the Q3 report, identify the risk in the figures, and prepare a
+proposed correction to the executive summary."** The site tools can inspect
+the workspace and prepare reviewable work. A person retains the actions that
+make a lasting change.
 
 ## Checks kept in the repository
 

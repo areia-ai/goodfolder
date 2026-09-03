@@ -22,8 +22,12 @@ import type {
   AccountPlan, ChangeProposal, Folder, FolderFile, PlanCode, PlanDefinition, SaveRow,
 } from "./gf-api.ts";
 
-/** Built out of production entirely. Never true on the hosted service. */
-export const DEMO_BUILD = process.env.NODE_ENV !== "production";
+/**
+ * This browser-only workspace is intentionally public for the WebMCP
+ * challenge. It does not run unless the address explicitly asks for `demo=1`,
+ * and it never talks to a GoodFolder account or the hosted API.
+ */
+export const DEMO_BUILD = true;
 
 const FLAG = "demo";
 const REMEMBERED = "goodfolder.demo";
