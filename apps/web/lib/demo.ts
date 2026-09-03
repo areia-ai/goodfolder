@@ -66,8 +66,9 @@ const daysAgo = (days: number) => new Date(NOW - days * 86_400_000).toISOString(
 interface DemoFile {
   path: string;
   size: number;
-  /** Text files carry their content; everything else is drawn or described. */
+  /** Text files carry their content; accepted binary files keep their exact bytes. */
   content?: string;
+  blob?: Blob;
 }
 
 interface DemoFolder {
@@ -367,9 +368,25 @@ function countOpen(entry: DemoFolder): number {
 }
 
 const comments = new Map<string, Array<{ id: string; path: string; quotedText?: string | null; body: string; createdAt: string; authorEmail: string }>>();
-/** Bytes an invited person has sent up that nobody has accepted yet. */
-const staged = new Map<string, { name: string; size: number }>();
+/** Bytes waiting for a person's review. The demo keeps them so accepted files remain real. */
+const staged = new Map<string, { name: string; size: number; blob?: Blob }>();
 const workspaceProposals: WorkspaceProposal[] = [];
+
+function blobFromDataUrl(content: unknown): Blob | null {
+  const dataUrl = content && typeof content === "object" && "dataUrl" in content
+    ? (content as { dataUrl?: unknown }).dataUrl
+    : null;
+  const match = typeof dataUrl === "string" ? /^data:([^;,]+);base64,([a-z0-9+/=\r\n]+)$/i.exec(dataUrl.trim()) : null;
+  if (!match) return null;
+  try {
+    const binary = atob(match[2]!.replace(/\s/g, ""));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return new Blob([bytes], { type: match[1]!.toLowerCase() });
+  } catch {
+    return null;
+  }
+}
 
 function generatedSize(content: unknown): number {
   const dataUrl = content && typeof content === "object" && "dataUrl" in content
@@ -464,15 +481,16 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
   }
   if (rest === "staged-files" && method === "POST") {
     const id = `demo-waiting-${staged.size + 1}`;
-    staged.set(id, { name: search.get("name") ?? "file", size: dropped?.size ?? 0 });
+    staged.set(id, { name: search.get("name") ?? "file", size: dropped?.size ?? 0, blob: dropped ?? undefined });
     return json({ ok: true, stagingId: id, size: dropped?.size ?? 0 });
   }
   if (rest === "generated-files" && method === "POST") {
     const path = String(body.path ?? "").trim();
     if (!path) return fail(422, "invalid", "Give the generated file a path.");
     const id = `demo-waiting-${staged.size + 1}`;
-    const size = generatedSize(body.content);
-    staged.set(id, { name: path.split("/").pop() || "generated-file", size });
+    const blob = blobFromDataUrl(body.content);
+    const size = blob?.size ?? generatedSize(body.content);
+    staged.set(id, { name: path.split("/").pop() || "generated-file", size, blob: blob ?? undefined });
     return json({ ok: true, stagingId: id, size });
   }
   if (rest === "proposals" && method === "POST") {
@@ -497,7 +515,7 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
           operation: {
             kind: (operation.kind as "text_replace") ?? "text_replace",
             ...(operation.to ? { to: String(operation.to) } : {}),
-            ...(waiting ? { sizeBytes: waiting.size, fileName: waiting.name } : {}),
+            ...(waiting ? { sizeBytes: waiting.size, fileName: waiting.name, stagingId: String(operation.stagingId) } : {}),
           },
         };
       }),
@@ -521,8 +539,11 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
         if (target && to) target.path = to;
       } else if (suggestion.kind === "asset_replace") {
         const size = Number(suggestion.operation?.sizeBytes ?? 0);
-        if (target) target.size = size;
-        else entry.files.push({ path: at, size });
+        const stagedFile = staged.get(String(suggestion.operation?.stagingId ?? ""));
+        if (target) {
+          target.size = size;
+          target.blob = stagedFile?.blob;
+        } else entry.files.push({ path: at, size, blob: stagedFile?.blob });
       } else if (target?.content !== undefined) {
         target.content = target.content.replace(suggestion.before, suggestion.replacement);
         target.size = target.content.length;
@@ -568,8 +589,9 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
     if (target) {
       target.size = size;
       target.content = content;
+      target.blob = readable ? undefined : dropped ?? undefined;
     } else {
-      entry.files.push({ path, size, content });
+      entry.files.push({ path, size, content, blob: readable ? undefined : dropped ?? undefined });
     }
     const seq = nextSave(entry, target ? `Replaced ${name}` : `Added ${name}`, [path],
       target ? { changedCount: 1 } : { addedCount: 1 });
@@ -605,17 +627,20 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
   if (rest === "file") {
     if (!file) return fail(404, "not-found", "file not found");
     const kind = previewKindFor(file.path);
-    if (file.content === undefined) {
+    if (file.content === undefined && !file.blob) {
       return json({ path: file.path, size: file.size, sha: `demo-${file.path}`, role: entry.folder.role ?? "owner", previewable: false, previewKind: null, storedForDevice: true });
     }
     return json({
       path: file.path, size: file.size, sha: `demo-${file.path}`, role: entry.folder.role ?? "owner",
-      previewable: true, editable: EDITABLE.test(file.path), proposable: kind === "text",
+      previewable: kind !== null, editable: EDITABLE.test(file.path), proposable: kind === "text",
       previewKind: kind, content: file.content,
     });
   }
   if (rest === "file/raw") {
     if (!file) return fail(404, "not-found", "file not found");
+    if (file.blob) {
+      return new Response(file.blob, { status: 200, headers: { "content-type": file.blob.type || "application/octet-stream" } });
+    }
     if (previewKindFor(file.path) === "image") {
       const blob = drawImage(file.path);
       return new Response(blob, { status: 200, headers: { "content-type": "image/svg+xml" } });
