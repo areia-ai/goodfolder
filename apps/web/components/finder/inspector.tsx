@@ -127,6 +127,9 @@ export function Inspector({
 }) {
   const only = selection.length === 1 ? selection[0]! : null;
   const usable = folder ? TABS : TABS.filter((entry) => entry.id === "info" || entry.id === "review");
+  const openReviewCount = folder
+    ? (data?.proposals.filter((proposal) => proposal.status === "open").length ?? 0)
+    : workspaceProposals.filter((proposal) => proposal.status === "open").length;
 
   return (
     <>
@@ -142,8 +145,8 @@ export function Inspector({
               onClick={() => onTab(entry.id)}
             >
               {entry.label}
-              {entry.id === "review" && (data?.proposals.filter((p) => p.status === "open").length ?? 0) > 0 && (
-                <span className="gf-tab-count">{data!.proposals.filter((p) => p.status === "open").length}</span>
+              {entry.id === "review" && openReviewCount > 0 && (
+                <span className="gf-tab-count">{openReviewCount}</span>
               )}
             </button>
           ))}

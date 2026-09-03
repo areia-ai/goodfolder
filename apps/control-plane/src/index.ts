@@ -963,23 +963,30 @@ app.post("/api/workspace-proposals", async (c) => {
 app.post("/api/workspace-proposals/:id/review", async (c) => {
   const acct = await accountFrom(c);
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const denied = await writeAccessError(acct.accountId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const body = await c.req.json<{ action?: "accept" | "reject" }>().catch(() => ({} as { action?: "accept" | "reject" }));
   if (body.action !== "accept" && body.action !== "reject") return c.json({ error: { code: "action", message: "Choose accept or reject." } }, 400);
-  const rows = await sql`SELECT id, name, status FROM workspace_proposals WHERE id = ${c.req.param("id")} AND account_id = ${acct.accountId} FOR UPDATE`;
-  const proposal = rows[0] as { id: string; name: string; status: string } | undefined;
-  if (!proposal) return c.json({ error: { code: "not-found", message: "Workspace proposal not found." } }, 404);
-  if (proposal.status !== "open") return c.json({ ok: true, status: proposal.status });
-  if (body.action === "reject") {
-    await sql`UPDATE workspace_proposals SET status = 'rejected', reviewed_at = now(), reviewed_by = ${acct.accountId} WHERE id = ${proposal.id}`;
-    return c.json({ ok: true, status: "rejected" });
+  if (body.action === "accept" && !rateLimit("project-create", acct.accountId, 30, 3_600_000)) {
+    return c.json({ error: { code: "rate", message: "too many folders created — try again later" } }, 429);
   }
   const projectId = crypto.randomUUID(); const deviceId = crypto.randomUUID(); const token = newToken();
-  await sql.begin(async (tx) => {
-    await tx`INSERT INTO projects (id, account_id, name) VALUES (${projectId}, ${acct.accountId}, ${proposal.name})`;
+  const proposal = await sql.begin(async (tx) => {
+    const rows = await tx`SELECT id, name, status FROM workspace_proposals WHERE id = ${c.req.param("id")} AND account_id = ${acct.accountId} FOR UPDATE`;
+    const current = rows[0] as { id: string; name: string; status: "open" | "accepted" | "rejected" } | undefined;
+    if (!current || current.status !== "open") return current ?? null;
+    if (body.action === "reject") {
+      await tx`UPDATE workspace_proposals SET status = 'rejected', reviewed_at = now(), reviewed_by = ${acct.accountId} WHERE id = ${current.id}`;
+      return { ...current, status: "rejected" as const };
+    }
+    await tx`INSERT INTO projects (id, account_id, name) VALUES (${projectId}, ${acct.accountId}, ${current.name})`;
     await tx`INSERT INTO devices (id, project_id, name, kind) VALUES (${deviceId}, ${projectId}, 'Made in the browser', 'user')`;
     await tx`INSERT INTO transfer_tokens (token_hash, device_id, expires_at) VALUES (${token.hash}, ${deviceId}, now() + interval '30 days')`;
-    await tx`UPDATE workspace_proposals SET status = 'accepted', reviewed_at = now(), reviewed_by = ${acct.accountId}, created_project_id = ${projectId} WHERE id = ${proposal.id}`;
+    await tx`UPDATE workspace_proposals SET status = 'accepted', reviewed_at = now(), reviewed_by = ${acct.accountId}, created_project_id = ${projectId} WHERE id = ${current.id}`;
+    return { ...current, status: "accepted" as const };
   });
+  if (!proposal) return c.json({ error: { code: "not-found", message: "Workspace proposal not found." } }, 404);
+  if (proposal.status !== "accepted") return c.json({ ok: true, status: proposal.status });
   await repos.ensureRepo(projectId);
   await sql`INSERT INTO audit_log (actor, action, detail) VALUES (${acct.email}, 'workspace-proposal.accept', ${sql.json({ proposalId: proposal.id, projectId, name: proposal.name })})`;
   return c.json({ ok: true, status: "accepted", projectId });
