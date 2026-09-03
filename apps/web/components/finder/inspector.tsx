@@ -96,6 +96,7 @@ function Fact({ term, children }: { term: string; children: React.ReactNode }) {
 export function Inspector({
   tab,
   onTab,
+  focusedProposalId,
   onClose,
   folder,
   data,
@@ -108,6 +109,7 @@ export function Inspector({
 }: {
   tab: InspectorTab;
   onTab: (next: InspectorTab) => void;
+  focusedProposalId: string | null;
   onClose: () => void;
   folder: Folder | null;
   data: FolderData | null;
@@ -242,6 +244,7 @@ export function Inspector({
             folder={folder}
             role={data.role}
             proposals={data.proposals}
+            focusedProposalId={focusedProposalId}
             onChanged={onChanged}
             onNotice={onNotice}
           />

@@ -9,6 +9,7 @@ import { QuickLook } from "@/components/finder/quick-look";
 import { ContextMenu, type ContextMenuState } from "@/components/finder/context-menu";
 import type { MenuItem } from "@/components/finder/menu";
 import { useOpenedFile } from "@/components/finder/use-opened-file";
+import { useResizablePanel } from "@/components/use-resizable-panel";
 import { AlertIcon, FolderIcon, SearchIcon, SparklesIcon } from "@/components/icons";
 import { EmptyState, Notice, Skeleton, done, info, problem, type NoticeMessage } from "@/components/ui";
 import { DocumentSurface } from "@/components/document-surface";
@@ -68,6 +69,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   const [search, setSearch] = useState("");
   const [sidebarSheet, setSidebarSheet] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("info");
+  const [focusedProposalId, setFocusedProposalId] = useState<string | null>(null);
   const [glanceId, setGlanceId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [naming, setNaming] = useState(false);
@@ -153,6 +155,13 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     }
     return stored;
   }, [prefs, placeKey, location.folderId, location.scope]);
+
+  const sidebarPanel = useResizablePanel({
+    initial: 244, min: 200, max: 420, edge: "end", storageKey: "goodfolder.sidebar-width.v1",
+  });
+  const asidePanel = useResizablePanel({
+    initial: 340, min: 280, max: 520, edge: "start", storageKey: "goodfolder.inspector-width.v1",
+  });
 
   const decoration = useMemo(
     () => ({ changed: data?.changed ?? null, review: data?.review ?? null }),
@@ -448,6 +457,23 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     },
     [setPreference],
   );
+
+  useEffect(() => {
+    function onProposalCreated(event: Event) {
+      const detail = (event as CustomEvent<{ folderId?: string; proposalId?: string }>).detail;
+      if (!detail?.folderId || !detail.proposalId) return;
+      setInspectorTab("review");
+      setFocusedProposalId(detail.proposalId);
+      setPreference({ previewPane: true });
+      if (detail.folderId === location.folderId) {
+        void store.refreshProposals(detail.folderId);
+      } else {
+        nav.go({ folderId: detail.folderId, dir: "", file: null, scope: "all" });
+      }
+    }
+    window.addEventListener("proposal-created", onProposalCreated);
+    return () => window.removeEventListener("proposal-created", onProposalCreated);
+  }, [location.folderId, nav, setPreference, store]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -746,10 +772,13 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   };
 
   return (
-    <div className={`gf-win ${prefs.sidebarCollapsed ? "gf-win-collapsed" : ""}`}>
+    <div
+      className={`gf-win ${prefs.sidebarCollapsed ? "gf-win-collapsed" : ""}`}
+      style={prefs.sidebarCollapsed ? undefined : { gridTemplateColumns: `${sidebarPanel.width}px 9px minmax(0, 1fr)` }}
+    >
       <a href="#listing" className="gf-skip-link">Skip to the files</a>
 
-      <div className={`hidden ${prefs.sidebarCollapsed ? "" : "md:block"}`}>
+      <div className={`gf-win-sidebar-pane hidden ${prefs.sidebarCollapsed ? "" : "md:block"}`}>
         <Sidebar
           folders={folders ?? []}
           location={location}
@@ -762,6 +791,21 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
           onRedeemChallenge={() => setChallengeCodeOpen(true)}
         />
       </div>
+
+      {!prefs.sidebarCollapsed && (
+        <div
+          className="gf-win-resizer gf-win-resizer-sidebar"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          aria-valuemin={sidebarPanel.min}
+          aria-valuemax={sidebarPanel.max}
+          aria-valuenow={sidebarPanel.width}
+          tabIndex={0}
+          onPointerDown={sidebarPanel.onPointerDown}
+          onKeyDown={sidebarPanel.onKeyDown}
+        />
+      )}
 
       {sidebarSheet && (
         <>
@@ -894,11 +938,11 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             )}
 
             {agentReady && !location.folderId && !searching && (
-              <div data-testid="site-tools-banner" className="gf-notice gf-notice-info m-3">
+              <div data-testid="site-tools-banner" className="gf-notice gf-notice-quiet m-3">
                 <SparklesIcon />
                 <span>
-                  <b>This window speaks agent.</b> Your assistant can read what is here alongside you. It can look and
-                  suggest — it can&apos;t save, accept a suggestion, or change who has access.
+                  <b>This window speaks WebMCP.</b> Your assistant can read this workspace and prepare proposals while
+                  you work. You review and accept each proposal before it joins the folder.
                 </span>
               </div>
             )}
@@ -940,11 +984,24 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
 
           {asideOpen && (
             <>
+              <div
+                className="gf-win-resizer gf-win-resizer-aside"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize review and details panel"
+                aria-valuemin={asidePanel.min}
+                aria-valuemax={asidePanel.max}
+                aria-valuenow={asidePanel.width}
+                tabIndex={0}
+                onPointerDown={asidePanel.onPointerDown}
+                onKeyDown={asidePanel.onKeyDown}
+              />
               <div className="gf-win-scrim" onClick={() => setPreference({ previewPane: false })} />
-              <aside className="gf-win-aside gf-win-aside-open" aria-label="About what is selected">
+              <aside className="gf-win-aside gf-win-aside-open" aria-label="About what is selected" style={{ width: asidePanel.width }}>
                 <Inspector
                   tab={inspectorTab}
                   onTab={setInspectorTab}
+                  focusedProposalId={focusedProposalId}
                   onClose={() => setPreference({ previewPane: false })}
                   folder={folder}
                   data={data}

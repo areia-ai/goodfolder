@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   addDocumentComment,
   createProposal,
@@ -17,6 +17,7 @@ import { DelimitedTableEditor, type DelimitedTableChange } from "@/components/de
 import type { TableEdit } from "@/lib/table";
 import { ArrowLeftIcon, ChevronDownIcon, CommentIcon, DownloadIcon } from "@/components/icons";
 import { ReviewBadge, done, problem, type NoticeMessage } from "@/components/ui";
+import { useResizablePanel } from "@/components/use-resizable-panel";
 
 /* --------------------------------------------------------------------------
    Reading and changing one file.
@@ -128,7 +129,7 @@ function DocumentReviewPanel({
     window.requestAnimationFrame(() => document.getElementById(`review-tab-${next}`)?.focus());
   }
   return (
-    <aside className="order-first border-b border-[var(--gf-line)] bg-[var(--gf-surface-sunken)] p-4 xl:order-last xl:border-b-0 xl:border-l">
+    <aside className="gf-document-review-panel order-first border-b border-[var(--gf-line)] bg-[var(--gf-surface-sunken)] p-4 xl:order-last xl:border-b-0 xl:border-l">
       <div className="flex items-center justify-between gap-3">
         <h3 className="gf-h3">Review</h3>
         <span className="gf-faint text-[12px]">{comments.length + fileProposals.length} items</span>
@@ -250,6 +251,35 @@ function DocumentReviewPanel({
         )}
       </div>
     </aside>
+  );
+}
+
+function ReviewLayout({ open, children, panel }: { open: boolean; children: ReactNode; panel: ReactNode }) {
+  const reviewPanel = useResizablePanel({
+    initial: 320, min: 260, max: 520, edge: "start", storageKey: "goodfolder.document-review-width.v1",
+  });
+  return (
+    <div
+      className={open ? "gf-document-review-layout gf-document-review-layout-open" : "gf-document-review-layout"}
+      style={open ? { gridTemplateColumns: `minmax(0, 1fr) 9px ${reviewPanel.width}px` } : undefined}
+    >
+      <div className="min-w-0">{children}</div>
+      {open && (
+        <div
+          className="gf-win-resizer gf-document-review-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize document review panel"
+          aria-valuemin={reviewPanel.min}
+          aria-valuemax={reviewPanel.max}
+          aria-valuenow={reviewPanel.width}
+          tabIndex={0}
+          onPointerDown={reviewPanel.onPointerDown}
+          onKeyDown={reviewPanel.onKeyDown}
+        />
+      )}
+      {panel}
+    </div>
   );
 }
 
@@ -647,7 +677,7 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
 
       {editable ? (
         tableEditable ? (
-          <div className={reviewOpen ? "grid xl:grid-cols-[minmax(0,1fr)_320px]" : ""}>
+          <ReviewLayout open={reviewOpen} panel={reviewPanel("Select a cell before commenting to keep the note attached to that part of the table.")}>
             <DelimitedTableEditor
               path={props.file.path}
               content={props.file.content ?? ""}
@@ -658,8 +688,7 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
               }}
               onSelect={setSelection}
             />
-            {reviewPanel("Select a cell before commenting to keep the note attached to that part of the table.")}
-          </div>
+          </ReviewLayout>
         ) : (
           <>
             <div
@@ -685,7 +714,7 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
               </button>
             </div>
 
-            <div className={reviewOpen ? "grid xl:grid-cols-[minmax(0,1fr)_320px]" : ""}>
+            <ReviewLayout open={reviewOpen} panel={reviewPanel("Select a passage before commenting to keep the note anchored to those exact words.")}>
               <div
                 ref={editor}
                 contentEditable
@@ -698,17 +727,18 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
                 className="gf-editor"
                 aria-label={`Edit ${props.file.path}`}
               />
-              {reviewPanel("Select a passage before commenting to keep the note anchored to those exact words.")}
-            </div>
+            </ReviewLayout>
           </>
         )
       ) : (
-        <div className={reviewOpen ? "grid xl:grid-cols-[minmax(0,1fr)_320px]" : ""}>
+        <ReviewLayout
+          open={reviewOpen}
+          panel={reviewPanel(props.file.kind === "sheet" ? "Select a cell before commenting to keep the note attached to that part of the sheet." : "Add a note about this file for the people you work with.")}
+        >
           <div className="min-w-0">
             <FilePreview file={props.file} onSelect={setSelection} />
           </div>
-          {reviewPanel(props.file.kind === "sheet" ? "Select a cell before commenting to keep the note attached to that part of the sheet." : "Add a note about this file for the people you work with.")}
-        </div>
+        </ReviewLayout>
       )}
     </div>
   );

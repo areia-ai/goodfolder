@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   addProposalComment,
   changesTheFolder,
@@ -29,16 +29,23 @@ export function ProposalList({
   folder,
   role,
   proposals,
+  focusedProposalId,
   onChanged,
   onNotice,
 }: {
   folder: Folder;
   role: Role;
   proposals: ChangeProposal[];
+  focusedProposalId?: string | null;
   onChanged: () => Promise<void>;
   onNotice: Notify;
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const focusedProposal = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    focusedProposal.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [focusedProposalId]);
 
   async function review(proposal: ChangeProposal, action: "accept" | "reject", suggestionId?: string) {
     try {
@@ -60,7 +67,12 @@ export function ProposalList({
             proposal.suggestions.some((suggestion) => suggestion.kind === "asset_replace") &&
             proposal.suggestions.some((suggestion) => !changesTheFolder(suggestion.kind));
           return (
-          <article key={proposal.id} className="gf-card p-5 sm:p-6">
+          <article
+            key={proposal.id}
+            ref={proposal.id === focusedProposalId ? focusedProposal : undefined}
+            data-review-proposal={proposal.id === focusedProposalId ? "focused" : undefined}
+            className={`gf-card p-5 sm:p-6 ${proposal.id === focusedProposalId ? "ring-2 ring-[var(--gf-blue-ink)]" : ""}`}
+          >
             <div className="flex flex-wrap items-start gap-3">
               {/* basis keeps the title on its own row before it gets squeezed. */}
               <div className="min-w-0 flex-1 basis-72">
