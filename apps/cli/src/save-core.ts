@@ -14,7 +14,7 @@ import { git, gitOk, gitStream, gitAsync, findGitDir } from "./git.ts";
 import { trace, traceSync, renderTrace, snapshotMarks } from "./perf.ts";
 import type { GitResult } from "./git.ts";
 import { preflightSave } from "./api.ts";
-import { pushCurrentHistory } from "./repo-setup.ts";
+import { ensureSaveAuthor, pushCurrentHistory } from "./repo-setup.ts";
 import { absorbForeignHistories, foreignHistories, pathsInside } from "./nested.ts";
 import { credentialFilesLeftOut, skippedGroups } from "./skip.ts";
 
@@ -436,8 +436,17 @@ export async function runSavePipeline(
   // ---- commit -------------------------------------------------------------
   const commitMsg = opts.message ?? (wasImport ? "First save" : "Save");
   const commit = await trace("commit", async () => {
+    ensureSaveAuthor(folder);
     const r = git(folder, ["commit", "-m", commitMsg]);
-    if (r.code !== 0) throw new CliError("✗ Could not save right now.", 1);
+    if (r.code !== 0) {
+      const detail = r.stderr.trim();
+      throw new CliError(
+        detail
+          ? `✗ Could not record this Save: ${detail}`
+          : "✗ Could not record this Save right now.",
+        1,
+      );
+    }
     return git(folder, ["rev-parse", "HEAD"]).stdout.trim();
   });
 

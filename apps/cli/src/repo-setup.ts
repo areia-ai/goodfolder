@@ -14,6 +14,26 @@ import { applySkipRules } from "./skip.ts";
  */
 export const GF_REMOTE = "goodfolder";
 
+const DEFAULT_SAVE_AUTHOR = "GoodFolder";
+const DEFAULT_SAVE_EMAIL = "goodfolder@local";
+
+/**
+ * A cloned folder can land on a minimal agent or container with no machine
+ * author configured. Give that folder a safe local fallback, but leave any
+ * existing person or machine identity alone.
+ */
+export function ensureSaveAuthor(folder: string): void {
+  const name = git(folder, ["config", "--get", "user.name"]);
+  if (name.code !== 0 || !name.stdout.trim()) {
+    git(folder, ["config", "user.name", DEFAULT_SAVE_AUTHOR]);
+  }
+
+  const email = git(folder, ["config", "--get", "user.email"]);
+  if (email.code !== 0 || !email.stdout.trim()) {
+    git(folder, ["config", "user.email", DEFAULT_SAVE_EMAIL]);
+  }
+}
+
 /**
  * Upload the currently checked-out work as GoodFolder's canonical history.
  *
@@ -48,6 +68,7 @@ export function bindRepo(
     `${withCredentials(cfg.apiUrl, cfg.token)}/lfs/${pid}`,
   ]);
   applySkipRules(folder, gitDir);
+  ensureSaveAuthor(folder);
   // Large-folder performance: fsmonitor + untracked cache + index v4.
   configureRepo(folder);
 }
