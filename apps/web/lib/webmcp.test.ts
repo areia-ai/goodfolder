@@ -94,9 +94,10 @@ test("site tools expose suggestions but never human review powers", () => {
   ];
   const toolNames = Object.keys(DASHBOARD_TOOL_NAMES);
 
-  assert.equal(toolNames.length, 21);
+  assert.equal(toolNames.length, 22);
   assert.equal(reviewTools.length, 6);
-  assert.equal(toolNames.filter((name) => !reviewTools.includes(name)).length, 15);
+  assert.equal(toolNames.filter((name) => !reviewTools.includes(name)).length, 16);
+  assert.equal(DASHBOARD_TOOL_NAMES.get_local_save_guidance, true);
   assert.equal(DASHBOARD_TOOL_NAMES.read_image, true);
   assert.equal(DASHBOARD_TOOL_NAMES.propose_document_change, true);
   assert.equal(DASHBOARD_TOOL_NAMES.propose_document_media, true);
@@ -119,10 +120,34 @@ test("media data URLs accept bounded media and refuse other payloads", () => {
 });
 
 test("new workspace tools keep the existing read tools", () => {
-  for (const name of ["list_folders", "get_timeline", "list_files", "read_selected_text", "read_file_context", "read_table_range", "get_document_history"]) {
+  for (const name of ["list_folders", "get_local_save_guidance", "get_timeline", "list_files", "read_selected_text", "read_file_context", "read_table_range", "get_document_history"]) {
     assert.equal((DASHBOARD_TOOL_NAMES as Record<string, boolean>)[name], true);
   }
   assert.equal(DASHBOARD_TOOL_NAMES.propose_file_change, true);
+});
+
+test("local save guidance keeps browser agents on the local MCP or CLI path", async () => {
+  const previous = (globalThis as { document?: unknown }).document;
+  const tools: Array<Record<string, any>> = [];
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { modelContext: { registerTool: async (tool: Record<string, unknown>) => tools.push(tool) }, body: { dataset: {} } },
+  });
+  try {
+    await registerDashboardTools();
+    const guidance = tools.find((tool) => tool.name === "get_local_save_guidance");
+    assert.ok(guidance);
+    assert.equal((guidance.annotations as any).readOnlyHint, true);
+    const result = await guidance.execute({});
+    assert.equal(result.dashboardCanSaveLocalFolder, false);
+    assert.match(result.requiredLocalActions.join(" "), /goodfolder_connect/);
+    assert.match(result.requiredLocalActions.join(" "), /goodfolder_save/);
+    assert.match(result.note, /Do not create a dashboard folder/);
+  } finally {
+    await unregisterDashboardTools();
+    if (previous === undefined) delete (globalThis as { document?: unknown }).document;
+    else Object.defineProperty(globalThis, "document", { configurable: true, value: previous });
+  }
 });
 
 test("WebMCP registration is titled, idempotent, abort-aware, and reports state", async () => {

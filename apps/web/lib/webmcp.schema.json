@@ -144,6 +144,20 @@
       }
     },
     {
+      "name": "get_local_save_guidance",
+      "description": "Explain how to protect and save an existing folder on the local computer. Use this when someone asks to save or protect a local folder: the dashboard is not a save surface and this tool makes no changes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
       "name": "get_timeline",
       "description": "Read a folder's timeline of saves, newest first. Each entry says who saved it, what changed in plain language, and which files mattered most.",
       "inputSchema": {
@@ -215,7 +229,7 @@
     },
     {
       "name": "list_folders",
-      "description": "List the person's GoodFolder folders with protection status and when each was last saved.",
+      "description": "List the person's folders already connected to GoodFolder with protection status and when each was last saved. This dashboard cannot connect or save a local filesystem folder.",
       "inputSchema": {
         "type": "object",
         "properties": {},

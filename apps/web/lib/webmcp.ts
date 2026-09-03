@@ -10,6 +10,8 @@
 // only prepare work for a person. The web never accepts a proposal, saves a
 // file, changes access, or acts on a working copy. Agents get eyes and can
 // offer a bounded suggestion; the owner makes the file-changing decision.
+// Connecting or saving a folder that lives on the person's computer is a
+// separate local-agent job: use the GoodFolder MCP server (or CLI) there.
 //
 // Browsers without WebMCP are unaffected: registration is feature-checked
 // and silently skipped.
@@ -180,6 +182,7 @@ const registrationPromises = new WeakMap<object, Promise<string[]>>();
 
 const TOOL_TITLES: Record<string, string> = {
   list_folders: "List folders",
+  get_local_save_guidance: "Explain local folder setup",
   get_workspace_context: "Read workspace context",
   list_files: "List files",
   read_document_outline: "Read document outline",
@@ -755,7 +758,7 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
     full = false,
   ): Promise<{ name: string; saves: SaveRow[] } | { error: string }> {
     const folders = await listFolders();
-    if (!folders.length) return { error: "No folders yet. Create one by telling your agent: “create a GoodFolder called …”" };
+    if (!folders.length) return { error: "No folders yet. To protect an existing folder on this computer, use the local GoodFolder MCP or CLI to connect that folder, then save it. The dashboard cannot do that." };
     let folder: Folder | undefined;
     if (!folderName) folder = folders[0];
     else
@@ -773,7 +776,7 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
   await mc.registerTool({
     name: "list_folders",
     description:
-      "List the person's GoodFolder folders with protection status and when each was last saved.",
+      "List the person's folders already connected to GoodFolder with protection status and when each was last saved. This dashboard cannot connect or save a local filesystem folder.",
     inputSchema: objSchema({}),
     annotations: readOnly,
     execute: async () => {
@@ -793,6 +796,22 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
         return { error: (e as Error).message };
       }
     },
+  });
+
+  await mc.registerTool({
+    name: "get_local_save_guidance",
+    description:
+      "Explain how to protect and save an existing folder on the local computer. Use this when someone asks to save or protect a local folder: the dashboard is not a save surface and this tool makes no changes.",
+    inputSchema: objSchema({}), annotations: readOnly,
+    execute: async () => ({
+      dashboardCanSaveLocalFolder: false,
+      requiredLocalActions: [
+        "Use the GoodFolder MCP server on the computer that holds the folder: goodfolder_connect with the folder's absolute path.",
+        "Then call goodfolder_save with that same absolute path.",
+      ],
+      cliEquivalent: "From that folder: goodfolder connect, then goodfolder save.",
+      note: "Use goodfolder_create only for a brand-new empty folder. Do not create a dashboard folder when the person asked to protect an existing local folder.",
+    }),
   });
 
   await mc.registerTool({
@@ -1217,6 +1236,7 @@ export async function unregisterDashboardTools(): Promise<void> {
 
 export const DASHBOARD_TOOL_NAMES = {
   list_folders: true,
+  get_local_save_guidance: true,
   get_timeline: true,
   find_saves: true,
   explain_save: true,

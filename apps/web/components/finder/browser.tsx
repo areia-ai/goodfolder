@@ -1211,7 +1211,7 @@ function EmptyListing({
     const empty: Record<string, { title: string; body: string }> = {
       all: {
         title: "No folders yet",
-        body: "Ask your AI agent to protect a folder for you — something like “create a GoodFolder called Q3 report” — and it will show up here with its own history.",
+        body: "To protect a folder already on this computer, ask an agent with the GoodFolder MCP to connect it, then save it. This dashboard is for reading the history after that. Create a new folder here only when you are starting empty.",
       },
       shared: { title: "Nobody has shared a folder with you", body: "When someone invites you to a folder, it appears here." },
       review: { title: "Nothing is waiting for you", body: "Suggestions from people and agents land here until you accept or reject them." },
@@ -1315,7 +1315,7 @@ function NameFolder({ onCancel, onName }: { onCancel: () => void; onName: (name:
       >
         <h2 className="text-[17px] font-bold tracking-[-.02em]">New folder</h2>
         <p className="gf-body mt-1.5 text-[13px]">
-          It is made here, and comes down to a computer when you ask for it there.
+          Start a brand-new empty folder here, then bring it down to a computer. To protect an existing folder on this computer, use the GoodFolder MCP or CLI there instead.
         </p>
         <label htmlFor="gf-new-folder" className="gf-label mt-4">Name</label>
         <input

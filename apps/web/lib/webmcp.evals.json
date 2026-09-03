@@ -1,5 +1,14 @@
 [
   {
+    "name": "Saving an existing local folder asks for the local workflow",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Save this folder to GoodFolder." }
+    ],
+    "expectedCall": [
+      { "functionName": "get_local_save_guidance", "arguments": {} }
+    ]
+  },
+  {
     "name": "Recent activity routes to get_timeline",
     "messages": [
       { "role": "user", "type": "message", "content": "Using the folder's timeline, what changed recently?" }
