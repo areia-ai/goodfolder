@@ -955,8 +955,9 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
               <div data-testid="site-tools-banner" className="gf-notice gf-notice-quiet m-3">
                 <SparklesIcon />
                 <span>
-                  <b>This window speaks WebMCP.</b> Your assistant can read this workspace and prepare proposals while
-                  you work. You review and accept each proposal before it joins the folder.
+                  <b>This window speaks WebMCP.</b> Ask your assistant to explore this workspace, prepare a new
+                  GoodFolder, or make an image, presentation, or document for review. Every new folder and file arrives
+                  as a proposal, then you decide what joins the folder.
                 </span>
               </div>
             )}
