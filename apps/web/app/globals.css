@@ -2179,6 +2179,9 @@ img, svg { max-width: 100%; }
 .gf-win-views button > svg { height: 15px; width: 15px; }
 .gf-win-views button:hover { color: var(--gf-black); background: var(--gf-blue-wash); }
 .gf-win-views button[aria-pressed="true"] { background: var(--gf-blue-ink); color: var(--gf-white); }
+/* The Page / Source switch above a rendered web page. The view switcher's
+   look, sized for two words rather than one glyph. */
+.gf-page-views button { width: auto; padding-inline: 10px; font-size: 12.5px; font-weight: 650; }
 
 .gf-win-title { min-width: 0; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
 .gf-win-search {

@@ -28,7 +28,7 @@ export const PREVIEW_BYTE_CAP = 25_000_000;
 
 const PREVIEW_EXTENSIONS: Record<PreviewKind, ReadonlySet<string>> = {
   text: new Set([
-    "md", "markdown", "txt", "json", "csv", "tsv", "html", "css", "js", "jsx", "ts",
+    "md", "markdown", "txt", "json", "csv", "tsv", "html", "htm", "css", "js", "jsx", "ts",
     "tsx", "yaml", "yml",
     // A folder someone is building an app in is still a folder. These read
     // as plain text like everything else here — shown, never run.
@@ -95,6 +95,32 @@ const PREVIEW_MIMES: Record<string, string> = {
   flac: "audio/flac",
   aac: "audio/aac",
 };
+
+/**
+ * Byte types a web page in a folder needs but which nobody looks at on their
+ * own: a webfont, a caption track, a compiled module. The raw endpoint serves
+ * these so a rendered page can carry them in. They deliberately get no
+ * PreviewKind, so nothing about how the folder is listed changes — and
+ * nothing here is a type a browser would run as a document on our own
+ * address, which is the reason text/html is absent and must stay absent.
+ */
+const PAGE_ASSET_MIMES: Record<string, string> = {
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
+  eot: "application/vnd.ms-fontobject",
+  vtt: "text/vtt",
+  wasm: "application/wasm",
+};
+
+/** Content type for a page's supporting file; null when it is not one. */
+export function pageAssetMimeFor(path: string): string | null {
+  const base = path.split("/").pop() ?? path;
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0) return null;
+  return PAGE_ASSET_MIMES[base.slice(dot + 1).toLowerCase()] ?? null;
+}
 
 /** Content type for raw bytes of a non-text preview kind; null for text. */
 export function previewMimeFor(path: string): string | null {

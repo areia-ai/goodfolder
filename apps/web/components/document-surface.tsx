@@ -736,7 +736,7 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
           panel={reviewPanel(props.file.kind === "sheet" ? "Select a cell before commenting to keep the note attached to that part of the sheet." : "Add a note about this file for the people you work with.")}
         >
           <div className="min-w-0">
-            <FilePreview file={props.file} onSelect={setSelection} />
+            <FilePreview file={props.file} folderId={props.folder.id} onSelect={setSelection} />
           </div>
         </ReviewLayout>
       )}

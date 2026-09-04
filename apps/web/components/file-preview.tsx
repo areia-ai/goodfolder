@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   AudioPreview, ImagePreview, PdfPreview, QuickLookPreview, SheetPreview,
   SlidesPreview, UnsupportedView, VideoPreview, WordPreview,
 } from "@/components/file-viewers";
+import { PagePreview } from "@/components/page-preview";
+import { isRenderablePage } from "@/lib/preview";
 import type { OpenedFile } from "@/lib/gf-api";
 
 /**
@@ -16,10 +19,15 @@ import type { OpenedFile } from "@/lib/gf-api";
  */
 export function FilePreview({
   file,
+  folderId,
   onSelect,
   maxHeight,
 }: {
   file: OpenedFile;
+  /** The folder the file sits in, so a web page can carry in the stylesheet
+   *  and pictures beside it. Absent for a file that is not in a folder yet —
+   *  a proposed one under review — which renders on its own. */
+  folderId?: string | null;
   /** A sheet reports the cell you picked, so a comment can be anchored to it. */
   onSelect?: (value: string) => void;
   /** Caps the plain-text view; a glance wants a different bound to a page. */
@@ -36,14 +44,74 @@ export function FilePreview({
     if (file.kind === "quicklook") return <QuickLookPreview path={file.path} blob={file.blob} />;
   }
   if (file.kind === "text" && file.content !== undefined) {
-    return (
-      <pre
-        className="overflow-auto whitespace-pre-wrap break-words p-6 text-[13px] leading-relaxed"
-        style={{ maxHeight: maxHeight ?? "640px" }}
-      >
-        {file.content}
-      </pre>
-    );
+    return <TextFile path={file.path} content={file.content} folderId={folderId} maxHeight={maxHeight} />;
+  }
+  // A file that is text but arrived as bytes: a proposed one, staged outside
+  // the folder and read back for review. Nothing else knows how to show it,
+  // and a proposed web page not rendering is exactly the thing being reviewed.
+  if (file.kind === "text" && file.blob) {
+    return <TextFromBytes path={file.path} blob={file.blob} folderId={folderId} maxHeight={maxHeight} />;
   }
   return <UnsupportedView file={file} />;
+}
+
+function TextFile({
+  path,
+  content,
+  folderId,
+  maxHeight,
+}: {
+  path: string;
+  content: string;
+  folderId?: string | null;
+  maxHeight?: string;
+}) {
+  if (isRenderablePage(path)) {
+    return <PagePreview folderId={folderId ?? null} path={path} content={content} />;
+  }
+  return (
+    <pre
+      className="overflow-auto whitespace-pre-wrap break-words p-6 text-[13px] leading-relaxed"
+      style={{ maxHeight: maxHeight ?? "640px" }}
+    >
+      {content}
+    </pre>
+  );
+}
+
+function TextFromBytes({
+  path,
+  blob,
+  folderId,
+  maxHeight,
+}: {
+  path: string;
+  blob: Blob;
+  folderId?: string | null;
+  maxHeight?: string;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setText(null);
+    blob.text().then(
+      (read) => {
+        if (alive) setText(read);
+      },
+      () => {
+        if (alive) setText("");
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [blob]);
+  if (text === null) {
+    return (
+      <div className="grid min-h-[320px] place-items-center p-8" role="status" aria-live="polite">
+        <span className="gf-faint text-[13px]">Opening…</span>
+      </div>
+    );
+  }
+  return <TextFile path={path} content={text} folderId={folderId} maxHeight={maxHeight} />;
 }

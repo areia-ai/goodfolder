@@ -37,6 +37,7 @@ import {
   type Folder,
   type SaveRow,
 } from "./gf-api.ts";
+import { pageRenderReport } from "./page-report.ts";
 import { extensionOfPath, previewKindFor } from "./preview.ts";
 import {
   parseDelimitedTable,
@@ -192,6 +193,7 @@ const TOOL_TITLES: Record<string, string> = {
   read_table_range: "Read table range",
   read_image: "Read image",
   get_document_history: "Read document history",
+  get_page_render_report: "Read what the page did",
   list_change_proposals: "List Change Proposals",
   explain_change_proposal: "Explain Change Proposal",
   propose_new_goodfolder: "Propose new GoodFolder",
@@ -934,6 +936,32 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
   });
 
   await mc.registerTool({
+    name: "get_page_render_report",
+    description: "Read what happened when the web page currently open was rendered in the dashboard: which files beside it were used, which it asked for and did not find, and any errors its own scripts reported. Use this after proposing a change to a web page. This never changes the folder.",
+    inputSchema: objSchema({}), annotations: readOnly,
+    execute: async () => {
+      const report = pageRenderReport();
+      if (!report) {
+        return {
+          error: "No web page is being shown. Open an .html file in the dashboard, and this reports what happened when it ran.",
+        };
+      }
+      return {
+        page: report.path,
+        openedFrom: report.openedPath,
+        renderedAt: report.at,
+        usedFromThisFolder: report.carried,
+        askedForButNotInThisFolder: report.missing,
+        askedForFromTheWeb: report.fromTheWeb,
+        tooBigToInclude: report.omitted,
+        bytesRead: report.bytes,
+        problems: report.problems.map((problem) => problem.detail),
+        note: "The page runs isolated from the dashboard and cannot reach the account. Addresses pointing at the web were left as written, for the browser to load.",
+      };
+    },
+  });
+
+  await mc.registerTool({
     name: "get_document_history",
     description: "Read saves that mention the document currently open, newest first.",
     inputSchema: objSchema({ limit: { type: "number", description: "Maximum entries, default 10 and at most 25." } }), annotations: readOnly,
@@ -1331,6 +1359,7 @@ export const DASHBOARD_TOOL_NAMES = {
   read_table_range: true,
   read_image: true,
   get_document_history: true,
+  get_page_render_report: true,
   list_change_proposals: true,
   explain_change_proposal: true,
   propose_new_goodfolder: true,

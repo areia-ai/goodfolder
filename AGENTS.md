@@ -70,6 +70,15 @@ tools/              the gates CI runs: vocabulary, brand SVG, contrast
     saves nothing and restores an empty folder. Those paths go through
     routing and the case gate exactly like any other, and the other tool's
     own history is never touched.
+12. A web page in a folder is rendered, scripts and all, and two things keep
+    that from being reckless. The frame it renders in is never given
+    `allow-same-origin` — with it, a page in someone's folder would run as the
+    dashboard, read its storage and speak to the account API as the person
+    signed in. And an `.html` file is never served as `text/html` from the API,
+    where the session cookie lives; it stays a text kind, read as JSON through
+    the document endpoint, and everything it points at is carried into it as
+    `data:` addresses before it is handed over. Both have tests; if one fails,
+    change the change.
 
 ## Working on it
 

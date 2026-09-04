@@ -12,6 +12,7 @@ import {
   webMcpRegistrationState,
 } from "./webmcp.ts";
 import { countsLabel, folderStatus, friendlyHarness, actorLabel } from "./gf-api.ts";
+import { setPageRenderReport } from "./page-report.ts";
 
 const now = new Date("2026-08-26T15:00:00Z").getTime();
 
@@ -96,11 +97,12 @@ test("site tools expose suggestions but never human review powers", () => {
   ];
   const toolNames = Object.keys(DASHBOARD_TOOL_NAMES);
 
-  assert.equal(toolNames.length, 24);
+  assert.equal(toolNames.length, 25);
   assert.equal(reviewTools.length, 8);
-  assert.equal(toolNames.filter((name) => !reviewTools.includes(name)).length, 16);
+  assert.equal(toolNames.filter((name) => !reviewTools.includes(name)).length, 17);
   assert.equal(DASHBOARD_TOOL_NAMES.get_local_save_guidance, true);
   assert.equal(DASHBOARD_TOOL_NAMES.read_image, true);
+  assert.equal(DASHBOARD_TOOL_NAMES.get_page_render_report, true);
   assert.equal(DASHBOARD_TOOL_NAMES.propose_document_change, true);
   assert.equal(DASHBOARD_TOOL_NAMES.propose_document_media, true);
   assert.equal(DASHBOARD_TOOL_NAMES.comment_on_document, true);
@@ -648,4 +650,50 @@ test("an older server that reports no proposable field refuses source files rath
     textEdit("notes.md"),
   );
   assert.equal(stillFine.error, undefined, "documents keep working against an older server");
+});
+
+test("get_page_render_report answers with what the open page actually did", async () => {
+  const previous = (globalThis as { document?: unknown }).document;
+  const tools: Array<Record<string, any>> = [];
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { modelContext: { registerTool: async (tool: Record<string, unknown>) => tools.push(tool) }, body: { dataset: {} } },
+  });
+  try {
+    await registerDashboardTools();
+    const tool = tools.find((entry) => entry.name === "get_page_render_report");
+    assert.ok(tool);
+    assert.equal((tool.annotations as any).readOnlyHint, true);
+
+    // Nothing open: it says so rather than inventing a healthy report.
+    setPageRenderReport(null);
+    assert.match((await tool.execute({})).error, /Open an \.html file/);
+
+    setPageRenderReport({
+      folderId: "f1",
+      path: "site/about.html",
+      openedPath: "site/index.html",
+      title: "about.html",
+      at: "2026-09-04T12:00:00.000Z",
+      carried: ["site/styles.css"],
+      missing: ["site/hero.png"],
+      fromTheWeb: ["https://cdn.example.com/a.js"],
+      omitted: ["site/tour.mp4"],
+      bytes: 2048,
+      problems: [{ kind: "error", detail: "TypeError: chart is not a function (line 12)" }],
+    });
+    const report = await tool.execute({});
+    assert.equal(report.page, "site/about.html");
+    assert.equal(report.openedFrom, "site/index.html");
+    assert.deepEqual(report.usedFromThisFolder, ["site/styles.css"]);
+    assert.deepEqual(report.askedForButNotInThisFolder, ["site/hero.png"]);
+    assert.deepEqual(report.askedForFromTheWeb, ["https://cdn.example.com/a.js"]);
+    assert.deepEqual(report.tooBigToInclude, ["site/tour.mp4"]);
+    assert.deepEqual(report.problems, ["TypeError: chart is not a function (line 12)"]);
+  } finally {
+    setPageRenderReport(null);
+    await unregisterDashboardTools();
+    if (previous === undefined) delete (globalThis as { document?: unknown }).document;
+    else Object.defineProperty(globalThis, "document", { configurable: true, value: previous });
+  }
 });

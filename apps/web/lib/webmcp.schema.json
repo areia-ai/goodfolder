@@ -158,6 +158,20 @@
       }
     },
     {
+      "name": "get_page_render_report",
+      "description": "Read what happened when the web page currently open was rendered in the dashboard: which files beside it were used, which it asked for and did not find, and any errors its own scripts reported. Use this after proposing a change to a web page. This never changes the folder.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      }
+    },
+    {
       "name": "get_timeline",
       "description": "Read a folder's timeline of saves, newest first. Each entry says who saved it, what changed in plain language, and which files mattered most.",
       "inputSchema": {

@@ -320,7 +320,10 @@ function ProposedFilePreview({ folderId, proposalId, suggestion }: {
   if (blob) {
     return (
       <div className="mt-3 overflow-hidden rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white">
-        <FilePreview file={{ path: suggestion.path, sha: "waiting-for-review", size: blob.size, kind: previewKindFor(suggestion.path), blob, mimeType: suggestion.operation?.mimeType ?? null, storedForDevice: false }} />
+        <FilePreview
+          folderId={folderId}
+          file={{ path: suggestion.path, sha: "waiting-for-review", size: blob.size, kind: previewKindFor(suggestion.path), blob, mimeType: suggestion.operation?.mimeType ?? null, storedForDevice: false }}
+        />
       </div>
     );
   }

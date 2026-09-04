@@ -50,6 +50,7 @@ import {
   PREVIEW_BYTE_CAP,
   parseStoredFilePointer,
   previewKindFor,
+  pageAssetMimeFor,
   previewMimeFor,
 } from "./preview.ts";
 
@@ -1351,7 +1352,10 @@ app.get("/api/projects/:id/file/raw", async (c) => {
   if (!file) return c.json({ error: { code: "not-found", message: "file not found" } }, 404);
   const pointer = parseStoredFilePointer(file.content);
   const realSize = pointer ? pointer.size : file.size;
-  if (!kind || !previewMimeFor(path)) {
+  // A page's own supporting files — a webfont, a caption track — have no
+  // preview of their own but are served so a rendered page can carry them in.
+  const mime = previewMimeFor(path) ?? pageAssetMimeFor(path);
+  if (!mime) {
     // Not a browser-viewable byte type. Describe it honestly instead.
     return c.json({
       path,
@@ -1372,7 +1376,6 @@ app.get("/api/projects/:id/file/raw", async (c) => {
       },
     }, 413);
   }
-  const mime = previewMimeFor(path)!;
   const headers: Record<string, string> = {
     "content-type": mime,
     "cache-control": "private, max-age=60",

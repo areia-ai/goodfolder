@@ -142,7 +142,7 @@ const ACTIONS = [
 
 const SOURCE_PARTS = [
   "The command-line tool on your computer",
-  "The agent server and all twenty-one WebMCP tools",
+  "The agent server and all twenty-five WebMCP tools",
   "The dashboard and hosted-service code",
   "The storage service and Docker setup",
 ];
@@ -188,7 +188,7 @@ const QUESTIONS: FaqItem[] = [
     question: "Can my AI assistant use GoodFolder directly?",
     answer: [
       "Yes, in two places. On your computer, GoodFolder uses the Model Context Protocol, so Codex, Claude Code, and other compatible agents can protect a folder, Save, Sync, and Restore.",
-      "The dashboard also gives a browser assistant twenty-one WebMCP tools. Fifteen only read; the other six can add a comment or prepare a Change Proposal, including a complete document, spreadsheet, PDF, presentation, or image that stays outside the folder until a person accepts it.",
+      "The dashboard also gives a browser assistant twenty-five WebMCP tools. Seventeen only read; the other eight can add a comment or prepare a Change Proposal, including a complete document, spreadsheet, PDF, presentation, or image that stays outside the folder until a person accepts it.",
       "WebMCP comes from the W3C Web Machine Learning Community Group and is still a draft. If your browser doesn’t support it, the dashboard works normally without those tools.",
     ],
   },

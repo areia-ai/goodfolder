@@ -278,5 +278,14 @@
         "arguments": { "status": { "$contains": "open" } }
       }
     ]
+  },
+  {
+    "name": "Asking why a rendered page is broken routes to the render report",
+    "messages": [
+      { "role": "user", "type": "message", "content": "This web page isn't rendering right \u2014 what errors did it report and what could it not find?" }
+    ],
+    "expectedCall": [
+      { "functionName": "get_page_render_report", "arguments": {} }
+    ]
   }
 ]

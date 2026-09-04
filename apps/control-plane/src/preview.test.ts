@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   PREVIEW_BYTE_CAP,
   parseStoredFilePointer,
+  pageAssetMimeFor,
   previewKindFor,
   previewMimeFor,
 } from "./preview.ts";
@@ -86,4 +87,35 @@ test("parseStoredFilePointer returns null for inline bytes", () => {
 
 test("preview byte cap stays at 25 MB", () => {
   assert.equal(PREVIEW_BYTE_CAP, 25_000_000);
+});
+
+test("a web page is text, and can never be served as one from this address", () => {
+  // The raw endpoint refuses every text kind, which is what keeps html off
+  // this origin. It matters more here than anywhere else: the session cookie
+  // lives on this address, so a page served as text/html from it would run as
+  // the signed-in person. It is read through the document endpoint instead,
+  // as JSON, and rendered by the browser inside a frame with no origin.
+  assert.equal(previewKindFor("site/index.html"), "text");
+  assert.equal(previewKindFor("site/index.htm"), "text");
+  assert.equal(previewMimeFor("site/index.html"), null);
+  assert.equal(pageAssetMimeFor("site/index.html"), null);
+  for (const path of ["a.html", "a.htm", "a.svg", "a.js", "a.xml"]) {
+    assert.notEqual(pageAssetMimeFor(path), "text/html", path);
+  }
+});
+
+test("a page's supporting files are served, and stay out of the listing", () => {
+  for (const [path, mime] of [
+    ["fonts/Inter.woff2", "font/woff2"],
+    ["fonts/old.WOFF", "font/woff"],
+    ["fonts/a.ttf", "font/ttf"],
+    ["captions/en.vtt", "text/vtt"],
+    ["lib/engine.wasm", "application/wasm"],
+  ] as const) {
+    assert.equal(pageAssetMimeFor(path), mime, path);
+    // No preview kind: the file browser shows these exactly as it did before.
+    assert.equal(previewKindFor(path), null, path);
+  }
+  assert.equal(pageAssetMimeFor("notes"), null);
+  assert.equal(pageAssetMimeFor("archive.zip"), null);
 });

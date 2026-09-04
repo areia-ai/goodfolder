@@ -112,7 +112,7 @@ export function QuickLook({
               <Notice message={problem(error)} />
             </div>
           ) : opened ? (
-            <FilePreview file={opened} maxHeight="100%" />
+            <FilePreview file={opened} folderId={folderId} maxHeight="100%" />
           ) : (
             <div className="p-5">
               <Skeleton className="h-72 w-full rounded-[var(--gf-radius)]" />

@@ -10,6 +10,7 @@
 
 export type PreviewKind =
   | "text" // shown as-is; markdown stays the only editable kind
+  //        html is text too, and additionally renders — see isRenderablePage
   | "image" // svg is only ever rendered through <img>, never inlined
   | "pdf"
   | "word" // converted to HTML in the browser, shown in a sandboxed frame
@@ -21,10 +22,11 @@ export type PreviewKind =
 
 const PREVIEW_EXTENSIONS: Record<PreviewKind, ReadonlySet<string>> = {
   text: new Set([
-    "md", "markdown", "txt", "json", "csv", "tsv", "html", "css", "js", "jsx", "ts",
+    "md", "markdown", "txt", "json", "csv", "tsv", "html", "htm", "css", "js", "jsx", "ts",
     "tsx", "yaml", "yml",
     // A folder someone is building an app in is still a folder. These read
-    // as plain text like everything else here — shown, never run.
+    // as plain text like everything else here. Only html additionally
+    // renders, and only inside the isolated frame isRenderablePage describes.
     "mjs", "cjs", "mts", "cts", "scss", "sass", "less", "vue", "svelte", "astro",
     "py", "rb", "go", "rs", "java", "kt", "swift", "c", "h", "cpp", "hpp", "cc",
     "cs", "php", "sh", "bash", "zsh", "fish", "sql", "toml", "ini", "cfg", "conf",
@@ -68,12 +70,29 @@ export function previewKindFor(path: string): PreviewKind | null {
   return null;
 }
 
+/**
+ * Whether a file is a web page the dashboard renders as well as reads.
+ *
+ * Deliberately separate from PreviewKind rather than a kind of its own. The
+ * kind is what the *server* answers with, and it decides which endpoint the
+ * bytes come from: html stays "text", so it keeps arriving as JSON through
+ * the document endpoint and can never be served as text/html from the API
+ * origin, where the session cookie lives. Rendering is a decision the browser
+ * makes about text it already has, which is why it lives in its own predicate
+ * and changes nothing on the server.
+ */
+export function isRenderablePage(path: string): boolean {
+  const ext = extensionOfPath(path);
+  return ext === "html" || ext === "htm";
+}
+
 /** Human type name for fallback states: "Word document", "Image", … */
 export function previewKindLabel(path: string): string {
   const ext = extensionOfPath(path);
   const labels: Record<string, string> = {
     md: "Markdown document", markdown: "Markdown document", txt: "Text file",
     csv: "CSV file", json: "JSON file",
+    html: "Web page", htm: "Web page",
     png: "Image", jpg: "Image", jpeg: "Image", gif: "Image", webp: "Image",
     svg: "Image", avif: "Image", bmp: "Image", ico: "Image",
     heic: "iPhone photo", heif: "Photo",
