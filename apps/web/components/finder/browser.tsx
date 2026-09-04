@@ -28,16 +28,19 @@ import {
   withSidebarCollapsed, withView, writePrefs, DEFAULT_STATE, VIEW_MODES, expandedIn,
   type ViewMode, type ViewPreference, type ViewPrefsState,
 } from "@/lib/view-prefs";
+import type { ShownView } from "@/components/finder/types";
 import { Sidebar } from "@/components/finder/sidebar";
 import { Toolbar } from "@/components/finder/toolbar";
 import { PathBar, StatusBar } from "@/components/finder/foot";
 import { FOLDER_COLUMNS, ListView, ROOT_COLUMNS } from "@/components/finder/view-list";
+import { CompactView } from "@/components/finder/view-compact";
 import { IconsView } from "@/components/finder/view-icons";
 import { ColumnsView } from "@/components/finder/view-columns";
 import { GalleryView } from "@/components/finder/view-gallery";
 import { Inspector, type InspectorTab } from "@/components/finder/inspector";
 import { useNavigation } from "@/components/finder/use-navigation";
 import { useFolderData } from "@/components/finder/use-folder-data";
+import { useCompact } from "@/components/finder/use-compact";
 import { useSelection, type ClickModifiers } from "@/components/finder/use-selection";
 import { droppedFiles, useFileVerbs } from "@/components/finder/use-file-verbs";
 import {
@@ -241,9 +244,13 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
 
   /* ------------------------------------------------------------- Actions */
 
+  const compact = useCompact();
   const go = nav.go;
 
-  const inlineDetail = prefs.view === "columns" || prefs.view === "gallery";
+  // A phone gets one listing rather than a choice of four, and it never
+  // shows a file beside the listing — there is no beside. See view-compact.
+  const view: ShownView = compact ? "compact" : prefs.view;
+  const inlineDetail = view === "columns" || view === "gallery";
 
   const open = useCallback(
     (node: VfsNode) => {
@@ -797,7 +804,12 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   return (
     <div
       className={`gf-win ${prefs.sidebarCollapsed ? "gf-win-collapsed" : ""}`}
-      style={prefs.sidebarCollapsed ? undefined : { gridTemplateColumns: `${sidebarPanel.width}px 9px minmax(0, 1fr)` }}
+      /* The dragged width goes in as a custom property, never as
+         `grid-template-columns` itself. An inline declaration beats every
+         media query, so writing the tracks here left a phone with a 200px
+         sidebar track it could not see and a 166px column for everything
+         else. The property is only read inside the desktop media query. */
+      style={{ "--gf-sidebar-width": `${sidebarPanel.width}px` } as React.CSSProperties}
     >
       <a href="#listing" className="gf-skip-link">Skip to the files</a>
 
@@ -855,7 +867,8 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       <div className="gf-win-main">
         <Toolbar
           title={title}
-          view={prefs.view}
+          view={view}
+          compact={compact}
           onView={(next) => setPrefs((current) => withView(current, next))}
           preference={preference}
           onPreference={setPreference}
@@ -968,7 +981,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
                 rows={rows}
                 groups={groups}
                 preference={preference}
-                view={prefs.view}
+                view={view}
                 onSort={onSort}
                 selection={selection}
                 searching={searching}
@@ -1002,7 +1015,14 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
                 onKeyDown={asidePanel.onKeyDown}
               />
               <div className="gf-win-scrim" onClick={() => setPreference({ previewPane: false })} />
-              <aside className="gf-win-aside gf-win-aside-open" aria-label="About what is selected" style={{ width: asidePanel.width }}>
+              <aside
+                className="gf-win-aside gf-win-aside-open"
+                aria-label="About what is selected"
+                /* Same reason as the sidebar above: on a phone this panel is
+                   the whole screen, and an inline width would keep it a
+                   cramped column there. */
+                style={{ "--gf-aside-width": `${asidePanel.width}px` } as React.CSSProperties}
+              >
                 <Inspector
                   tab={inspectorTab}
                   onTab={setInspectorTab}
@@ -1108,7 +1128,10 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
         />
 
         <div className="gf-win-foot">
-          <PathBar crumbs={crumbs} onGo={go} />
+          {/* At the root of a phone the path bar has one step, and it says the
+              same word the toolbar already does. It comes back the moment
+              there is somewhere to go back to. */}
+          {(!compact || crumbs.length > 1) && <PathBar crumbs={crumbs} onGo={go} />}
           <StatusBar
             count={nodes.length}
             selectedCount={selection.ids.size}
@@ -1138,7 +1161,7 @@ function Listing(props: {
   rows: ListRow[];
   groups: Array<{ id: string; label: string; rows: ListRow[] }> | null;
   preference: ViewPreference;
-  view: ViewMode;
+  view: ShownView;
   onSort: (key: SortKey) => void;
   selection: ReturnType<typeof useSelection>;
   searching: boolean;
@@ -1185,6 +1208,23 @@ function Listing(props: {
 
   const view = props.view;
   const select = props.onSelectNode;
+
+  if (view === "compact") {
+    if (props.nodes.length === 0) {
+      return <EmptyListing location={props.location} search={props.search} onClearSearch={props.onClearSearch} />;
+    }
+    return (
+      <CompactView
+        rows={props.rows}
+        groups={props.groups}
+        isSelected={props.selection.isSelected}
+        onOpen={props.onOpen}
+        onContext={props.onContext}
+        showPath={props.searching}
+        scroller={props.scroller}
+      />
+    );
+  }
 
   // Columns keeps working with nothing in the current directory — its other
   // columns are still the way around. The rest have nothing left to draw.

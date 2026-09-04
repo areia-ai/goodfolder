@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_PREFERENCE,
   DEFAULT_STATE,
+  DEFAULT_VIEW,
+  VIEW_MODES,
   MAX_ICON_SIZE,
   MIN_ICON_SIZE,
   PREFS_VERSION,
@@ -22,6 +24,7 @@ import {
   withView,
   writePrefs,
   type StorageLike,
+  type ViewMode,
   type ViewPrefsState,
 } from "./view-prefs.ts";
 
@@ -226,4 +229,15 @@ test("only the newest places are remembered", () => {
   assert.ok(state.places["place-199"], "the newest place is kept");
   const roundTripped = migrateState(JSON.parse(JSON.stringify(state)));
   assert.deepEqual(roundTripped, state);
+});
+
+test("the phone's listing is never a stored preference", () => {
+  // A narrow window draws `compact` whatever the preference says, and leaves
+  // the preference alone — so the same account on a laptop still opens in the
+  // view it was left in. Writing it down would break that in both directions:
+  // a phone would overwrite a laptop's choice, and a laptop would be handed a
+  // view it has no way to draw.
+  assert.ok(!VIEW_MODES.includes("compact" as ViewMode));
+  assert.equal(withView(DEFAULT_STATE, "compact" as ViewMode).view, DEFAULT_STATE.view);
+  assert.equal(migrateState({ version: 1, view: "compact" }).view, DEFAULT_VIEW);
 });

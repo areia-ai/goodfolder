@@ -10,7 +10,7 @@ import { Menu, type MenuItem } from "@/components/finder/menu";
 import { Tooltip, TooltipGroup } from "@/components/tooltip";
 import { MAX_ICON_SIZE, MIN_ICON_SIZE } from "@/lib/view-prefs";
 import type {
-  GroupKey, SortDirection, SortKey, ViewMode, ViewPreference,
+  GroupKey, ShownView, SortDirection, SortKey, ViewMode, ViewPreference,
 } from "@/components/finder/types";
 
 const VIEWS: Array<{ id: ViewMode; label: string; hint: string; Glyph: (p: { className?: string }) => React.ReactElement }> = [
@@ -36,8 +36,10 @@ const GROUPS: Array<{ id: GroupKey; label: string }> = [
 
 export interface ToolbarProps {
   title: string;
-  view: ViewMode;
+  view: ShownView;
   onView: (view: ViewMode) => void;
+  /** A phone. One listing, one row of controls, everything else in the menu. */
+  compact?: boolean;
   preference: ViewPreference;
   onPreference: (patch: Partial<ViewPreference>) => void;
   canGoBack: boolean;
@@ -76,32 +78,39 @@ export function Toolbar(props: ToolbarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const showSearch = searchOpen || props.search.length > 0;
 
+  // Headed rather than only divided, because on a phone these are read inside
+  // the actions menu with no glyph above them to say what they are.
   const sortItems: MenuItem[] = [
-    ...SORTS.map((sort) => ({
+    ...SORTS.map((sort, index) => ({
       id: `sort-${sort.id}`,
       label: sort.label,
+      heading: index === 0 ? "Sort by" : undefined,
       checked: preference.sort === sort.id,
       onSelect: () => onPreference({ sort: sort.id }),
     })),
     ...(["asc", "desc"] as SortDirection[]).map((direction, index) => ({
       id: `direction-${direction}`,
       label: direction === "asc" ? "Ascending" : "Descending",
+      heading: index === 0 ? "Order" : undefined,
       checked: preference.direction === direction,
-      dividerBefore: index === 0,
       onSelect: () => onPreference({ direction }),
     })),
     ...GROUPS.map((group, index) => ({
       id: `group-${group.id}`,
-      label: index === 0 ? "Group by nothing" : `Group by ${group.label.toLowerCase()}`,
+      label: index === 0 ? "Nothing" : group.label,
+      heading: index === 0 ? "Group by" : undefined,
       checked: preference.group === group.id,
-      dividerBefore: index === 0,
       onSelect: () => onPreference({ group: group.id }),
     })),
   ];
 
   const actionItems: MenuItem[] = [
+    // A phone has no room for a row of glyphs, so the things that were glyphs
+    // become words here. Sorting first: it is the one people look for.
+    ...(props.compact && !props.reading ? sortItems : []),
     {
       id: "preview",
+      ...(props.compact && !props.reading ? { dividerBefore: true } : {}),
       label: preference.previewPane ? "Hide the preview panel" : "Show the preview panel",
       onSelect: () => onPreference({ previewPane: !preference.previewPane }),
     },
@@ -125,7 +134,12 @@ export function Toolbar(props: ToolbarProps) {
   ];
 
   return (
-    <div className="gf-win-toolbar" role="toolbar" aria-label="Window controls">
+    <div
+      className={`gf-win-toolbar ${props.compact ? "gf-win-toolbar-compact" : ""}`}
+      data-searching={showSearch ? "true" : undefined}
+      role="toolbar"
+      aria-label="Window controls"
+    >
       <TooltipGroup>
       <Tooltip label={props.sidebarCollapsed ? "Show the places list" : "Hide the places list"}>
         <button
@@ -140,6 +154,9 @@ export function Toolbar(props: ToolbarProps) {
       </Tooltip>
 
       <div className="flex flex-none items-center">
+        {/* Back is the one a phone keeps. Forward, up and home are three more
+            glyphs for journeys the path bar at the foot already makes, and at
+            this width every glyph costs a piece of the folder's name. */}
         <Tooltip label="Back">
           <button
             type="button"
@@ -151,38 +168,42 @@ export function Toolbar(props: ToolbarProps) {
             <ArrowLeftIcon />
           </button>
         </Tooltip>
-        <Tooltip label="Forward">
-          <button
-            type="button"
-            className="gf-win-tool"
-            aria-label="Forward"
-            disabled={!props.canGoForward}
-            onClick={props.onForward}
-          >
-            <ArrowRightIcon />
-          </button>
-        </Tooltip>
-        <Tooltip label="Up one level">
-          <button
-            type="button"
-            className="gf-win-tool gf-win-up"
-            aria-label="Up one level"
-            disabled={!props.canGoUp}
-            onClick={props.onUp}
-          >
-            <ChevronUpIcon />
-          </button>
-        </Tooltip>
-        <Tooltip label="All folders">
-          <button type="button" className="gf-win-tool" aria-label="All folders" onClick={props.onHome}>
-            <HomeIcon />
-          </button>
-        </Tooltip>
+        {!props.compact && (
+          <>
+            <Tooltip label="Forward">
+              <button
+                type="button"
+                className="gf-win-tool"
+                aria-label="Forward"
+                disabled={!props.canGoForward}
+                onClick={props.onForward}
+              >
+                <ArrowRightIcon />
+              </button>
+            </Tooltip>
+            <Tooltip label="Up one level">
+              <button
+                type="button"
+                className="gf-win-tool gf-win-up"
+                aria-label="Up one level"
+                disabled={!props.canGoUp}
+                onClick={props.onUp}
+              >
+                <ChevronUpIcon />
+              </button>
+            </Tooltip>
+            <Tooltip label="All folders">
+              <button type="button" className="gf-win-tool" aria-label="All folders" onClick={props.onHome}>
+                <HomeIcon />
+              </button>
+            </Tooltip>
+          </>
+        )}
       </div>
 
       <p className="gf-win-title gf-truncate flex-1">{props.title}</p>
 
-      {!props.reading && (
+      {!props.reading && !props.compact && (
       <div className="gf-win-views" role="group" aria-label="How to show this">
         {VIEWS.map((view) => (
           <Tooltip key={view.id} label={`${view.label} view`} shortcut={`mod+${view.hint}`}>
@@ -199,9 +220,11 @@ export function Toolbar(props: ToolbarProps) {
       </div>
       )}
 
-      {!props.reading && <Menu label="Sort and group" trigger={<SortIcon />} items={sortItems} tooltip />}
+      {!props.reading && !props.compact && (
+        <Menu label="Sort and group" trigger={<SortIcon />} items={sortItems} tooltip />
+      )}
 
-      {!props.reading && props.view === "icons" && (
+      {!props.reading && !props.compact && props.view === "icons" && (
         <label className="gf-win-size-slider hidden md:flex">
           <span className="sr-only">Tile size</span>
           <ViewIconsIcon className="h-3 w-3 text-[var(--gf-ink-faint)]" />

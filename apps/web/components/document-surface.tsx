@@ -573,8 +573,15 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
     <div>
       <p className="sr-only" role="status" aria-live="polite">{reviewAnnouncement}</p>
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--gf-line)] px-4 py-3 sm:px-6">
-        {/* On a phone the name gets its own row; the actions wrap beneath it. */}
-        <div className="flex min-w-0 flex-1 basis-full items-center gap-2 sm:basis-auto">
+        {/* On a phone the name takes its own row only when there are enough
+            actions to need one. A file you can only read has Review and
+            nothing else, and it sits beside the name rather than costing a
+            second row of chrome above the file itself. */}
+        <div
+          className={`flex min-w-0 flex-1 items-center gap-2 sm:basis-auto ${
+            editable ? "basis-full" : "basis-auto"
+          }`}
+        >
           <button
             type="button"
             onClick={props.onClose}
