@@ -536,6 +536,690 @@ Before it goes out:
 - Everything is relative, so the folder can be zipped and sent as it is.
 `;
 
+/* ------------------------------------- Pages inside the working folders */
+
+// Each of these is a deliverable someone would actually hand over, written as
+// a web page and living in the folder beside the things it is made of. They
+// point at that folder's own photographs, video and audio, so opening one is
+// the whole claim in a single screen: the folder holds the pieces, the page is
+// the piece made of them, and both are saved together.
+
+// Kestrel Studio. No script at all — markup, styling, and the folder's own
+// media. The disclosures open and close on their own; that is the browser.
+const KESTREL_PAGE = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meridian House — site visit</title>
+  <style>
+    :root { --ink:#191b1f; --muted:#6a7280; --line:#e4e7ec; --accent:#7a5c3e; --wash:#f7f5f2; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:0 20px 80px; background:#fff; color:var(--ink);
+           font:16px/1.6 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+    .wrap { max-width:52rem; margin:0 auto; }
+    header { padding:52px 0 26px; border-bottom:1px solid var(--line); }
+    .mark { height:30px; width:auto; display:block; margin-bottom:26px; }
+    .eyebrow { margin:0 0 10px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px;
+               letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+    h1 { margin:0 0 14px; font-size:clamp(28px,5vw,44px); line-height:1.12; letter-spacing:-.02em; }
+    .lede { margin:0; font-size:18.5px; color:var(--muted); }
+    section { padding:32px 0; border-bottom:1px solid var(--line); }
+    h2 { margin:0 0 16px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12.5px;
+         letter-spacing:.09em; text-transform:uppercase; color:var(--accent); }
+    p { margin:0 0 14px; }
+    video, audio { width:100%; display:block; }
+    video { border-radius:10px; background:#000; }
+    figure { margin:0; }
+    figcaption { margin-top:10px; font-family:ui-sans-serif,system-ui,sans-serif;
+                 font-size:12.5px; color:var(--muted); }
+    .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); }
+    .grid img { width:100%; height:200px; object-fit:cover; border-radius:8px; display:block; }
+    .memo { padding:16px; border:1px solid var(--line); border-radius:10px; background:var(--wash); }
+    details { padding:14px 0; border-bottom:1px solid var(--line); }
+    details:last-of-type { border-bottom:0; }
+    summary { cursor:pointer; font-weight:600; font-family:ui-sans-serif,system-ui,sans-serif; font-size:15px; }
+    details p { margin:10px 0 0; color:var(--muted); }
+    footer { padding-top:26px; font-family:ui-sans-serif,system-ui,sans-serif;
+             font-size:12.5px; color:var(--muted); }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink:#f1f2f4; --muted:#a6adb8; --line:#2b3037; --accent:#d3ae86; --wash:#1d2126; }
+      body { background:#15171a; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img class="mark" src="logo.png" alt="Kestrel Studio">
+    <p class="eyebrow">Site visit &middot; 14 August 2026</p>
+    <h1>Meridian House</h1>
+    <p class="lede">
+      The second visit since the roof came off. Everything below was recorded on
+      the day and sits in this folder beside this page.
+    </p>
+  </header>
+
+  <main>
+    <section>
+      <h2>The walk-through</h2>
+      <figure>
+        <video controls preload="metadata" poster="exterior/south-elevation.png" src="walkthrough.mp4"></video>
+        <figcaption>Ground floor through to the stair hall.
+          Filmed on the south side at about four in the afternoon.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>Voice memo from the day</h2>
+      <div class="memo">
+        <audio controls preload="none" src="site-visit.m4a"></audio>
+        <p style="margin:12px 0 0; font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px;">
+          Recorded standing in the hallway. The lintel measurement at the end is
+          the one that matters for the structural note.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Outside</h2>
+      <div class="grid">
+        <img src="exterior/south-elevation.png" alt="South elevation">
+        <img src="exterior/entrance.png" alt="The entrance">
+        <img src="exterior/roofline.png" alt="The roofline">
+        <img src="exterior/detail/brickwork.png" alt="Brickwork detail">
+        <img src="exterior/detail/window-reveal.png" alt="Window reveal detail">
+      </div>
+    </section>
+
+    <section>
+      <h2>Inside</h2>
+      <div class="grid">
+        <img src="interior/hallway.png" alt="The hallway">
+        <img src="interior/stairs.png" alt="The stairs">
+      </div>
+    </section>
+
+    <section>
+      <h2>What we found</h2>
+      <details open>
+        <summary>The brickwork on the south side is sound</summary>
+        <p>Some spalling at the low course, nothing structural. Repointing only,
+           and only where it shows.</p>
+      </details>
+      <details>
+        <summary>The window reveals are not original</summary>
+        <p>Two of the five have been widened at some point, badly. The detail
+           photograph shows the join. This changes the joinery quote.</p>
+      </details>
+      <details>
+        <summary>The stair hall wants the light it used to have</summary>
+        <p>The blocked window above the half-landing is still there behind the
+           plaster. Opening it is the single biggest change available for the
+           money, and it is in the walk-through at 1:12.</p>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Kestrel Studio &middot; Prepared for the owners &middot;
+       Everything here is in this folder.</p>
+  </footer>
+</div>
+</body>
+</html>
+`;
+
+// Hollow Peak. The page reads the folder's own spreadsheet when it runs, so
+// correcting a number in figures/revenue.csv corrects the page.
+const HOLLOW_PAGE = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hollow Peak — Q3 at a glance</title>
+  <style>
+    :root { --ink:#111418; --muted:#626a77; --line:#e3e6eb; --accent:#1d6f5c; --wash:#f4f6f7; --warn:#a1442f; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:0 20px 80px; background:#fff; color:var(--ink);
+           font:15.5px/1.62 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .wrap { max-width:50rem; margin:0 auto; }
+    header { display:flex; align-items:center; gap:14px; padding:44px 0 22px; border-bottom:1px solid var(--line); }
+    header img { height:38px; width:38px; border-radius:9px; }
+    header h1 { margin:0; font-size:23px; letter-spacing:-.02em; }
+    header p { margin:2px 0 0; font-size:13px; color:var(--muted); }
+    section { padding:28px 0; border-bottom:1px solid var(--line); }
+    h2 { margin:0 0 4px; font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--accent); }
+    .note { margin:0 0 18px; font-size:13px; color:var(--muted); }
+    .tiles { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
+    .tile { padding:14px 16px; border:1px solid var(--line); border-radius:10px; background:var(--wash); }
+    .tile b { display:block; font-size:26px; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+    .tile span { font-size:12.5px; color:var(--muted); }
+    table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+    th, td { padding:9px 8px; text-align:right; border-bottom:1px solid var(--line); font-size:14px; }
+    th:first-child, td:first-child { text-align:left; }
+    thead th { font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:650; }
+    .track { display:block; height:7px; border-radius:99px; background:var(--wash); overflow:hidden; }
+    .track i { display:block; height:100%; background:var(--accent); border-radius:99px;
+               transition:width .6s cubic-bezier(.2,.7,.3,1); }
+    .charts { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); }
+    .charts img { width:100%; border:1px solid var(--line); border-radius:10px; display:block; background:#fff; }
+    .flag { padding:14px 16px; border-left:3px solid var(--warn); background:var(--wash); border-radius:0 8px 8px 0; }
+    .flag b { color:var(--warn); }
+    footer { padding-top:24px; font-size:12.5px; color:var(--muted); }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink:#eef0f3; --muted:#a0a8b4; --line:#292f36; --accent:#63c3aa; --wash:#1c2026; --warn:#e0876d; }
+      body { background:#111418; }
+      .charts img { background:#fff; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="logo.png" alt="Hollow Peak">
+    <div>
+      <h1>Q3 at a glance</h1>
+      <p>For the board, 30 August 2026. The figures are read from
+         figures/revenue.csv in this folder.</p>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>Where the quarter landed</h2>
+      <p class="note" id="status">Reading the figures&hellip;</p>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section>
+      <h2>Month by month</h2>
+      <p class="note">Net is revenue less costs. The bar is that month against
+         the best month in the table.</p>
+      <table>
+        <thead>
+          <tr><th>Month</th><th>Revenue</th><th>Costs</th><th>Net</th><th style="width:34%">&nbsp;</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>The two charts</h2>
+      <p class="note">Drawn from the same table by figures/redraw.py, and saved
+         beside it.</p>
+      <div class="charts">
+        <img src="figures/net-by-month.png" alt="Net by month">
+        <img src="figures/cost-per-folder.png" alt="Cost per active folder">
+      </div>
+    </section>
+
+    <section>
+      <h2>The one thing to watch</h2>
+      <p class="flag"><b>January.</b> The renewal cliff is unchanged by anything
+         in this quarter. Two large accounts renewed early, which moves cash and
+         not the cliff.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Hollow Peak &middot; The full pack is Board pack.pdf, in this folder.</p>
+  </footer>
+</div>
+
+<script>
+// The table on this page is not typed into it. It is read from the folder's
+// own spreadsheet when the page runs, so a corrected figure corrects the page.
+(function () {
+  var status = document.getElementById("status");
+
+  function parse(text) {
+    var lines = text.trim().split("\\n").filter(function (line) { return line.trim(); });
+    var head = lines.shift().split(",");
+    return lines.map(function (line) {
+      var cells = line.split(",");
+      var row = {};
+      head.forEach(function (name, index) {
+        var value = (cells[index] || "").trim();
+        row[name.trim()] = isNaN(Number(value)) || value === "" ? value : Number(value);
+      });
+      return row;
+    });
+  }
+
+  function money(value) {
+    return "$" + Math.round(value).toLocaleString();
+  }
+
+  function draw(rows) {
+    var revenue = 0, costs = 0, net = 0, best = 0;
+    rows.forEach(function (row) {
+      revenue += row.Revenue; costs += row.Costs; net += row.Net;
+      if (row.Net > best) best = row.Net;
+    });
+
+    var first = rows[0], last = rows[rows.length - 1];
+    var growth = first.Revenue ? (100 * (last.Revenue - first.Revenue) / first.Revenue) : 0;
+    var margin = revenue ? (100 * net / revenue) : 0;
+
+    var tiles = [
+      { value: money(revenue), label: "Revenue across " + rows.length + " months" },
+      { value: money(net), label: "Net, same period" },
+      { value: margin.toFixed(1) + "%", label: "Net margin" },
+      { value: (growth >= 0 ? "+" : "") + growth.toFixed(1) + "%", label: "Revenue, first month to last" }
+    ];
+    var into = document.getElementById("tiles");
+    tiles.forEach(function (tile) {
+      var box = document.createElement("div");
+      box.className = "tile";
+      var b = document.createElement("b"); b.textContent = tile.value;
+      var s = document.createElement("span"); s.textContent = tile.label;
+      box.appendChild(b); box.appendChild(s); into.appendChild(box);
+    });
+
+    var body = document.getElementById("rows");
+    rows.forEach(function (row, index) {
+      var tr = document.createElement("tr");
+      [row.Month, money(row.Revenue), money(row.Costs), money(row.Net)].forEach(function (cell) {
+        var td = document.createElement("td"); td.textContent = cell; tr.appendChild(td);
+      });
+      var bar = document.createElement("td");
+      var track = document.createElement("span"); track.className = "track";
+      var fill = document.createElement("i");
+      track.appendChild(fill); bar.appendChild(track); tr.appendChild(bar);
+      body.appendChild(tr);
+      setTimeout(function () { fill.style.width = (100 * row.Net / best) + "%"; }, 80 + index * 90);
+    });
+
+    status.textContent = rows.length + " months, read from figures/revenue.csv when this page opened.";
+  }
+
+  (async function () {
+    try {
+      var answer = await fetch("figures/revenue.csv");
+      if (!answer.ok) throw new Error("the file answered " + answer.status);
+      draw(parse(await answer.text()));
+    } catch (problem) {
+      status.textContent = "The figures could not be read: " + problem.message;
+      console.error("Q3 page: " + problem.message);
+    }
+  })();
+})();
+</script>
+</body>
+</html>
+`;
+
+// Marrow & Salt. Filtering that happens in the page, and the folder's own
+// photographs and promo video.
+const MARROW_PAGE = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marrow &amp; Salt — winter menu</title>
+  <style>
+    :root { --ink:#20180f; --muted:#7b6a58; --line:#e8e0d5; --accent:#8a3324; --wash:#faf6f0; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:0 20px 80px; background:#fffdfa; color:var(--ink);
+           font:16px/1.6 "Iowan Old Style","Palatino Linotype",Georgia,serif; }
+    .wrap { max-width:46rem; margin:0 auto; }
+    header { text-align:center; padding:52px 0 26px; border-bottom:2px solid var(--ink); }
+    header img { height:64px; width:64px; border-radius:14px; margin:0 auto 18px; display:block; }
+    h1 { margin:0 0 8px; font-size:clamp(30px,6vw,44px); letter-spacing:-.02em; }
+    .eyebrow { margin:0; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px;
+               letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+    .filters { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; padding:22px 0; }
+    .chip { border:1px solid var(--line); border-radius:999px; padding:8px 15px; background:#fff;
+            font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px; font-weight:600;
+            color:var(--muted); cursor:pointer; }
+    .chip[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .count { text-align:center; font-family:ui-sans-serif,system-ui,sans-serif;
+             font-size:12.5px; color:var(--muted); padding-bottom:8px; }
+    .course { padding:26px 0 4px; }
+    .course h2 { margin:0 0 14px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px;
+                 letter-spacing:.12em; text-transform:uppercase; color:var(--accent); }
+    .dish { display:flex; justify-content:space-between; gap:18px; padding:13px 0; border-bottom:1px dotted var(--line); }
+    .dish h3 { margin:0 0 3px; font-size:17.5px; font-weight:600; }
+    .dish p { margin:0; font-size:14px; color:var(--muted); }
+    .dish b { font-variant-numeric:tabular-nums; font-weight:600; white-space:nowrap; }
+    .tags { margin-top:5px; display:flex; gap:6px; flex-wrap:wrap; }
+    .tag { font-family:ui-sans-serif,system-ui,sans-serif; font-size:10.5px; letter-spacing:.05em;
+           text-transform:uppercase; padding:2px 7px; border-radius:99px; background:var(--wash); color:var(--muted); }
+    .plates { display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); padding:30px 0; }
+    .plates img { width:100%; height:150px; object-fit:cover; border-radius:8px; display:block; }
+    video { width:100%; border-radius:10px; background:#000; display:block; }
+    .room { padding:22px 0; border-top:1px solid var(--line); }
+    .room h2 { margin:0 0 12px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px;
+               letter-spacing:.12em; text-transform:uppercase; color:var(--accent); }
+    .empty { text-align:center; padding:26px 0; color:var(--muted); }
+    footer { padding-top:26px; text-align:center; font-family:ui-sans-serif,system-ui,sans-serif;
+             font-size:12.5px; color:var(--muted); }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink:#f3ece3; --muted:#b3a494; --line:#37302a; --accent:#e0866f; --wash:#241e1a; }
+      body { background:#191512; }
+      .chip { background:#241e1a; }
+      header { border-bottom-color:var(--muted); }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="logo.png" alt="Marrow and Salt">
+    <p class="eyebrow">Marrow &amp; Salt</p>
+    <h1>Winter menu</h1>
+    <p class="eyebrow">Served from 1 December</p>
+  </header>
+
+  <div class="filters" id="filters" role="group" aria-label="Show only certain dishes"></div>
+  <p class="count" id="count"></p>
+
+  <main id="menu"></main>
+  <p class="empty" id="empty" hidden>Nothing on the menu matches all of those at once.</p>
+
+  <div class="plates">
+    <img src="photos/loaf.png" alt="The Sunday loaf">
+    <img src="photos/soup.png" alt="Soup of the day">
+    <img src="photos/pastry-case.png" alt="The pastry case">
+  </div>
+
+  <div class="room">
+    <h2>The room in winter</h2>
+    <video controls preload="metadata" poster="photos/dining-room.png" src="promo.mp4"></video>
+  </div>
+
+  <footer>
+    <p>Costings are in Menu costing.xlsx, in this folder. Prices include service.</p>
+  </footer>
+</div>
+
+<script>
+// The menu is data, and the filtering happens here in the page. Nothing is
+// asked of anything outside it.
+(function () {
+  var DISHES = [
+    { name: "Sunday loaf, cultured butter", course: "To start", price: 6, tags: ["vegetarian"],
+      note: "The long ferment. Baked from four in the morning." },
+    { name: "Salt cod croquettes", course: "To start", price: 9, tags: [],
+      note: "Three to a plate, with a lemon aioli." },
+    { name: "Roast squash, brown butter, sage", course: "To start", price: 8.5, tags: ["vegetarian", "no gluten"],
+      note: "From the last of the Marlow crop." },
+    { name: "Barley and root soup", course: "To start", price: 7.5, tags: ["vegan", "no gluten"],
+      note: "Thick enough to stand a spoon in." },
+    { name: "Braised shin, marrow, mash", course: "Mains", price: 21, tags: [],
+      note: "Six hours. The dish the winter menu is built around." },
+    { name: "Hake, brown shrimp, cider", course: "Mains", price: 19.5, tags: ["no gluten"],
+      note: "Line caught, landed at Brixham." },
+    { name: "Celeriac steak, hazelnut crumb", course: "Mains", price: 16, tags: ["vegan"],
+      note: "Roasted whole, carved at the pass." },
+    { name: "Pearl barley risotto, winter greens", course: "Mains", price: 15.5, tags: ["vegetarian"],
+      note: "Finished with a hard sheep cheese." },
+    { name: "Burnt honey custard tart", course: "To finish", price: 8, tags: ["vegetarian"],
+      note: "From the pastry case. There are never many." },
+    { name: "Poached quince, oat crumble", course: "To finish", price: 7.5, tags: ["vegan"],
+      note: "Quince from the tree behind the bakery." },
+    { name: "Chocolate and olive oil pot", course: "To finish", price: 7, tags: ["vegetarian", "no gluten"],
+      note: "Sea salt on top, as it should be." }
+  ];
+  var COURSES = ["To start", "Mains", "To finish"];
+  var TAGS = ["vegetarian", "vegan", "no gluten"];
+  var chosen = {};
+
+  var filters = document.getElementById("filters");
+  TAGS.forEach(function (tag) {
+    var chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.textContent = tag;
+    chip.setAttribute("aria-pressed", "false");
+    chip.addEventListener("click", function () {
+      chosen[tag] = !chosen[tag];
+      chip.setAttribute("aria-pressed", chosen[tag] ? "true" : "false");
+      render();
+    });
+    filters.appendChild(chip);
+  });
+
+  function wanted(dish) {
+    return TAGS.every(function (tag) {
+      return !chosen[tag] || dish.tags.indexOf(tag) !== -1;
+    });
+  }
+
+  function render() {
+    var menu = document.getElementById("menu");
+    menu.textContent = "";
+    var showing = DISHES.filter(wanted);
+
+    COURSES.forEach(function (course) {
+      var dishes = showing.filter(function (dish) { return dish.course === course; });
+      if (!dishes.length) return;
+      var block = document.createElement("section");
+      block.className = "course";
+      var heading = document.createElement("h2");
+      heading.textContent = course;
+      block.appendChild(heading);
+
+      dishes.forEach(function (dish) {
+        var row = document.createElement("div");
+        row.className = "dish";
+        var left = document.createElement("div");
+        var name = document.createElement("h3"); name.textContent = dish.name;
+        var note = document.createElement("p"); note.textContent = dish.note;
+        left.appendChild(name); left.appendChild(note);
+        if (dish.tags.length) {
+          var tags = document.createElement("div"); tags.className = "tags";
+          dish.tags.forEach(function (tag) {
+            var pill = document.createElement("span"); pill.className = "tag"; pill.textContent = tag;
+            tags.appendChild(pill);
+          });
+          left.appendChild(tags);
+        }
+        var price = document.createElement("b");
+        price.textContent = "£" + dish.price.toFixed(2);
+        row.appendChild(left); row.appendChild(price);
+        block.appendChild(row);
+      });
+      menu.appendChild(block);
+    });
+
+    document.getElementById("empty").hidden = showing.length > 0;
+    var picked = TAGS.filter(function (tag) { return chosen[tag]; });
+    document.getElementById("count").textContent = picked.length
+      ? showing.length + " of " + DISHES.length + " dishes are " + picked.join(" and ")
+      : DISHES.length + " dishes. Choose above to narrow it down.";
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
+`;
+
+// Fernweh. A launch page: the product film, the renders, a countdown that runs
+// in the page, and the sting on a button.
+const FERNWEH_PAGE = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fernweh Wayfarer — launching soon</title>
+  <style>
+    :root { --ink:#0e1116; --muted:#5f6875; --line:#e2e6ec; --accent:#15607a; --wash:#f3f6f8; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:0 20px 80px; background:#fff; color:var(--ink);
+           font:16px/1.62 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .wrap { max-width:54rem; margin:0 auto; }
+    nav { display:flex; align-items:center; gap:10px; padding:24px 0; }
+    nav img { height:30px; width:30px; border-radius:8px; }
+    nav b { font-size:15px; letter-spacing:-.01em; }
+    nav .push { margin-left:auto; }
+    .sting { border:1px solid var(--line); border-radius:999px; padding:7px 14px; background:#fff;
+             font-size:13px; font-weight:600; color:var(--accent); cursor:pointer; }
+    .hero { padding:14px 0 34px; border-bottom:1px solid var(--line); }
+    h1 { margin:0 0 14px; font-size:clamp(32px,6.4vw,58px); line-height:1.06; letter-spacing:-.035em; }
+    .lede { margin:0 0 24px; max-width:34rem; font-size:19px; color:var(--muted); }
+    video { width:100%; border-radius:14px; background:#000; display:block; }
+    .clock { display:flex; gap:10px; flex-wrap:wrap; padding:26px 0 0; }
+    .unit { flex:1 1 96px; padding:14px 8px; border:1px solid var(--line); border-radius:12px;
+            background:var(--wash); text-align:center; }
+    .unit b { display:block; font-size:30px; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+    .unit span { font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+    section { padding:34px 0; border-bottom:1px solid var(--line); }
+    h2 { margin:0 0 6px; font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--accent); }
+    .note { margin:0 0 20px; font-size:14px; color:var(--muted); }
+    .shots { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
+    .shots button { padding:0; border:1px solid var(--line); border-radius:12px; overflow:hidden;
+                    background:none; cursor:pointer; display:block; }
+    .shots img { width:100%; height:190px; object-fit:cover; display:block; }
+    .specs { display:grid; gap:0; }
+    .spec { display:flex; justify-content:space-between; gap:20px; padding:11px 2px;
+            border-bottom:1px solid var(--line); font-size:14.5px; }
+    .spec span:first-child { color:var(--muted); }
+    .spec span:last-child { font-variant-numeric:tabular-nums; }
+    dialog { max-width:min(900px,92vw); border:0; border-radius:14px; padding:0; background:#000; }
+    dialog img { display:block; width:100%; height:auto; }
+    dialog::backdrop { background:rgba(6,9,13,.78); }
+    .close { position:absolute; top:10px; right:12px; border-radius:999px; padding:6px 12px;
+             background:rgba(255,255,255,.92); font-size:13px; font-weight:650; cursor:pointer; }
+    footer { padding-top:26px; font-size:12.5px; color:var(--muted); }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink:#eef1f5; --muted:#9ba4b1; --line:#262c34; --accent:#66b6d0; --wash:#181d23; }
+      body { background:#0e1116; }
+      .sting, .shots button { background:#181d23; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <img src="logo.png" alt="Fernweh">
+    <b>Fernweh</b>
+    <span class="push"></span>
+    <button class="sting" type="button" id="sting">Play the launch sting</button>
+  </nav>
+
+  <div class="hero">
+    <h1>The Wayfarer.<br>A camera you take, not one you pack.</h1>
+    <p class="lede">
+      Three hundred grams, one dial, and a sensor that does not mind the cold.
+      Shipping in the spring.
+    </p>
+    <video controls muted playsinline preload="metadata"
+           poster="renders/product-hero.png" src="demo.mp4"></video>
+    <div class="clock" id="clock" aria-live="off"></div>
+  </div>
+
+  <main>
+    <section>
+      <h2>The camera</h2>
+      <p class="note">Tap a picture to see it whole.</p>
+      <div class="shots" id="shots">
+        <button type="button" data-full="renders/product-hero.png">
+          <img src="renders/product-hero.png" alt="The Wayfarer, front">
+        </button>
+        <button type="button" data-full="renders/product-detail.png">
+          <img src="renders/product-detail.png" alt="The dial, close up">
+        </button>
+        <button type="button" data-full="renders/lifestyle-shot.png">
+          <img src="renders/lifestyle-shot.png" alt="The Wayfarer in use">
+        </button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Numbers</h2>
+      <p class="note">The ones people ask for first.</p>
+      <div class="specs">
+        <div class="spec"><span>Weight, with battery</span><span>298 g</span></div>
+        <div class="spec"><span>Sensor</span><span>26 MP, back-illuminated</span></div>
+        <div class="spec"><span>Rated to</span><span>&minus;20 &deg;C</span></div>
+        <div class="spec"><span>Frames on one charge</span><span>約 640</span></div>
+        <div class="spec"><span>Lens mount</span><span>Fernweh F, adaptable</span></div>
+        <div class="spec"><span>Price at launch</span><span>$1,290</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Fernweh &middot; The full story is in One-pager.pdf and Pitch deck.pptx,
+       both in this folder.</p>
+  </footer>
+</div>
+
+<dialog id="viewer">
+  <button class="close" type="button" id="closeViewer">Close</button>
+  <img id="viewerImage" alt="">
+</dialog>
+
+<audio id="stingAudio" src="launch-sting.mp3" preload="none"></audio>
+
+<script>
+// Three small things, all of them in the page: a clock, a picture viewer, and
+// a button that plays the folder's own sting.
+(function () {
+  var LAUNCH = new Date("2027-03-18T09:00:00Z").getTime();
+  var UNITS = [
+    { label: "days", size: 86400000 },
+    { label: "hours", size: 3600000 },
+    { label: "minutes", size: 60000 },
+    { label: "seconds", size: 1000 }
+  ];
+  var clock = document.getElementById("clock");
+  var boxes = UNITS.map(function (unit) {
+    var box = document.createElement("div");
+    box.className = "unit";
+    var value = document.createElement("b");
+    var name = document.createElement("span");
+    name.textContent = unit.label;
+    box.appendChild(value); box.appendChild(name);
+    clock.appendChild(box);
+    return value;
+  });
+
+  function tick() {
+    var left = Math.max(0, LAUNCH - Date.now());
+    UNITS.forEach(function (unit, index) {
+      var whole = Math.floor(left / unit.size);
+      left -= whole * unit.size;
+      boxes[index].textContent = index === 0 ? String(whole) : ("0" + whole).slice(-2);
+    });
+  }
+  tick();
+  // setInterval rather than a frame callback: a window nobody is looking at
+  // runs no frames, and a clock that stops when you look away is worse than
+  // no clock.
+  setInterval(tick, 1000);
+
+  var viewer = document.getElementById("viewer");
+  var viewerImage = document.getElementById("viewerImage");
+  document.getElementById("shots").addEventListener("click", function (event) {
+    var button = event.target.closest ? event.target.closest("button[data-full]") : null;
+    if (!button) return;
+    var picture = button.querySelector("img");
+    viewerImage.src = picture.currentSrc || picture.src;
+    viewerImage.alt = picture.alt;
+    if (viewer.showModal) viewer.showModal();
+  });
+  document.getElementById("closeViewer").addEventListener("click", function () { viewer.close(); });
+
+  var sting = document.getElementById("stingAudio");
+  var button = document.getElementById("sting");
+  button.addEventListener("click", function () {
+    if (!sting.paused) { sting.pause(); sting.currentTime = 0; button.textContent = "Play the launch sting"; return; }
+    var played = sting.play();
+    button.textContent = "Stop";
+    if (played && played.catch) played.catch(function () { button.textContent = "The sting would not play"; });
+  });
+  sting.addEventListener("ended", function () { button.textContent = "Play the launch sting"; });
+})();
+</script>
+</body>
+</html>
+`;
+
 const asset = (slug: string, path: string): string => `/demo-assets/${slug}/${path}`;
 
 function makeFolders(): DemoFolder[] {
@@ -543,10 +1227,11 @@ function makeFolders(): DemoFolder[] {
     {
       folder: {
         id: "demo-report", name: "Q3 Board Pack", createdAt: daysAgo(96),
-        lastSeq: 24, lastSaveAt: hoursAgo(2), role: "owner",
+        lastSeq: 25, lastSaveAt: hoursAgo(1), role: "owner",
         contributorCount: 2, openProposalCount: 0,
       },
       files: [
+        { path: "Q3 at a glance.html", size: HOLLOW_PAGE.length, content: HOLLOW_PAGE },
         { path: "summary.md", size: REPORT_SUMMARY.length, content: REPORT_SUMMARY },
         { path: "open-questions.md", size: OPEN_QUESTIONS.length, content: OPEN_QUESTIONS },
         { path: "figures/revenue.csv", size: REVENUE_CSV.length, content: REVENUE_CSV },
@@ -562,6 +1247,7 @@ function makeFolders(): DemoFolder[] {
         { path: "Cover letter.docx", size: 8_877, asset: asset("hollow-peak", "Cover letter.docx") },
       ],
       saves: [
+        save(25, hoursAgo(1), "Put the quarter on one page that reads the figures itself", ["Q3 at a glance.html"], { harness: "claude-code" }),
         save(24, hoursAgo(2), "Rewrote the summary and refreshed the August figure", ["summary.md", "figures/revenue.csv"], { harness: "claude-code" }),
         save(23, hoursAgo(9), "Added the two charts and the script that draws them", ["figures/net-by-month.png", "figures/cost-per-folder.png", "figures/redraw.py"], { deviceName: "Carlos's laptop" }),
         save(22, daysAgo(2), "Accepted a suggestion on the opening paragraph", ["summary.md"], { harness: "codex" }),
@@ -578,10 +1264,11 @@ function makeFolders(): DemoFolder[] {
     {
       folder: {
         id: "demo-photos", name: "Meridian House", createdAt: daysAgo(41),
-        lastSeq: 11, lastSaveAt: daysAgo(1), role: "owner",
+        lastSeq: 12, lastSaveAt: hoursAgo(5), role: "owner",
         contributorCount: 0, openProposalCount: 0,
       },
       files: [
+        { path: "Site visit.html", size: KESTREL_PAGE.length, content: KESTREL_PAGE },
         { path: "notes.md", size: KESTREL_NOTES.length, content: KESTREL_NOTES },
         { path: "logo.png", size: 438_602, asset: asset("kestrel-studio", "logo.png") },
         { path: "exterior/south-elevation.png", size: 273_310, asset: asset("kestrel-studio", "exterior/south-elevation.png") },
@@ -599,6 +1286,7 @@ function makeFolders(): DemoFolder[] {
         { path: "Contract.docx", size: 8_858, asset: asset("kestrel-studio", "Contract.docx") },
       ],
       saves: [
+        save(12, hoursAgo(5), "Wrote up the site visit as a page the owners can just open", ["Site visit.html"], { harness: "codex" }),
         save(11, daysAgo(1), "Brought in the Kestrel Studio mark and rebuilt the client proposal around it", ["logo.png", "Client proposal.pptx"], { deviceName: "Carlos's laptop" }),
         save(10, daysAgo(2), "Added the renovation budget and the countersigned contract", ["Renovation budget.xlsx", "Contract.docx"], { deviceName: "Carlos's laptop" }),
         save(9, daysAgo(2), "Wrote up the site report from the second visit", ["Site report.pdf"], { deviceName: "Carlos's laptop" }),
@@ -629,10 +1317,11 @@ function makeFolders(): DemoFolder[] {
     {
       folder: {
         id: "demo-recipes", name: "Winter Menu Launch", createdAt: daysAgo(220),
-        lastSeq: 6, lastSaveAt: daysAgo(1), role: "contributor",
+        lastSeq: 7, lastSaveAt: hoursAgo(9), role: "contributor",
         contributorCount: 1, openProposalCount: 0,
       },
       files: [
+        { path: "Winter menu.html", size: MARROW_PAGE.length, content: MARROW_PAGE },
         { path: "sunday-bread.md", size: RECIPE.length, content: RECIPE },
         { path: "winter-menu-notes.md", size: WINTER_MENU_NOTES.length, content: WINTER_MENU_NOTES },
         { path: "logo.png", size: 383_554, asset: asset("marrow-salt", "logo.png") },
@@ -648,6 +1337,7 @@ function makeFolders(): DemoFolder[] {
         { path: "Supplier letter.docx", size: 8_727, asset: asset("marrow-salt", "Supplier letter.docx") },
       ],
       saves: [
+        save(7, hoursAgo(9), "Made the menu a page, so it can go out before the card is printed", ["Winter menu.html"], { harness: "claude-code" }),
         save(6, daysAgo(1), "Added the promo video and the dining room playlist", ["promo.mp4", "dining-playlist.mp3"], { deviceName: "Carlos's laptop" }),
         save(5, daysAgo(2), "Brought in the Marrow & Salt mark and put together the investor one-pager", ["logo.png", "Investor one-pager.pptx"], { deviceName: "Carlos's laptop" }),
         save(4, daysAgo(3), "Photographed the new menu items", ["photos/loaf.png", "photos/soup.png", "photos/pastry-case.png", "photos/dining-room.png"], { deviceName: "Carlos's laptop" }),
@@ -664,10 +1354,11 @@ function makeFolders(): DemoFolder[] {
     {
       folder: {
         id: "demo-launch", name: "Wayfarer Launch", createdAt: daysAgo(60),
-        lastSeq: 9, lastSaveAt: hoursAgo(6), role: "owner",
+        lastSeq: 10, lastSaveAt: hoursAgo(3), role: "owner",
         contributorCount: 1, openProposalCount: 0,
       },
       files: [
+        { path: "Launch page.html", size: FERNWEH_PAGE.length, content: FERNWEH_PAGE },
         { path: "README.md", size: FERNWEH_README.length, content: FERNWEH_README },
         { path: "roadmap.md", size: FERNWEH_ROADMAP.length, content: FERNWEH_ROADMAP },
         { path: "logo.png", size: 397_878, asset: asset("fernweh", "logo.png") },
@@ -682,6 +1373,7 @@ function makeFolders(): DemoFolder[] {
         { path: "Investor update.docx", size: 8_814, asset: asset("fernweh", "Investor update.docx") },
       ],
       saves: [
+        save(10, hoursAgo(3), "Built the launch page around the film and the renders", ["Launch page.html"], { harness: "codex" }),
         save(9, hoursAgo(6), "Cut the product demo video and the launch sting", ["demo.mp4", "launch-sting.mp3"], { deviceName: "Carlos's laptop" }),
         save(8, daysAgo(1), "Brought in the Fernweh mark and rebuilt the pitch deck around the renders", ["logo.png", "renders/product-hero.png", "Pitch deck.pptx"], { deviceName: "Carlos's laptop" }),
         save(7, daysAgo(2), "Shot the lifestyle and detail renders", ["renders/product-detail.png", "renders/lifestyle-shot.png"], { deviceName: "Carlos's laptop" }),

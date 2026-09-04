@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { renderHtml, tokenizeHtml, attributeOf, setAttribute } from "./page-html.ts";
 import {
+  STREAM_BYTE_FLOOR,
   assetMimeFor,
   bundlePage,
   bytesToBase64,
@@ -185,6 +186,42 @@ test("a file too big for the budget is left out, not read", async () => {
   assert.deepEqual(bundle.included, ["small.png"]);
   assert.equal(readCount, 1, "the oversized file is never pulled through the browser");
   assert.match(bundle.html, /src="huge\.png"/);
+});
+
+test("a film is named for the frame to ask for, not written into the page", async () => {
+  const html = `<video src="tour.mp4" poster="still.png"></video><img src="mark.png">`;
+  let read = 0;
+  const base = reader({ "index.html": html, "still.png": PNG, "mark.png": PNG });
+  const source: PageFileReader = {
+    files: [...base.files, { path: "tour.mp4", size: STREAM_BYTE_FLOOR + 1 }],
+    readText: base.readText,
+    async readBytes(path) {
+      read += 1;
+      return base.readBytes(path);
+    },
+  };
+  const bundle = await bundlePage("index.html", html, source);
+  assert.deepEqual(bundle.streamed, ["tour.mp4"]);
+  assert.ok(bundle.included.includes("tour.mp4"), "it still counts as read from the folder");
+  assert.equal(read, 2, "the film itself is never pulled through the bundler");
+  // The address the page wrote resolves to nothing here, so it is taken off
+  // rather than left to fail; the frame is told the path instead.
+  assert.match(bundle.html, /data-gf-src="tour\.mp4"/);
+  assert.doesNotMatch(bundle.html, /[^-]src="tour\.mp4"/);
+  // Its poster and the small picture are small enough to write straight in.
+  assert.match(bundle.html, /poster="data:image\/png;base64,/);
+  assert.equal(bundle.html.match(/data:image\/png;base64,/g)?.length, 2);
+});
+
+test("a stylesheet and a script are always written in, however big", async () => {
+  const html = `<link rel="stylesheet" href="big.css"><script src="big.js"></script>`;
+  const big = "/* ".padEnd(STREAM_BYTE_FLOOR + 10, "x") + " */";
+  const bundle = await bundlePage("index.html", html, reader({ "index.html": html, "big.css": big, "big.js": big }));
+  // A stylesheet that arrives late is a flash of the wrong page; a script
+  // that arrives late never runs. Neither may be named for later.
+  assert.deepEqual(bundle.streamed, []);
+  assert.match(bundle.html, /href="data:text\/css;base64,/);
+  assert.match(bundle.html, /src="data:text\/javascript;base64,/);
 });
 
 test("a link to another page in the folder is marked, never flattened", async () => {

@@ -675,7 +675,8 @@ test("get_page_render_report answers with what the open page actually did", asyn
       openedPath: "site/index.html",
       title: "about.html",
       at: "2026-09-04T12:00:00.000Z",
-      carried: ["site/styles.css"],
+      carried: ["site/styles.css", "site/tour.webm"],
+      streamed: ["site/tour.webm"],
       missing: ["site/hero.png"],
       fromTheWeb: ["https://cdn.example.com/a.js"],
       omitted: ["site/tour.mp4"],
@@ -685,7 +686,8 @@ test("get_page_render_report answers with what the open page actually did", asyn
     const report = await tool.execute({});
     assert.equal(report.page, "site/about.html");
     assert.equal(report.openedFrom, "site/index.html");
-    assert.deepEqual(report.usedFromThisFolder, ["site/styles.css"]);
+    assert.deepEqual(report.usedFromThisFolder, ["site/styles.css", "site/tour.webm"]);
+    assert.deepEqual(report.tooBigToWriteInSoHandedOverWhenItRan, ["site/tour.webm"]);
     assert.deepEqual(report.askedForButNotInThisFolder, ["site/hero.png"]);
     assert.deepEqual(report.askedForFromTheWeb, ["https://cdn.example.com/a.js"]);
     assert.deepEqual(report.tooBigToInclude, ["site/tour.mp4"]);

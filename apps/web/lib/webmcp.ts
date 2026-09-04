@@ -951,6 +951,7 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
         openedFrom: report.openedPath,
         renderedAt: report.at,
         usedFromThisFolder: report.carried,
+        tooBigToWriteInSoHandedOverWhenItRan: report.streamed,
         askedForButNotInThisFolder: report.missing,
         askedForFromTheWeb: report.fromTheWeb,
         tooBigToInclude: report.omitted,

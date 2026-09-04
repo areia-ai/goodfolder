@@ -76,13 +76,22 @@ export function readPageFrameEvent(data: unknown, token: string): PageFrameEvent
   }
 }
 
-/** One answer to a page's own request for a file beside it. */
+/**
+ * One answer to a page's request for a file beside it.
+ *
+ * The bytes go over as an ArrayBuffer rather than text. Structured clone
+ * carries one without encoding it, and the frame can hand it straight to a
+ * Blob — which is the point: an address the frame makes from its own bytes
+ * belongs to the frame's own origin, and is the one kind of address a page
+ * with no origin is allowed to read. That is how a film in the folder plays
+ * without being written into the document as text a third larger than itself.
+ */
 export interface PageFrameReply {
   id: number;
   ok: boolean;
   status: number;
   mime: string;
-  base64: string;
+  bytes: ArrayBuffer | null;
 }
 
 /** Addressed to one frame, so a page cannot be answered by another page. */
@@ -203,10 +212,7 @@ export function pageFrameRuntime(token: string): string {
             resolve(new Response(null, { status: reply.status || 404, statusText: "Not in this folder" }));
             return;
           }
-          var binary = atob(reply.base64 || "");
-          var bytes = new Uint8Array(binary.length);
-          for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-          resolve(new Response(bytes, {
+          resolve(new Response(reply.bytes, {
             status: 200,
             headers: { "content-type": reply.mime || "application/octet-stream" }
           }));
@@ -219,6 +225,49 @@ export function pageFrameRuntime(token: string): string {
         }, 15000);
       });
     };
+  }
+
+  // Anything too big to be written into the page was named rather than
+  // carried. Ask for it now, and make an address for it here — a blob address
+  // minted inside this frame belongs to this frame, which is why it can be
+  // read at all.
+  function ask(path) {
+    return new Promise(function (resolve) {
+      var id = nextRequest++;
+      var settled = false;
+      waiting[id] = function (reply) {
+        settled = true;
+        resolve(reply.ok && reply.bytes ? new Blob([reply.bytes], { type: reply.mime || "" }) : null);
+      };
+      send("request", { id: id, url: path, raw: true });
+      setTimeout(function () {
+        if (settled) return;
+        delete waiting[id];
+        resolve(null);
+      }, 30000);
+    });
+  }
+
+  function resolveNamedMedia() {
+    ["src", "poster"].forEach(function (attribute) {
+      var named = document.querySelectorAll("[data-gf-" + attribute + "]");
+      Array.prototype.forEach.call(named, function (element) {
+        var path = element.getAttribute("data-gf-" + attribute);
+        if (!path) return;
+        element.removeAttribute("data-gf-" + attribute);
+        ask(path).then(function (blob) {
+          if (!blob) {
+            send("resource", { url: path, element: String(element.tagName || "").toLowerCase() });
+            return;
+          }
+          element[attribute] = URL.createObjectURL(blob);
+          if (element.tagName === "SOURCE" && element.parentNode && element.parentNode.load) {
+            element.parentNode.load();
+          }
+          announce();
+        });
+      });
+    });
   }
 
   function measure() {
@@ -235,6 +284,7 @@ export function pageFrameRuntime(token: string): string {
   document.addEventListener("DOMContentLoaded", function () {
     send("ready", { title: String(document.title || ""), height: measure() });
     try { new ResizeObserver(announce).observe(document.documentElement); } catch (ignored) {}
+    resolveNamedMedia();
   });
 })();`;
 }

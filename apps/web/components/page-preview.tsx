@@ -22,7 +22,6 @@ import { formatBytes } from "@/lib/preview";
 import {
   assetMimeFor,
   bundlePage,
-  bytesToBase64,
   resolveIn,
   type PageBundle,
   type PageFileReader,
@@ -185,6 +184,7 @@ export function PagePreview({
       title: nameOf(current),
       at: new Date().toISOString(),
       carried: bundle.included,
+      streamed: bundle.streamed,
       missing: bundle.missing,
       fromTheWeb: bundle.external,
       omitted: bundle.omitted,
@@ -203,7 +203,7 @@ export function PagePreview({
       const known = target ? (files ?? []).find((file) => file.path === target) : undefined;
       const refuse = () =>
         frame.current?.contentWindow?.postMessage(
-          pageFrameReply(token, { id, ok: false, status: 404, mime: "", base64: "" }),
+          pageFrameReply(token, { id, ok: false, status: 404, mime: "", bytes: null }),
           "*",
         );
       if (!target || !known) return refuse();
@@ -217,9 +217,16 @@ export function PagePreview({
         : await reader.readBytes(target);
       if (!bytes) return refuse();
       spend.current.bytes += bytes.byteLength;
+      // The buffer is handed over rather than copied: a film is tens of
+      // megabytes, and it belongs to the frame from here on.
+      const buffer = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ) as ArrayBuffer;
       frame.current?.contentWindow?.postMessage(
-        pageFrameReply(token, { id, ok: true, status: 200, mime, base64: bytesToBase64(bytes) }),
+        pageFrameReply(token, { id, ok: true, status: 200, mime, bytes: buffer }),
         "*",
+        [buffer],
       );
     },
     [current, files, folderId, reader, token],
@@ -274,6 +281,9 @@ export function PagePreview({
     }
     if (bundle.missing.length) notes.push(`${bundle.missing.length} not in the folder`);
     if (bundle.omitted.length) notes.push(`${bundle.omitted.length} too big to carry`);
+    if (bundle.streamed.length) {
+      notes.push(`${bundle.streamed.length} played from the folder`);
+    }
     if (bundle.external.length) {
       notes.push(`${bundle.external.length} from the web`);
     }

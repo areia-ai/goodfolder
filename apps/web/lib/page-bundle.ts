@@ -19,14 +19,45 @@
 import { isRenderablePage } from "./preview.ts";
 import {
   attributeOf,
+  removeAttribute,
   renderHtml,
   setAttribute,
   tokenizeHtml,
   type HtmlToken,
 } from "./page-html.ts";
 
-/** Bytes read out of the folder for one page before the rest is left out. */
+/** Bytes written into the page itself before the rest is left out. */
 export const PAGE_BUNDLE_BYTE_BUDGET = 8_000_000;
+
+/**
+ * At or above this, a file named by a markup attribute is not written into
+ * the page at all.
+ *
+ * A film carried as base64 is a third larger than the film, and the whole of
+ * it has to be parsed as part of the document before anything at all appears.
+ * A 1.6 MB walk-through took about twenty-five seconds to open that way. So
+ * anything this size is left for the frame to ask for once it is running: the
+ * dashboard hands over the bytes, and the frame makes an address for them out
+ * of its own origin, which it is allowed to read. The page then streams and
+ * seeks like any other video.
+ *
+ * `url()` inside a stylesheet is deliberately not treated this way — there is
+ * no element to hang a later address on — so a very large background picture
+ * is still written in, and still bounded by the budget above.
+ */
+export const STREAM_BYTE_FLOOR = 128_000;
+
+/**
+ * Elements whose file may arrive after the page has started.
+ *
+ * Deliberately not `script` or `link`: a stylesheet that arrives late is a
+ * flash of the wrong page, and a script that arrives late does not run at
+ * all, because nothing re-executes it. Those are always written in, however
+ * big they are — bounded only by the budget.
+ */
+const STREAMABLE = new Set([
+  "img", "video", "audio", "source", "track", "embed", "object", "iframe", "input",
+]);
 
 /** How far `@import` inside a stylesheet is followed. */
 const CSS_IMPORT_DEPTH = 4;
@@ -45,6 +76,8 @@ export interface PageBundle {
   html: string;
   /** Folder paths that were read and carried in. */
   included: string[];
+  /** Folder paths left for the frame to ask for once it is running. */
+  streamed: string[];
   /** References that named nothing in the folder. */
   missing: string[];
   /** Addresses left for the network to answer, exactly as the page wrote them. */
@@ -255,13 +288,17 @@ export async function bundlePage(
   const budget = options.budget ?? PAGE_BUNDLE_BYTE_BUDGET;
   const sizes = new Map(reader.files.map((file) => [file.path, file.size]));
   const included = new Set<string>();
+  const streamed = new Set<string>();
   const missing = new Set<string>();
   const external = new Set<string>();
   const omitted = new Set<string>();
   const carried = new Map<string, Promise<string | null>>();
   let bytes = 0;
 
-  /** Read one file and give back its `data:` address, once per file. */
+  /**
+   * Read one file, once, and say how it was handled: written into the page as
+   * a `data:` address, or left for the frame to ask for.
+   */
   function carry(path: string, cssDepth = CSS_IMPORT_DEPTH): Promise<string | null> {
     const existing = carried.get(path);
     if (existing) return existing;
@@ -339,6 +376,23 @@ export async function bundlePage(
     const target = baseIsElsewhere ? null : resolveIn(baseDir, reference);
     if (target === null) {
       external.add(reference.trim());
+      return;
+    }
+    const size = sizes.get(target);
+    if (
+      STREAMABLE.has(token.name) &&
+      size !== undefined &&
+      size >= STREAM_BYTE_FLOOR &&
+      size <= budget
+    ) {
+      // Too big to write into the document. The address the frame will use is
+      // one only the frame can make, so it is named here and resolved there;
+      // the one the page wrote resolves to nothing and would only fail loudly.
+      streamed.add(target);
+      included.add(target);
+      bytes += size;
+      setAttribute(token, `data-gf-${attribute}`, target);
+      removeAttribute(token, attribute);
       return;
     }
     jobs.push(
@@ -429,6 +483,7 @@ export async function bundlePage(
   return {
     html: out,
     included: [...included].sort(),
+    streamed: [...streamed].sort(),
     missing: [...missing].sort(),
     external: [...external].sort(),
     omitted: [...omitted].sort(),

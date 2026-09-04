@@ -201,6 +201,19 @@ export function setAttribute(
   token.attributes.push({ name, value, raw: "", changed: true });
 }
 
+/** Take an attribute off a tag, for one that would only fail if left on. */
+export function removeAttribute(
+  token: Extract<HtmlToken, { kind: "tag" }>,
+  name: string,
+): void {
+  const at = token.attributes.findIndex((attribute) => attribute.name === name);
+  if (at === -1) return;
+  token.attributes.splice(at, 1);
+  // Something must be marked changed or the tag is written back verbatim.
+  if (token.attributes.length) token.attributes[0]!.changed = true;
+  else token.attributes.push({ name: "data-gf-emptied", value: "", raw: "", changed: true });
+}
+
 /**
  * Write one tag back out. A tag nobody rewrote comes back exactly as it went
  * in — quoting, spacing, entities and all.

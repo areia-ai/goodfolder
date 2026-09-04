@@ -26,6 +26,9 @@ export interface PageRenderReport {
   at: string;
   /** Files in the folder the page pointed at and got. */
   carried: string[];
+  /** Of those, the ones too big to write into the page, handed over as bytes
+   *  once it was running. */
+  streamed: string[];
   /** References that named nothing in the folder. */
   missing: string[];
   /** Addresses left for the network to answer. */
