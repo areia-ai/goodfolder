@@ -167,7 +167,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   }, [prefs, placeKey, location.folderId, location.scope]);
 
   const sidebarPanel = useResizablePanel({
-    initial: 244, min: 200, max: 420, edge: "end", storageKey: "goodfolder.sidebar-width.v1",
+    initial: 244, min: 60, max: 420, edge: "end", storageKey: "goodfolder.sidebar-width.v1",
   });
   const asidePanel = useResizablePanel({
     initial: 340, min: 280, max: 520, edge: "start", storageKey: "goodfolder.inspector-width.v1",

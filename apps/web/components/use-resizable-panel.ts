@@ -24,7 +24,8 @@ export function useResizablePanel({
   useEffect(() => {
     if (!storageKey) return;
     try {
-      const stored = Number(window.localStorage.getItem(storageKey));
+      const saved = window.localStorage.getItem(storageKey);
+      const stored = saved === null ? NaN : Number(saved);
       if (Number.isFinite(stored)) setWidth(Math.max(min, stored));
     } catch {
       // A panel that does not remember its width still needs to resize.

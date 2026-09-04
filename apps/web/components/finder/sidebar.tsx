@@ -1,14 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { BrandLockup } from "@/components/brand";
+import { useEffect, useRef, type ReactNode } from "react";
+import { BrandMark, BrandWordmark } from "@/components/brand";
 import {
   ClockIcon, FolderIcon, PeopleIcon, ProposalIcon, StarIcon,
 } from "@/components/icons";
+import { Tooltip } from "@/components/tooltip";
 import { Menu } from "@/components/finder/menu";
 import {
   ROOT_SCOPE_LABEL, type Folder, type Location, type RootScope,
 } from "@/components/finder/types";
+
+/** Fade only the clipped end, easing the mask away as the content fits. */
+function SidebarLabel({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const box = ref.current;
+    const content = box?.firstElementChild;
+    if (!box || !content) return;
+    const measure = () => {
+      const overflow = Math.max(0, content.getBoundingClientRect().width - box.clientWidth);
+      box.style.opacity = String(Math.min(1, box.clientWidth / 24));
+      box.style.setProperty("--gf-label-fade", `${Math.min(24, overflow)}px`);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    observer.observe(content);
+    measure();
+    return () => observer.disconnect();
+  }, []);
+  return <span ref={ref} className="gf-win-side-label"><span>{children}</span></span>;
+}
 
 const SCOPE_GLYPH: Record<RootScope, (props: { className?: string }) => React.ReactElement> = {
   all: FolderIcon,
@@ -55,47 +78,52 @@ export function Sidebar({
     const count = scope === "review" ? reviewCount : 0;
     const here = !location.folderId && location.scope === scope;
     return (
-      <button
-        key={scope}
-        type="button"
-        className="gf-win-side-link"
-        aria-current={here ? "page" : undefined}
-        onClick={() => onGo({ folderId: null, dir: "", file: null, scope })}
-      >
-        <Glyph />
-        <span className="gf-truncate">{ROOT_SCOPE_LABEL[scope]}</span>
-        {count > 0 && <span className="gf-win-side-count">{count}</span>}
-      </button>
+      <Tooltip key={scope} label={ROOT_SCOPE_LABEL[scope]} placement="right">
+        <button
+          type="button"
+          className="gf-win-side-link"
+          aria-label={ROOT_SCOPE_LABEL[scope]}
+          aria-current={here ? "page" : undefined}
+          onClick={() => onGo({ folderId: null, dir: "", file: null, scope })}
+        >
+          <Glyph />
+          <SidebarLabel>{ROOT_SCOPE_LABEL[scope]}</SidebarLabel>
+          {count > 0 && <span className="gf-win-side-count">{count}</span>}
+        </button>
+      </Tooltip>
     );
   }
 
   return (
     <nav className="gf-win-sidebar" aria-label="Places">
-      <Link href="/" aria-label="GoodFolder home" className="mb-1 inline-flex px-1.5 py-1.5">
-        <BrandLockup size={28} />
+      <Link href="/" aria-label="GoodFolder home" className="gf-win-side-brand">
+        <BrandMark size={28} title="" />
+        <SidebarLabel><BrandWordmark height={14.6} title="" /></SidebarLabel>
       </Link>
 
-      <p className="gf-win-side-heading">Locations</p>
+      <p className="gf-win-side-heading"><SidebarLabel>Locations</SidebarLabel></p>
       {place("all")}
       {sharedCount > 0 && place("shared")}
 
-      <p className="gf-win-side-heading">Smart</p>
+      <p className="gf-win-side-heading"><SidebarLabel>Smart</SidebarLabel></p>
       {place("review")}
       {place("recent")}
 
       {kept.length > 0 && (
         <>
-          <p className="gf-win-side-heading">Kept to hand</p>
+          <p className="gf-win-side-heading"><SidebarLabel>Kept to hand</SidebarLabel></p>
           {kept.map((folder) => (
             <button
               key={folder.id}
               type="button"
               className="gf-win-side-link"
+              title={folder.name}
+              aria-label={folder.name}
               aria-current={location.folderId === folder.id ? "page" : undefined}
               onClick={() => onGo({ folderId: folder.id, dir: "", file: null, scope: "all" })}
             >
               <FolderIcon />
-              <span className="gf-truncate flex-1">{folder.name}</span>
+              <SidebarLabel>{folder.name}</SidebarLabel>
               <span
                 role="button"
                 tabIndex={0}
@@ -131,7 +159,7 @@ export function Sidebar({
               <span className="gf-win-initial" aria-hidden="true">
                 {email[0]?.toUpperCase() ?? "?"}
               </span>
-              <span className="gf-truncate">{email}</span>
+              <SidebarLabel>{email}</SidebarLabel>
             </>
           }
           items={[
