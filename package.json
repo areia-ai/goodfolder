@@ -16,11 +16,17 @@
     "contrast:check": "node tools/check-contrast.mjs",
     "package:smoke": "node tools/package-smoke.mjs",
     "webmcp:schema": "node --experimental-transform-types tools/gen-webmcp-schema.ts",
+    "demo:assets": "node --experimental-transform-types tools/generate-demo-assets.ts",
     "webmcp:evals": "webmcp-evals local -t apps/web/lib/webmcp.schema.json -e apps/web/lib/webmcp.evals.json -b vercel --max-steps 1",
     "test": "pnpm -r --if-present test",
     "gate": "pnpm typecheck && pnpm vocab"
   },
   "devDependencies": {
-    "esbuild": "^0.28.2"
+    "docx": "^9.7.1",
+    "esbuild": "^0.28.2",
+    "pdf-lib": "^1.17.1",
+    "pptxgenjs": "^4.0.1",
+    "sharp": "^0.35.4",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }
