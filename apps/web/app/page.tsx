@@ -30,6 +30,7 @@ import {
   TerminalIcon,
   TimelineIcon,
   VideoIcon,
+  WebPageIcon,
 } from "@/components/icons";
 
 /** The AGPL obliges us to offer this to anyone using the hosted service. */
@@ -65,7 +66,8 @@ const GAPS = [
  * sits two screens under an eyebrow that says what GoodFolder is for, and
  * adding "Code" to it would argue with that line rather than extend it. The
  * technical block near the foot of the page covers it, for the reader who came
- * looking. Keep this list in step with lib/preview.ts for the kinds it names.
+ * looking. HTML belongs here as a rendered deliverable, alongside documents.
+ * Keep this list in step with lib/preview.ts for the kinds it names.
  */
 const FILE_KINDS = [
   { Glyph: DocumentIcon, name: "Documents", note: "Word" },
@@ -73,6 +75,7 @@ const FILE_KINDS = [
   { Glyph: SlidesIcon, name: "Presentations", note: "PowerPoint" },
   { Glyph: ImageIcon, name: "Images", note: "10 formats" },
   { Glyph: PdfIcon, name: "PDFs", note: "" },
+  { Glyph: WebPageIcon, name: "Web pages", note: "HTML + JavaScript" },
   { Glyph: VideoIcon, name: "Video", note: "" },
   { Glyph: AudioIcon, name: "Audio", note: "" },
   { Glyph: NoteIcon, name: "Notes & tables", note: "editable here" },
@@ -185,6 +188,14 @@ const QUESTIONS: FaqItem[] = [
     ],
   },
   {
+    question: "Can I open HTML pages with JavaScript?",
+    answer: [
+      "Yes. HTML files open as rendered pages in the dashboard, with or without JavaScript. A page can use styles, images, video, audio, and data files from the same folder; links to other HTML pages in that folder work too.",
+      "Switch between Page and Source to see the result or read the file behind it. An assistant can propose a change and read the page’s render report for missing files or script errors. You review and accept the proposal before it changes the folder.",
+      "This works for HTML deliverables such as reports and interactive presentations. It doesn’t run a backend or a build process; apps that need those still use their own tools. Relative JavaScript module imports aren’t bundled by the preview.",
+    ],
+  },
+  {
     question: "Can my AI assistant use GoodFolder directly?",
     answer: [
       "Yes, in two places. On your computer, GoodFolder uses the Model Context Protocol, so Codex, Claude Code, and other compatible agents can protect a folder, Save, Sync, and Restore.",
@@ -269,7 +280,7 @@ export default function Landing() {
           <div className="gf-wrap">
             <div className="mx-auto grid max-w-5xl items-center gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6">
               <div className="text-center lg:text-left">
-                <p className="gf-eyebrow">For documents, spreadsheets, decks, photos, and recordings</p>
+                <p className="gf-eyebrow">For documents, spreadsheets, decks, web pages, and media</p>
                 <h1 className="gf-display-xl mt-5">
                   Let AI agents work on your files.
                   <br />
@@ -338,9 +349,9 @@ export default function Landing() {
               <p className="gf-eyebrow">Most of a real folder isn’t text</p>
               <h2 className="gf-h2 mt-4">Every kind of file gets the same history. Not just the ones made of words.</h2>
               <p className="gf-lead mt-5">
-                A Word file, a spreadsheet, a slide deck, a photograph, a video, a voice note — each one keeps its own
-                format, and each one gets the same readable history. Open any of them here when you want to see what
-                an agent did, then carry on in the app you already use.
+                Word files, spreadsheets, PDFs, slide decks, HTML pages, and media keep their original formats and
+                get the same readable history. Open them here when you want to see what an agent did, then carry on
+                in the app you already use.
               </p>
             </div>
 
@@ -372,8 +383,45 @@ export default function Landing() {
           </div>
         </section>
 
+        {/* ------------------------------------------------------------- Web pages */}
+        <section id="web-pages" className="gf-band gf-band-tint scroll-mt-16">
+          <div className="gf-wrap">
+            <div className="grid gap-6 lg:grid-cols-2 lg:gap-14">
+              <div>
+                <p className="gf-eyebrow">HTML belongs in the folder, too</p>
+                <h2 className="gf-h2 mt-4">Your next report can be a web page.</h2>
+              </div>
+              <div>
+                <p className="gf-lead">
+                  Open an HTML file in GoodFolder and see the finished page. JavaScript runs, so a report can
+                  calculate its figures or a menu can filter its dishes, right inside the dashboard.
+                </p>
+                <p className="gf-body mt-4">
+                  The page can use the data, images, video, and audio beside it in the folder. Plain HTML works
+                  too. Keep the whole deliverable together, with the same Saves, history, and way back as your
+                  PDFs and presentations.
+                </p>
+                <p className="gf-body mt-4">
+                  Switch between Page and Source when you want to look underneath. If an agent changes the
+                  page, you can review the result where you already review the rest of your work.
+                </p>
+              </div>
+            </div>
+            <figure className="mx-auto mt-10 max-w-5xl">
+              <Image
+                src="/shots/html-report-preview.png"
+                width={1280}
+                height={720}
+                alt="An HTML report open in GoodFolder, with JavaScript calculating revenue and net margin from a CSV file in the same folder. The Page and Source controls sit above it."
+                className="gf-shot"
+                sizes="(max-width: 1120px) calc(100vw - 40px), 1000px"
+              />
+            </figure>
+          </div>
+        </section>
+
         {/* -------------------------------------------------------------- Moments */}
-        <section className="gf-band gf-band-tint">
+        <section className="gf-band">
           <div className="gf-wrap grid items-center gap-10 lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)] lg:gap-14">
             <div>
               <div className="gf-head">
@@ -538,7 +586,8 @@ export default function Landing() {
                   <h3 className="text-[16px] font-bold tracking-[-.02em]">Read what’s open</h3>
                   <p className="gf-body mt-2 text-[13.5px]">
                     WebMCP gives the assistant structured access to the current folder, document, table, selection, and
-                    <span className="font-medium text-[var(--gf-blue-ink)]"> history</span>. No copy and paste.
+                    <span className="font-medium text-[var(--gf-blue-ink)]"> history</span>. For an HTML page,
+                    it can also check which files loaded and read any script errors. No copy and paste.
                   </p>
                 </div>
                 <div className="rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white p-5">
