@@ -67,10 +67,10 @@ export const MIN_ICON_SIZE = 72;
 export const MAX_ICON_SIZE = 208;
 
 /**
- * List, because it is what Finder, Drive, Dropbox and SharePoint all open
- * with, and because it is the only view that shows every column at once.
+ * Columns, because it opens straight onto an inline preview of whatever's
+ * selected — the fastest way to see what's actually inside a folder.
  */
-export const DEFAULT_VIEW: ViewMode = "list";
+export const DEFAULT_VIEW: ViewMode = "columns";
 
 export const DEFAULT_PREFERENCE: ViewPreference = {
   sort: "name",
