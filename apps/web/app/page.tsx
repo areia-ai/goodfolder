@@ -383,45 +383,8 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ------------------------------------------------------------- Web pages */}
-        <section id="web-pages" className="gf-band gf-band-tint scroll-mt-16">
-          <div className="gf-wrap">
-            <div className="grid gap-6 lg:grid-cols-2 lg:gap-14">
-              <div>
-                <p className="gf-eyebrow">HTML belongs in the folder, too</p>
-                <h2 className="gf-h2 mt-4">Your next report can be a web page.</h2>
-              </div>
-              <div>
-                <p className="gf-lead">
-                  Open an HTML file in GoodFolder and see the finished page. JavaScript runs, so a report can
-                  calculate its figures or a menu can filter its dishes, right inside the dashboard.
-                </p>
-                <p className="gf-body mt-4">
-                  The page can use the data, images, video, and audio beside it in the folder. Plain HTML works
-                  too. Keep the whole deliverable together, with the same Saves, history, and way back as your
-                  PDFs and presentations.
-                </p>
-                <p className="gf-body mt-4">
-                  Switch between Page and Source when you want to look underneath. If an agent changes the
-                  page, you can review the result where you already review the rest of your work.
-                </p>
-              </div>
-            </div>
-            <figure className="mx-auto mt-10 max-w-5xl">
-              <Image
-                src="/shots/html-report-preview.png"
-                width={1280}
-                height={720}
-                alt="An HTML report open in GoodFolder, with JavaScript calculating revenue and net margin from a CSV file in the same folder. The Page and Source controls sit above it."
-                className="gf-shot"
-                sizes="(max-width: 1120px) calc(100vw - 40px), 1000px"
-              />
-            </figure>
-          </div>
-        </section>
-
         {/* -------------------------------------------------------------- Moments */}
-        <section className="gf-band">
+        <section className="gf-band gf-band-tint">
           <div className="gf-wrap grid items-center gap-10 lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)] lg:gap-14">
             <div>
               <div className="gf-head">
