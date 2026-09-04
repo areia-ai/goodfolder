@@ -1825,14 +1825,17 @@ img, svg { max-width: 100%; }
 .gf-demo-telegram__avatar img { width: 100%; height: 100%; object-fit: cover; }
 .gf-demo-telegram__avatar svg { width: 55%; height: 55%; fill: var(--gf-white); }
 .gf-demo-telegram__avatar.is-active { outline: 3px solid var(--gf-blue); outline-offset: 3px; }
-.gf-demo-telegram__chat { display: grid; min-width: 0; min-height: 0; grid-template-rows: clamp(54px, 8vw, 98px) minmax(0,1fr) clamp(38px, 5.7vw, 70px); background: color-mix(in srgb, var(--gf-blue) 5%, var(--gf-black)); }
+.gf-demo-telegram__chat { display: grid; min-width: 0; min-height: 0; grid-template-rows: clamp(44px, 5vw, 64px) minmax(0,1fr) clamp(38px, 5.7vw, 70px); background: color-mix(in srgb, var(--gf-blue) 5%, var(--gf-black)); }
 .gf-demo-telegram__chat-head { display: flex; align-items: center; gap: clamp(8px, 1.1vw, 14px); border-bottom: 1px solid color-mix(in srgb, var(--gf-white) 7%, transparent); padding-inline: clamp(13px, 2vw, 26px); background: color-mix(in srgb, var(--gf-blue) 10%, var(--gf-black)); }
 .gf-demo-telegram__chat-head > span:first-child { display: flex; flex-direction: column; gap: 4px; }
 .gf-demo-telegram__chat-head b { font-size: clamp(11px, 1.55vw, 19px); }
 .gf-demo-telegram__chat-head small { color: color-mix(in srgb, var(--gf-white) 45%, transparent); font-size: clamp(7px, .95vw, 12px); }
 .gf-demo-telegram__chat-actions { margin-left: auto; color: color-mix(in srgb, var(--gf-white) 42%, transparent); font-size: clamp(9px, 1.4vw, 18px); letter-spacing: .25em; }
-.gf-demo-telegram__messages { display: flex; min-height: 0; flex-direction: column; gap: clamp(8px, 1.3vw, 16px); overflow: hidden; padding: clamp(12px, 2.1vw, 26px) clamp(15px, 2.8vw, 36px); }
-.gf-demo-telegram__date { align-self: center; border-radius: 999px; background: color-mix(in srgb, var(--gf-white) 12%, var(--gf-black)); padding: clamp(4px, .55vw, 7px) clamp(9px, 1vw, 13px); color: color-mix(in srgb, var(--gf-white) 86%, transparent); font-size: clamp(6px, .8vw, 10px); font-weight: 700; opacity: 0; animation: gf-demo-telegram-date var(--gf-demo-time) ease infinite; }
+/* Typing and the reply share a row, so the hidden indicator takes no extra space. */
+.gf-demo-telegram__messages { display: grid; min-height: 0; grid-template-rows: max-content max-content minmax(0, 1fr); align-items: start; gap: clamp(6px, .8vw, 8px); overflow: hidden; padding: clamp(10px, 1.2vw, 12px) clamp(15px, 2.8vw, 36px); }
+.gf-demo-telegram__typing,
+.gf-demo-telegram__bot-message { grid-area: 3 / 1; }
+.gf-demo-telegram__date { justify-self: center; border-radius: 999px; background: color-mix(in srgb, var(--gf-white) 12%, var(--gf-black)); padding: clamp(4px, .55vw, 7px) clamp(9px, 1vw, 13px); color: color-mix(in srgb, var(--gf-white) 86%, transparent); font-size: clamp(6px, .8vw, 10px); font-weight: 700; opacity: 0; animation: gf-demo-telegram-date var(--gf-demo-time) ease infinite; }
 @keyframes gf-demo-telegram-date { 0%, 59% { opacity: 0; transform: translateY(-5px); } 63%, 100% { opacity: 1; transform: translateY(0); } }
 .gf-demo-telegram__folder-card { display: flex; width: min(76%, 550px); align-items: center; gap: clamp(7px, 1vw, 13px); border: 1px solid color-mix(in srgb, var(--gf-blue) 34%, transparent); border-radius: clamp(8px, 1.2vw, 15px); background: color-mix(in srgb, var(--gf-blue) 17%, var(--gf-black)); padding: clamp(8px, 1.2vw, 15px); opacity: 0; transform: translateY(14px); animation: gf-demo-telegram-folder var(--gf-demo-time) cubic-bezier(.2,.8,.24,1) infinite; }
 @keyframes gf-demo-telegram-folder { 0%, 60% { opacity: 0; transform: translateY(14px); } 65%, 100% { opacity: 1; transform: translateY(0); } }
@@ -1843,7 +1846,7 @@ img, svg { max-width: 100%; }
 .gf-demo-telegram__folder-card small { overflow: hidden; color: color-mix(in srgb, var(--gf-white) 53%, transparent); font-size: clamp(6px, .75vw, 9px); text-overflow: ellipsis; white-space: nowrap; }
 .gf-demo-telegram__folder-card i { display: grid; width: clamp(17px, 2.2vw, 27px); aspect-ratio: 1; place-items: center; border-radius: 50%; background: var(--gf-blue); }
 .gf-demo-telegram__folder-card i svg { width: 58%; height: 58%; }
-.gf-demo-telegram__user-message { align-self: flex-end; width: min(69%, 480px); border-radius: clamp(11px, 1.6vw, 20px) clamp(11px, 1.6vw, 20px) 3px clamp(11px, 1.6vw, 20px); background: color-mix(in srgb, var(--gf-blue) 48%, #17324b); padding: clamp(8px, 1.2vw, 15px); opacity: 0; transform: translateX(24px); animation: gf-demo-telegram-user var(--gf-demo-time) cubic-bezier(.2,.8,.22,1) infinite; }
+.gf-demo-telegram__user-message { justify-self: end; width: min(69%, 480px); border-radius: clamp(11px, 1.6vw, 20px) clamp(11px, 1.6vw, 20px) 3px clamp(11px, 1.6vw, 20px); background: color-mix(in srgb, var(--gf-blue) 48%, #17324b); padding: clamp(8px, 1.2vw, 15px); opacity: 0; transform: translateX(24px); animation: gf-demo-telegram-user var(--gf-demo-time) cubic-bezier(.2,.8,.22,1) infinite; }
 @keyframes gf-demo-telegram-user { 0%, 72% { opacity: 0; transform: translateX(24px); } 75%, 100% { opacity: 1; transform: translateX(0); } }
 .gf-demo-telegram__user-message p,
 .gf-demo-telegram__bot-message p { margin: 0; font-size: clamp(8px, 1.15vw, 15px); line-height: 1.4; }
@@ -1881,8 +1884,12 @@ img, svg { max-width: 100%; }
 .gf-demo-telegram__send svg { width: 55%; height: 55%; fill: currentColor; }
 @keyframes gf-demo-telegram-send { 0%, 64%, 74%, 100% { background: transparent; color: color-mix(in srgb, var(--gf-white) 52%, transparent); opacity: 0; transform: scale(1); } 65%, 71% { background: var(--gf-blue); color: var(--gf-white); opacity: 1; transform: scale(1); } 72% { background: var(--gf-blue); color: var(--gf-white); opacity: 1; transform: scale(.78); } }
 
+@media (max-width: 760px) {
+  .gf-hero-demo { min-height: 420px; }
+}
+
 @media (max-width: 620px) {
-  .gf-hero-demo { min-height: clamp(300px, 88vw, 350px); aspect-ratio: auto; }
+  .gf-hero-demo { min-height: 400px; aspect-ratio: auto; }
   .gf-demo-codex,
   .gf-demo-telegram { inset: 8px; }
   .gf-demo-codex__body { grid-template-columns: 32px minmax(0,1fr); }
