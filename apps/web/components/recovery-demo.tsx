@@ -62,10 +62,12 @@ export function RecoveryDemo() {
     <figure ref={root} className="gf-recovery" aria-label="Illustrated example of saving and restoring a report with a local agent">
       <div className="gf-recovery__heading">
         <div><p className="gf-eyebrow">An example, from Save to Restore</p><h2 className="gf-h3 mt-2">Try the change. Keep a way back.</h2></div>
-        <button type="button" className="gf-button-secondary" onClick={() => {
+        <button type="button" className="gf-recovery__play" aria-label={playing ? "Pause example" : scene === SCENES.length - 1 ? "Replay example" : "Play example"} onClick={() => {
           if (!playing && scene === SCENES.length - 1) setScene(0);
           setPlaying(!playing);
-        }}>{playing ? "Pause" : scene === SCENES.length - 1 ? "Replay" : "Play"}</button>
+        }}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">{playing ? <path d="M8 6v12M16 6v12" /> : <path d="m9 6 9 6-9 6Z" />}</svg>
+        </button>
       </div>
       <div className="gf-recovery__steps" role="group" aria-label="Example steps">
         {SCENES.map((item, index) => <button key={item.label} type="button" aria-pressed={scene === index} onClick={() => { setScene(index); setPlaying(false); }}>
@@ -77,7 +79,16 @@ export function RecoveryDemo() {
           <div className="gf-recovery__bar"><img src="/partners/codex.svg" alt="" width="20" height="20" /><b>Codex</b><span>On your computer</span></div>
           <div key={scene} className="gf-recovery__exchange">
             <p className="gf-recovery__prompt">{current.prompt}</p>
+            <div className="gf-recovery__typing" aria-hidden="true"><i /><i /><i /></div>
             <p className="gf-recovery__reply">{current.reply}</p>
+          </div>
+          <div className="gf-recovery__composer">
+            <span className="gf-recovery__composer-add">+</span>
+            <span className="gf-recovery__approval"><span>⌘</span> Approve for me</span>
+            <span className="gf-recovery__composer-spacer" />
+            <span className="gf-recovery__model"><i />5.6 Sol <small>Light</small>⌄</span>
+            <span className="gf-recovery__mic" aria-hidden="true">♩</span>
+            <span className="gf-recovery__send" aria-hidden="true">↑</span>
           </div>
           <div className="gf-recovery__connected"><BrandMark size={19} title="" />GoodFolder connected</div>
         </div>
