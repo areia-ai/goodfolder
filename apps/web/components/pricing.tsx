@@ -19,18 +19,18 @@ interface Tier {
 const TIERS: Tier[] = [
   {
     code: "starter", name: "Starter", monthly: 15, annual: 144, includedGb: 25, overageCents: 10,
-    blurb: "For a folder of documents and photos. Light history, low churn.",
+    blurb: "For documents and occasional photos.",
     features: ["25 GB of protected data", "Unlimited folders and contributors", "Extra capacity at $0.10 per GB-month"],
   },
   {
     code: "plus", name: "Plus", monthly: 29, annual: 278, includedGb: 100, overageCents: 10,
-    blurb: "The one most people want. Room for photos, video, and an active agent.",
+    blurb: "For regular agent work, photos, and video.",
     features: ["100 GB of protected data", "Unlimited folders and contributors", "Extra capacity at $0.10 per GB-month", "No arbitrary history expiry"],
     highlight: true,
   },
   {
     code: "studio", name: "Studio", monthly: 79, annual: 758, includedGb: 300, overageCents: 8,
-    blurb: "For heavy churn. A lot of generated media, replaced often.",
+    blurb: "For large media files and frequent revisions.",
     features: ["300 GB of protected data", "Unlimited folders and contributors", "Extra capacity at $0.08 per GB-month", "Priority support"],
   },
 ];
@@ -110,6 +110,7 @@ export function PricingTiers({ selfHostUrl }: { selfHostUrl: string }) {
 
   return (
     <div>
+      <p className="gf-body mt-5 text-[14px]">Hosted plans offer a 7-day trial. Sign in to see your account’s trial and billing options before connecting a folder.</p>
       <div className="mt-8 flex justify-center">
         <div className="inline-flex rounded-full border border-[var(--gf-line)] bg-white p-1" role="tablist" aria-label="Billing interval">
           {(["month", "year"] as const).map((value) => (
@@ -157,7 +158,7 @@ export function PricingTiers({ selfHostUrl }: { selfHostUrl: string }) {
             >
               {tier.highlight && (
                 <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--gf-blue-ink)] px-3 py-1 text-[12px] font-semibold text-white">
-                  Most popular
+                  For active folders
                 </span>
               )}
               <p className={tier.highlight ? "gf-eyebrow gf-on-dark-faint" : "gf-eyebrow"}>{tier.name}</p>
@@ -183,7 +184,7 @@ export function PricingTiers({ selfHostUrl }: { selfHostUrl: string }) {
                 href="/dashboard"
                 className="gf-button-secondary mt-7"
               >
-                {tier.highlight ? <>Start the 7-day trial <ArrowRightIcon /></> : "Start the 7-day trial"}
+                {tier.highlight ? <>Get started <ArrowRightIcon /></> : "Get started"}
               </Link>
             </article>
           );

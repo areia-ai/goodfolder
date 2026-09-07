@@ -1339,6 +1339,7 @@ function EmptyListing({
     return (
       <div className="gf-win-empty">
         <EmptyState icon={<FolderIcon />} title={copy.title}>{copy.body}</EmptyState>
+        {location.scope === "all" && <a href="/docs" className="gf-button-secondary mt-5">Agent setup guide</a>}
       </div>
     );
   }

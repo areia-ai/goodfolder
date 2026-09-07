@@ -244,7 +244,7 @@ export function HeroAgentDemo() {
     >
       <span className="sr-only">
         Codex saves Q3 Board Pack on the computer holding the files. GoodFolder exposes that folder history
-        so OpenClaw in Telegram can sync it and read the latest Save without moving the folder to the cloud.
+        so OpenClaw in Telegram can sync it and read the latest Save through a connected computer.
       </span>
       <div className="gf-hero-demo__ambient" aria-hidden="true"><i /><i /><i /></div>
       <CodexWindow />

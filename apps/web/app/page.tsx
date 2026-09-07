@@ -3,21 +3,17 @@ import type { Metadata } from "next";
 import { PRODUCT_DESCRIPTION, SITE_URL } from "@/lib/discovery";
 import Link from "next/link";
 import { BrandLockup, BrandMark } from "@/components/brand";
-import { AgentHandoffMotion } from "@/components/agent-handoff-motion";
+import { RecoveryDemo } from "@/components/recovery-demo";
 import { CtaScope } from "@/components/cta-scope";
 import { Faq, type FaqItem } from "@/components/faq";
 import { MascotPose } from "@/components/folder-mascot";
 import { ForEngineers } from "@/components/for-engineers";
 import { HeroAgentDemo } from "@/components/hero-agent-demo";
 import { PricingTiers } from "@/components/pricing";
-import { TimelinePreview } from "@/components/product-preview";
 import { Shot } from "@/components/shot";
 import {
   ArrowRightIcon,
   AudioIcon,
-  CheckIcon,
-  ClockIcon,
-  ComputerIcon,
   DocumentIcon,
   GitHubIcon,
   ImageIcon,
@@ -29,7 +25,6 @@ import {
   SlidesIcon,
   SparklesIcon,
   SyncIcon,
-  TerminalIcon,
   TimelineIcon,
   VideoIcon,
   WebPageIcon,
@@ -46,24 +41,9 @@ export const metadata: Metadata = {
 const NAV = [
   { href: "#files", label: "Your files" },
   { href: "#how", label: "How it works" },
-  { href: "#webmcp", label: "WebMCP" },
+  { href: "#webmcp", label: "Review changes" },
+  { href: "#pricing", label: "Pricing" },
   { href: "#questions", label: "Questions" },
-];
-
-/** What a folder can't tell you today. The reason the rest of the page exists. */
-const GAPS = [
-  {
-    title: "The agent finished",
-    body: "It worked through the folder while you were somewhere else. The only record of what it did is the files themselves.",
-  },
-  {
-    title: "final_final_v5.pdf",
-    body: "You shouldn’t have to open five files to find the real final. GoodFolder shows which version came last and what changed, with every earlier one still there when you need it.",
-  },
-  {
-    title: "Yesterday is gone",
-    body: "You want the numbers from before the rewrite, and the only copy is whatever the app happened to keep for you.",
-  },
 ];
 
 /**
@@ -88,42 +68,18 @@ const FILE_KINDS = [
   { Glyph: NoteIcon, name: "Notes & tables", note: "editable here" },
 ];
 
-/** Relevance, as situations rather than features. */
-const MOMENTS = [
-  {
-    Glyph: SparklesIcon,
-    title: "You leave an agent running",
-    body: "Every piece of work it finishes becomes its own Save, with its name on it. The first thing you read when you sit back down is what it did.",
-  },
-  {
-    Glyph: RestoreIcon,
-    title: "A number turns out to be wrong",
-    body: "Restore brings back the version from before and records the return as another Save. If that was the wrong call, you can undo the undo.",
-  },
-  {
-    Glyph: ClockIcon,
-    title: "You come back after two weeks",
-    body: "The timeline says what happened, in order, in plain sentences. You don’t have to open eleven files and work it out.",
-  },
-  {
-    Glyph: ComputerIcon,
-    title: "You move to the other computer",
-    body: "Sync carries the same history across, so the folder picks up in the same place instead of starting a second copy of the truth.",
-  },
-];
-
 const STEPS = [
   {
     title: "Point an agent at a folder",
-    body: "Codex, Claude Code, and other agents that speak the same protocol can set it up. Nothing is moved and nothing is renamed.",
+    body: "Follow the agent setup guide, then ask Codex, Claude Code, or another compatible agent to connect your folder. It keeps its name and location.",
   },
   {
     title: "Work the way you already do",
-    body: "Same files, same apps. When a piece of work is finished, GoodFolder records a Save with a short description and the name of whoever did it.",
+    body: "Keep using your files and apps. Ask your agent to Save when it finishes a piece of work, or make a Save yourself.",
   },
   {
     title: "Read the history when you need it",
-    body: "Open the timeline to see who did what and when, and to bring back any earlier version of the folder.",
+    body: "Read the timeline in your browser. To return to an earlier saved version, ask your agent to Restore on the computer holding the folder.",
   },
 ];
 
@@ -146,38 +102,32 @@ const ACTIONS = [
   {
     Glyph: RestoreIcon,
     name: "Restore",
-    body: "Bring back any earlier version. GoodFolder records the return as another Save, so you can change your mind later.",
+    body: "Bring back an earlier saved version. GoodFolder records the return as another Save, so you can change your mind later.",
   },
-];
-
-const SOURCE_PARTS = [
-  "The command-line tool on your computer",
-  "The agent server and all twenty-five WebMCP tools",
-  "The dashboard and hosted-service code",
-  "The storage service and Docker setup",
 ];
 
 const QUESTIONS: FaqItem[] = [
   {
-    question: "What happens when I open my folders?",
+    question: "What do I need to get started?",
     defaultOpen: true,
     answer: [
-      "You give an email address and we send a one-time sign-in link. There’s no password to make up and nothing to install.",
-      "Once you’re in, you’ll see the folders you own and any folder someone has shared with you. If a colleague invited you, sign in with the address they used.",
-    ],
-  },
-  {
-    question: "What do I need to get started?",
-    answer: [
-      "You need a folder on your computer. Ask a compatible agent to set it up, or run one command yourself.",
+      "You need a folder on your computer and a compatible agent such as Codex or Claude Code. Follow the Agent setup guide linked on this page to install GoodFolder from source and connect your folder.",
       "There’s no desktop app or installer yet, so setup happens on the computer where the folder lives. After that, the dashboard works in any browser.",
     ],
   },
   {
+    question: "Does GoodFolder save every change automatically?",
+    answer: ["No. Ask your agent to Save when a piece of work is ready, or make a Save yourself. A Save captures the folder at that point; changes between Saves are not separate versions.", "Make a Save before asking an agent to rewrite something, so you have a version to return to."],
+  },
+  {
+    question: "Do my files leave my computer?",
+    answer: ["Your original folder stays where it is. Connecting to the hosted service and syncing sends a copy of the protected files and history to GoodFolder so you can review them in a browser or use them on another computer.", "You can also run the GoodFolder service on your own server. Keep the backup you already trust."],
+  },
+  {
     question: "What happens if an AI agent makes a mistake?",
     answer: [
-      "The mistake gets its own Save in the timeline. You can see that Codex made it, which files it touched, and when it happened.",
-      "On the computer where the folder lives, you can undo the latest Save or return to any earlier one. GoodFolder shows a preview first and records the return as a new Save, which means you can undo that too.",
+      "If you or your agent Save the changed folder, that work appears in the timeline with its author and the files it touched. You can return to a version saved before the mistake.",
+      "On the computer where the folder lives, you can preview an undo of the latest Save or Restore an earlier one. Either return creates a new Save, which means you can undo that too.",
     ],
   },
   {
@@ -232,6 +182,13 @@ const QUESTIONS: FaqItem[] = [
       "If hosted access ends, the account moves to read and export mode for 30 days before scheduled deletion. We send reminders at the start of that period, seven days before deletion, and 24 hours before deletion.",
     ],
   },
+  {
+    question: "What happens when I open my folders?",
+    answer: [
+      "You give an email address and we send a one-time sign-in link. There’s no password to make up and nothing to install.",
+      "Once you’re in, you’ll see the folders you own and any folder someone has shared with you. If a colleague invited you, sign in with the address they used.",
+    ],
+  },
 ];
 
 export default function Landing() {
@@ -252,10 +209,8 @@ export default function Landing() {
             <BrandMark size={36} className="min-[360px]:hidden" title="GoodFolder" />
             <BrandLockup size={36} className="hidden min-[360px]:inline-flex" />
           </Link>
-          {/* Not md: the right side now holds GitHub and Dashboard, so the row
-              needs 172 + 392 + 208 plus gaps and padding, about 860px. 900 is
-              that plus a margin. Re-measure if either label changes. */}
-          <nav aria-label="Sections" className="hidden items-center gap-1 min-[900px]:flex">
+          {/* Keep the expanded section navigation clear of the brand and account links. */}
+          <nav aria-label="Sections" className="hidden items-center gap-1 min-[1100px]:flex">
             {NAV.map((item) => (
               <a key={item.href} href={item.href} className="gf-button-ghost">
                 {item.label}
@@ -294,15 +249,16 @@ export default function Landing() {
                   <i>Keep a way back.</i>
                 </h1>
                 <p className="gf-lead mx-auto mt-7 max-w-2xl lg:mx-0">
-                  GoodFolder gives a folder on your computer a history you can read. When a piece of work is finished,
-                  it records what changed, who changed it, and a version you can return to. Use that same folder with
-                  your agents, wherever you work.
+                  GoodFolder gives your working folder a readable history. Save changes made by you or your agents,
+                  see who changed which files, and return to an earlier saved version. Keep using your existing apps.
                 </p>
-                <div className="mt-9 flex justify-center lg:justify-start">
+                <div className="mt-7 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
                   <Link href="/dashboard" className="gf-button-primary gf-button-lg">
-                    Open your folders <ArrowRightIcon />
+                    Get started <ArrowRightIcon />
                   </Link>
+                  <a href="#how" className="gf-button-ghost">See how setup works</a>
                 </div>
+                <p className="gf-faint mt-4 text-[13px]">Sign in by email, then connect a folder from your computer with a compatible agent.</p>
               </div>
               <MascotPose
                 pose="hero"
@@ -313,32 +269,7 @@ export default function Landing() {
           </div>
 
           <div className="gf-wrap mt-14 sm:mt-20">
-            <HeroAgentDemo />
-          </div>
-        </section>
-
-        {/* -------------------------------------------------------------- Problem */}
-        <section className="gf-band gf-band-tight gf-band-tint">
-          <div className="gf-wrap grid items-center gap-9 lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-10">
-            <div>
-              <div className="gf-head">
-                <p className="gf-eyebrow">Why this exists</p>
-                <h2 className="gf-h2 mt-4">A folder doesn’t remember anything.</h2>
-                <p className="gf-lead mt-5">
-                  It shows you the files as they are this second. Not how they looked on Tuesday, not who touched them,
-                  not what the agent you left running actually did.
-                </p>
-              </div>
-              <ul className="mt-9 grid gap-6 sm:grid-cols-3 sm:gap-7">
-                {GAPS.map(({ title, body }) => (
-                  <li key={title} className="border-t border-[var(--gf-line-strong)] pt-4">
-                    <b className="gf-h3 block">{title}</b>
-                    <span className="gf-body mt-1.5 block text-[14px]">{body}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <MascotPose pose="pixel" className="mx-auto w-[190px] [image-rendering:pixelated] sm:w-[220px] lg:w-[240px]" />
+            <RecoveryDemo />
           </div>
         </section>
 
@@ -353,8 +284,8 @@ export default function Landing() {
                   so the objection forming right here is "that isn't my work".
                   The answer is the breadth, and the browser view is the
                   evidence for it rather than the point of it. */}
-              <p className="gf-eyebrow">Most of a real folder isn’t text</p>
-              <h2 className="gf-h2 mt-4">Every kind of file gets the same history. Not just the ones made of words.</h2>
+              <p className="gf-eyebrow">Your files, your apps</p>
+              <h2 className="gf-h2 mt-4">One history for the whole folder.</h2>
               <p className="gf-lead mt-5">
                 Word files, spreadsheets, PDFs, slide decks, HTML pages, and media keep their original formats and
                 get the same readable history. Open them here when you want to see what an agent did, then carry on
@@ -390,47 +321,20 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* -------------------------------------------------------------- Moments */}
-        <section className="gf-band gf-band-tint">
-          <div className="gf-wrap grid items-center gap-10 lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)] lg:gap-14">
-            <div>
-              <div className="gf-head">
-                <p className="gf-eyebrow">When it earns its place</p>
-                <h2 className="gf-h2 mt-4">Four moments a history pays for itself.</h2>
-              </div>
-              <MascotPose pose="moments" className="mx-auto mt-7 w-full max-w-[440px]" />
-            </div>
-            <ul className="grid gap-3 sm:grid-cols-2">
-              {MOMENTS.map(({ Glyph, title, body }) => (
-                <li key={title} className="rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white p-5">
-                  <span className="gf-feature-icon"><Glyph /></span>
-                  <b className="gf-h3 mt-4 block">{title}</b>
-                  <span className="gf-body mt-1.5 block text-[14.5px]">{body}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
         {/* --------------------------------------------------------------- Setup */}
         <section id="how" className="gf-band scroll-mt-16">
           <div className="gf-wrap grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,.86fr)] lg:gap-16">
             <div>
               <p className="gf-eyebrow">Start with the folder you have</p>
-              <h2 className="gf-h2 mt-4">Three steps, and nothing moves.</h2>
+              <h2 className="gf-h2 mt-4">Start with a folder you already use.</h2>
               <p className="gf-lead mt-5">
-                Setup happens on the computer where the folder lives. Ask your agent to do it, or type it yourself.
+                Set up GoodFolder with a compatible agent on the computer holding your folder. There’s no desktop installer yet; the guide walks you through setup from source.
               </p>
+              <Link href="/docs" className="gf-button-secondary mt-6">Read the agent setup guide <ArrowRightIcon /></Link>
               <div className="mt-7 grid gap-2.5">
                 <p className="gf-prompt">
                   <SparklesIcon />
                   <span>Protect my “Q3 Report” folder with GoodFolder.</span>
-                </p>
-                <p className="gf-prompt gf-prompt-alt">
-                  <TerminalIcon />
-                  <span>
-                    <span className="gf-faint">or type it yourself · </span>goodfolder connect
-                  </span>
                 </p>
               </div>
               <ol className="mt-8 grid gap-5">
@@ -449,90 +353,30 @@ export default function Landing() {
               <Shot id="agent-connect" />
             </div>
           </div>
-        </section>
-
-        {/* --------------------------------------------- Save · Sync · Timeline · Restore */}
-        <section className="gf-band gf-band-tint">
-          <div className="gf-wrap grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,.95fr)] lg:items-center lg:gap-16">
-            <div>
-              <div className="gf-head">
-                <p className="gf-eyebrow">No expert mode hiding underneath</p>
-                <h2 className="gf-h2 mt-4">You only need four words.</h2>
-                <p className="gf-lead mt-5">
-                  Save, Sync, Timeline, and Restore. That’s it.
-                </p>
-              </div>
-              <div className="mt-9">
-                {ACTIONS.map(({ Glyph, name, body }) => (
-                  <div key={name} className="gf-verb">
-                    <h3 className="gf-verb-name">
-                      <Glyph />
-                      {name}
-                    </h3>
-                    <p className="gf-body text-[14.5px]">{body}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="gf-faint mt-6 max-w-xl text-[13px] leading-relaxed">
-                Sync and Restore need the computer that holds the folder. Adding a file, renaming one and taking
-                one out all work in the browser too.
-              </p>
+          <div className="gf-wrap mt-12">
+            <h3 className="gf-h3">Save, Sync, Timeline, Restore.</h3>
+            <div className="mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {ACTIONS.map(({ Glyph, name, body }) => (
+                <div key={name} className="border-t border-[var(--gf-line)] pt-4">
+                  <h4 className="gf-h3 flex items-center gap-2"><Glyph className="h-5 w-5" />{name}</h4>
+                  <p className="gf-body mt-2 text-[14px]">{body}</p>
+                </div>
+              ))}
             </div>
-            <div>
-              <TimelinePreview />
-            </div>
+            <p className="gf-faint mt-6 text-[13px]">Sync sends a copy to your connected GoodFolder service. Your original folder stays in place. Sync and Restore run on a computer holding the folder.</p>
           </div>
         </section>
 
-        {/* ----------------------------------------------------- One history, every computer */}
-        <section className="gf-band">
-          <div className="gf-wrap grid items-center gap-12 lg:grid-cols-[minmax(0,.92fr)_minmax(0,1fr)] lg:gap-16">
-            <div>
+        {/* -------------------------------------------------------------- Handoff */}
+        <section className="gf-band gf-band-tint">
+          <div className="gf-wrap">
+            <div className="gf-head">
               <p className="gf-eyebrow">One folder, wherever you work</p>
-              <h2 className="gf-h2 mt-4">Change computers without starting over.</h2>
-              <p className="gf-lead mt-5">
-                Your work shouldn’t be stranded on the machine where you started it. Sync the same folder to another
-                laptop or PC and its history comes along, ready for you, a teammate, or an AI agent to pick up.
-              </p>
-              <ul className="mt-6 grid gap-2.5">
-                {[
-                  "Finish on your laptop, open the same folder on your desktop, and pick up with its history intact",
-                  "Work alone, with other people, or with an AI agent; everyone starts from the same files and context",
-                  "The drafts, notes, and decisions stay with the folder, so changing computers never means starting over",
-                ].map((line) => (
-                  <li key={line} className="flex gap-2.5">
-                    <CheckIcon className="gf-check" />
-                    <span className="gf-body text-[14.5px]">{line}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-7 rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-[var(--gf-blue-wash)] p-5">
-                <b className="block text-[15px]">Your work, wherever you sit down.</b>
-                <p className="gf-body mt-2 text-[14px]">
-                  GoodFolder keeps one readable history around the folder, so you can continue yourself, hand it to a
-                  teammate, or let another agent carry on without losing the thread.
-                </p>
-              </div>
+              <h2 className="gf-h2 mt-4">Pick up with another computer or agent.</h2>
+              <p className="gf-lead mt-5">Sync carries your saved files and their history to another computer. You or your next agent can read what happened and continue from there.</p>
             </div>
-            <AgentHandoffMotion>
-              <Image
-                src="/brand/mascot/mascot-agent-handoff-v2.png"
-                alt="GoodFolder mascot holding two rotating agent-harness signs"
-                width={1383}
-                height={1137}
-                className="gf-agent-handoff__mascot"
-              />
-              <span className="gf-agent-handoff__sign gf-agent-handoff__sign--left" aria-hidden="true">
-                <Image src="/partners/codex.svg" alt="" width={24} height={24} className="gf-agent-handoff__mark gf-agent-handoff__mark--left-first" />
-                <Image src="/partners/pi-agent.svg" alt="" width={800} height={800} className="gf-agent-handoff__mark gf-agent-handoff__mark--left-second gf-agent-handoff__mark--pi-agent" />
-                <Image src="/partners/hermes-agent.svg" alt="" width={24} height={24} className="gf-agent-handoff__mark gf-agent-handoff__mark--left-last" />
-              </span>
-              <span className="gf-agent-handoff__sign gf-agent-handoff__sign--right" aria-hidden="true">
-                <Image src="/partners/openclaw.svg" alt="" width={512} height={512} className="gf-agent-handoff__mark gf-agent-handoff__mark--right-first" />
-                <Image src="/partners/claude-code.svg" alt="" width={24} height={24} className="gf-agent-handoff__mark gf-agent-handoff__mark--right-second gf-agent-handoff__mark--claude" />
-                <Image src="/partners/opencode.svg" alt="" width={24} height={24} className="gf-agent-handoff__mark gf-agent-handoff__mark--right-last" />
-              </span>
-            </AgentHandoffMotion>
+            <div className="mt-9"><HeroAgentDemo /></div>
+            <p className="gf-faint mt-4 text-[13px]">Illustrated example. A remote agent needs access to a computer holding the folder.</p>
           </div>
         </section>
 
@@ -540,49 +384,12 @@ export default function Landing() {
         <section id="webmcp" className="gf-band gf-band-tint scroll-mt-16">
           <div className="gf-wrap">
             <div className="max-w-3xl">
-              <p className="gf-eyebrow">WebMCP · the missing piece</p>
-              <h2 className="gf-h2 mt-4">Bring the agent into the work, even when it isn’t code.</h2>
+              <p className="gf-eyebrow">Your assistant, beside your files</p>
+              <h2 className="gf-h2 mt-4">Review your assistant’s changes before accepting them.</h2>
               <p className="gf-lead mt-5">
-                GoodFolder began with a simple idea: people who work with documents, numbers, and ideas should have the
-                same versioned history and way back that coders rely on. AI agents already fit that pattern for code:
-                they make changes, record a Save, and hand the work back. Spreadsheets, images, and documents with
-                images need one more step; people need to see the result in context. WebMCP brings the agent into the
-                GoodFolder dashboard, where people and agents can work side by side, review the result, and decide what
-                becomes the next Save.
+                In compatible browsers, your assistant can read the open file and prepare a Change Proposal beside it.
+                You review the result and decide whether to accept it. Browser assistants can propose work; they cannot accept it or Save it themselves.
               </p>
-
-              <div className="mt-8 grid gap-3 md:grid-cols-3">
-                <div className="rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white p-5">
-                  <h3 className="text-[16px] font-bold tracking-[-.02em]">Read what’s open</h3>
-                  <p className="gf-body mt-2 text-[13.5px]">
-                    WebMCP gives the assistant structured access to the current folder, document, table, selection, and
-                    <span className="font-medium text-[var(--gf-blue-ink)]"> history</span>. For an HTML page,
-                    it can also check which files loaded and read any script errors. No copy and paste.
-                  </p>
-                </div>
-                <div className="rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white p-5">
-                  <h3 className="text-[16px] font-bold tracking-[-.02em]">Prepare work you can see</h3>
-                  <p className="gf-body mt-2 text-[13.5px]">
-                    It can suggest text, update a table, add media to a document, or leave a comment. GoodFolder shows
-                    the <span className="font-medium text-[var(--gf-blue-ink)]">proposal</span> beside the file.
-                  </p>
-                </div>
-                <div className="rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white p-5">
-                  <h3 className="text-[16px] font-bold tracking-[-.02em]">People decide what lands</h3>
-                  <p className="gf-body mt-2 text-[13.5px]">
-                    You and your collaborators review the exact change in the dashboard. Accepting it creates the next
-                    Save; until then, the folder stays unchanged.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-7 rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-[var(--gf-blue-wash)] p-5">
-                <b className="block text-[15px]">GoodFolder ships with MCP from day one.</b>
-                <p className="gf-body mt-2 text-[14px]">
-                  Agents can work with the folder where it lives through MCP, while browser assistants use WebMCP beside
-                  the people reviewing it; both meet in the same files and history, with one clear review boundary.
-                </p>
-              </div>
 
               <p className="gf-faint mt-6 max-w-xl text-[12.5px] leading-relaxed">
                 In compatible browsers, ChatGPT’s built-in browser, ChatGPT Work and Codex find these as{" "}
@@ -600,7 +407,7 @@ export default function Landing() {
               <figure className="overflow-hidden rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white shadow-[var(--gf-shadow)]">
                 <figcaption className="flex items-center gap-2 border-b border-[var(--gf-line)] px-4 py-3 text-[13px] font-semibold">
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--gf-blue-ink)] text-[11px] text-white">1</span>
-                  WebMCP prepares a <span className="text-[var(--gf-blue-ink)]">Change Proposal</span>
+                  <span>Your assistant prepares a <span className="text-[var(--gf-blue-ink)]">Change Proposal</span></span>
                 </figcaption>
                 <Image
                   src="/shots/webmcp-proposal.png"
@@ -627,39 +434,6 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* --------------------------------------------------------- Open source */}
-        <section className="gf-band">
-          <div className="gf-wrap">
-            <div className="gf-panel-dark grid gap-10 px-7 py-10 sm:px-10 sm:py-12 lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)] lg:items-center lg:px-14">
-              <div>
-                <p className="gf-eyebrow gf-on-dark-faint">Public by design</p>
-                <h2 className="gf-h2 mt-4">Open source, all the way down.</h2>
-                <p className="gf-on-dark mt-5 max-w-xl text-[16px] leading-relaxed">
-                  GoodFolder doesn’t publish a small client and keep the interesting parts private. The code that
-                  touches your files, serves the dashboard, stores history, and runs the hosted service is public under
-                  the AGPL.
-                </p>
-                <a href={SOURCE_URL} className="gf-button-secondary mt-7">
-                  <GitHubIcon className="h-[17px] w-[17px]" />
-                  Explore the source
-                </a>
-                <p className="gf-on-dark-faint mt-4 text-[12.5px] leading-relaxed">
-                  Prefer your own server? Docker Compose runs the full stack without a cloud account, mail provider,
-                  billing provider, or AI key.
-                </p>
-              </div>
-              <ul className="grid gap-3 sm:grid-cols-2">
-                {SOURCE_PARTS.map((part) => (
-                  <li key={part} className="rounded-[var(--gf-radius)] border border-[var(--gf-line-on-dark)] p-4">
-                    <CheckIcon className="gf-check" />
-                    <span className="gf-on-dark mt-2 block text-[13.5px] leading-snug">{part}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </section>
-
         {/* --------------------------------------------------------------- Pricing */}
         <section id="pricing" className="gf-band gf-band-tint scroll-mt-16">
           <div className="gf-wrap">
@@ -667,7 +441,7 @@ export default function Landing() {
               <p className="gf-eyebrow">Run it yourself, or let us run it</p>
               <h2 className="gf-h2 mt-4">Three hosted plans. No folder or contributor limits.</h2>
               <p className="gf-lead mt-5">
-                You pay for the protected data inside your folders, not how many folders you make. Documents often use little capacity; photos and video use more.
+                Choose capacity for your current files and retained history. Every plan includes unlimited folders and contributors. Documents usually need less space than photos and video.
               </p>
             </div>
 
@@ -702,14 +476,15 @@ export default function Landing() {
             </CtaScope>
             <h2 className="gf-h2 mt-7 max-w-2xl">Start with a folder you already use.</h2>
             <p className="gf-on-dark mt-5 max-w-lg text-[16px] leading-relaxed">
-              Sign in and look around first. When you’re ready, one sentence to Codex or Claude Code protects a folder
-              on your computer, and it shows up here.
+              Sign in by email, then follow the agent setup guide to connect a folder on your computer.
+              Make your first Save and see its history here.
             </p>
             <Link href="/dashboard" className="gf-button-secondary gf-button-lg mt-9">
-              Open your folders <ArrowRightIcon />
+              Get started <ArrowRightIcon />
             </Link>
+            <Link href="/docs" className="gf-on-dark mt-4 underline underline-offset-2">Agent setup guide</Link>
             <p className="gf-on-dark-faint mt-6 text-[13px]">
-              A one-time link by email. No password, and your files stay where they are.
+              No password to remember. Your original files keep their names, formats, and location.
             </p>
           </div>
         </section>

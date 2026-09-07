@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { CheckIcon, FolderIcon, LockIcon, ShieldIcon, TerminalIcon } from "@/components/icons";
+import { FolderIcon, LockIcon, ShieldIcon, TerminalIcon } from "@/components/icons";
 
 /**
  * The one block on this site written for someone who already knows how this
@@ -88,29 +88,7 @@ export function ForEngineers({ sourceUrl }: { sourceUrl: string }) {
           ))}
         </ul>
 
-        <div className="gf-panel-dark mt-10 p-7">
-          <h3 className="text-[18px] font-bold tracking-[-.02em]">
-            The safety net is real, even when the product gets out of the way.
-          </h3>
-          <p className="gf-on-dark mt-4 max-w-3xl text-[14.5px] leading-relaxed">
-            People working in recordings, budgets, and code should not need to learn the machinery underneath their
-            folders. GoodFolder makes that protection legible to them, while giving your technical team a foundation
-            they can audit, run themselves, and leave without losing the history.
-          </p>
-          <ul className="mt-6 grid gap-2.5 sm:grid-cols-2">
-            {[
-              "The folder stays where its owner already works",
-              "No new file format or developer platform",
-              "Access checks stay in GoodFolder, not the transport",
-              "Run it yourself or use the hosted service",
-            ].map((line) => (
-              <li key={line} className="flex gap-2.5">
-                <CheckIcon className="gf-check" />
-                <span className="gf-on-dark text-[14.5px] leading-relaxed">{line}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+
       </div>
     </section>
   );
