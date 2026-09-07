@@ -115,16 +115,12 @@ function CodexWindow() {
             <div className="gf-demo-codex__composer-controls">
               <div className="gf-demo-codex__composer-left">
                 <i className="gf-demo-codex__add">+</i>
-                <span className="gf-demo-codex__approval">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.6c0 4.4 2.8 7.5 7.5 9.4 4.7-1.9 7.5-5 7.5-9.4V6L12 3Z"/><path d="m9 10 2 2-2 2m4 0h2"/></svg>
-                  Approve for me
-                </span>
               </div>
               <div className="gf-demo-codex__composer-right">
                 <span className="gf-demo-codex__model-dot" />
                 <span className="gf-demo-codex__model"><b>5.6 Sol</b><small>Light</small><em>⌄</em></span>
                 <svg className="gf-demo-codex__mic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-3 0h6"/></svg>
-                <i className="gf-demo-codex__send"><span className="gf-demo-codex__send-arrow">↑</span><span className="gf-demo-codex__send-stop" /></i>
+                <i className="gf-demo-codex__send"><span className="gf-demo-codex__send-arrow">↑</span></i>
               </div>
             </div>
           </div>
