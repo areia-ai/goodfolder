@@ -1699,7 +1699,7 @@ img, svg { max-width: 100%; }
 @keyframes gf-demo-check { 0%, 25% { opacity: 0; transform: translateX(-8px); } 29%, 100% { opacity: 1; transform: translateX(0); } }
 .gf-demo-codex__checks svg { width: 13px; height: 13px; color: var(--gf-blue); flex: none; }
 .gf-demo-codex__composer { display: flex; width: min(100%, 650px); min-height: clamp(58px, 8vw, 98px); flex-direction: column; gap: clamp(7px, 1vw, 12px); margin-top: auto; border: 1px solid color-mix(in srgb, var(--gf-white) 13%, transparent); border-radius: clamp(12px, 1.6vw, 20px); padding: clamp(9px, 1.2vw, 15px) clamp(10px, 1.4vw, 17px); background: color-mix(in srgb, var(--gf-white) 7%, var(--gf-black)); color: color-mix(in srgb, var(--gf-white) 38%, transparent); font-size: clamp(7px, .9vw, 11px); }
-.gf-demo-codex__typed { display: block; min-width: 0; overflow: hidden; color: color-mix(in srgb, var(--gf-white) 78%, transparent); white-space: nowrap; }
+.gf-demo-codex__typed { display: block; min-width: 0; overflow: hidden; color: color-mix(in srgb, var(--gf-white) 78%, transparent); white-space: nowrap; clip-path: inset(0 100% 0 0); animation: gf-demo-codex-type var(--gf-demo-time) steps(62, end) infinite; }
 @keyframes gf-demo-codex-type { 0% { clip-path: inset(0 100% 0 0); opacity: 1; } 6.2% { clip-path: inset(0 0 0 0); opacity: 1; } 7.7%, 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
 .gf-demo-codex__composer-controls,
 .gf-demo-codex__composer-left,
@@ -1708,16 +1708,19 @@ img, svg { max-width: 100%; }
 .gf-demo-codex__composer-left { min-width: 0; gap: clamp(7px, 1vw, 12px); }
 .gf-demo-codex__composer-right { flex: none; gap: clamp(6px, .8vw, 10px); }
 .gf-demo-codex__add { color: var(--gf-white); font: 300 clamp(14px, 1.8vw, 22px)/1 sans-serif; font-style: normal; }
+.gf-demo-codex__approval { display: inline-flex; min-width: 0; align-items: center; gap: 5px; white-space: nowrap; }
+.gf-demo-codex__approval svg { width: clamp(12px, 1.4vw, 17px); height: clamp(12px, 1.4vw, 17px); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .gf-demo-codex__model-dot { width: clamp(7px, .9vw, 11px); aspect-ratio: 1; border: 2px solid color-mix(in srgb, var(--gf-white) 32%, transparent); border-top-color: color-mix(in srgb, var(--gf-white) 70%, transparent); border-radius: 50%; }
 .gf-demo-codex__model { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
 .gf-demo-codex__model b { color: var(--gf-white); font-weight: 500; }
 .gf-demo-codex__model small { color: color-mix(in srgb, var(--gf-white) 42%, transparent); font-size: inherit; }
 .gf-demo-codex__model em { font-style: normal; }
 .gf-demo-codex__mic { width: clamp(13px, 1.6vw, 20px); height: clamp(13px, 1.6vw, 20px); fill: none; stroke: var(--gf-white); stroke-width: 1.7; stroke-linecap: round; }
-.gf-demo-codex__send { display: grid; width: clamp(20px, 2.8vw, 34px); aspect-ratio: 1; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--gf-white) 92%, transparent); color: var(--gf-black); font-style: normal; font-weight: 800; }
+.gf-demo-codex__send { display: grid; width: clamp(20px, 2.8vw, 34px); aspect-ratio: 1; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--gf-white) 72%, transparent); color: var(--gf-black); font-style: normal; font-weight: 800; animation: gf-demo-codex-send var(--gf-demo-time) ease infinite; }
 .gf-demo-codex__send-arrow,
 .gf-demo-codex__send-stop { grid-area: 1 / 1; }
-.gf-demo-codex__send-arrow { opacity: 1; }
+.gf-demo-codex__send-arrow { animation: gf-demo-codex-send-arrow var(--gf-demo-time) step-end infinite; }
+.gf-demo-codex__send-stop { width: 35%; aspect-ratio: 1; border-radius: 2px; background: currentColor; opacity: 0; animation: gf-demo-codex-send-stop var(--gf-demo-time) step-end infinite; }
 @keyframes gf-demo-codex-send { 0%, 7% { transform: scale(1); } 8.5% { transform: scale(.82); background: var(--gf-blue); } 10%, 100% { transform: scale(1); } }
 @keyframes gf-demo-codex-send-arrow { 0%, 13%, 25%, 100% { opacity: 1; } 14%, 24% { opacity: 0; } }
 @keyframes gf-demo-codex-send-stop { 0%, 13%, 25%, 100% { opacity: 0; } 14%, 24% { opacity: 1; } }
