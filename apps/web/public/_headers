@@ -1,0 +1,9 @@
+/docs.md
+  Content-Type: text/markdown; charset=utf-8
+  Link: </docs>; rel="canonical"
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
+/dashboard*
+  X-Robots-Tag: noindex, nofollow
+/challenge*
+  X-Robots-Tag: noindex, nofollow

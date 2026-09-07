@@ -13,6 +13,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://trygoodfolder.com"),
   title: "GoodFolder | See what changed in your folder, and go back",
   description:
     "GoodFolder gives a folder on your computer a history you can read. See what an agent or a person changed, who did it, and return to any earlier version. Your files stay where they are and keep their formats.",
@@ -32,6 +33,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`scroll-smooth ${inter.variable}`}>
+      <head><link rel="alternate" type="text/plain" href="/llms.txt" title="GoodFolder agent index" /></head>
       <body className="bg-white text-black antialiased">{children}</body>
     </html>
   );

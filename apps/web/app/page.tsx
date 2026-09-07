@@ -1,4 +1,6 @@
 import Image from "next/image";
+import type { Metadata } from "next";
+import { PRODUCT_DESCRIPTION, SITE_URL } from "@/lib/discovery";
 import Link from "next/link";
 import { BrandLockup, BrandMark } from "@/components/brand";
 import { AgentHandoffMotion } from "@/components/agent-handoff-motion";
@@ -35,6 +37,11 @@ import {
 
 /** The AGPL obliges us to offer this to anyone using the hosted service. */
 const SOURCE_URL = "https://github.com/areia-ai/goodfolder";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+  openGraph: { type: "website", url: SITE_URL, title: "GoodFolder", description: PRODUCT_DESCRIPTION },
+};
 
 const NAV = [
   { href: "#files", label: "Your files" },
@@ -709,8 +716,18 @@ export default function Landing() {
       </main>
 
       <footer className="border-t border-[var(--gf-line)]">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          "@context": "https://schema.org", "@type": "SoftwareApplication",
+          name: "GoodFolder", url: SITE_URL, description: PRODUCT_DESCRIPTION,
+          applicationCategory: "ProductivityApplication",
+          license: "https://www.gnu.org/licenses/agpl-3.0.html",
+        }).replace(/</g, "\\u003c") }} />
         <div className="gf-wrap flex flex-col items-start justify-between gap-5 py-10 sm:flex-row sm:items-center">
           <BrandLockup size={30} />
+          <nav aria-label="Resources" className="flex flex-wrap gap-4 text-[13px]">
+            <Link href="/docs" className="underline underline-offset-2">Agent setup</Link>
+            <a href="/llms.txt" className="underline underline-offset-2">Agent index</a>
+          </nav>
           <p className="gf-faint text-[13px]">
             <a href={SOURCE_URL} className="underline underline-offset-2 hover:text-black">
               Proudly open source

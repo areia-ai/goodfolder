@@ -45,7 +45,7 @@ putting it behind a domain, and what each service does.
 | --- | --- |
 | `apps/cli` | The `goodfolder` command: connect, save, sync, log, restore, undo |
 | `apps/mcp` | Model Context Protocol server, so Codex, Claude Code and other agents can drive those actions |
-| `apps/web` | Dashboard and landing page, including twenty-one WebMCP tools |
+| `apps/web` | Dashboard, landing page, public agent setup guide, and WebMCP tools |
 | `apps/control-plane` | Accounts, folders, saves, permissions, the transport proxy |
 | `apps/lfs` | Large-file transfers against S3-compatible storage |
 | `packages/shared` | Domain types, the routing rule, the case-collision finder |
@@ -65,6 +65,13 @@ Save, Sync, Timeline, Restore. There is no expert mode underneath.
   Save, so you can change your mind again.
 
 ## Working on it
+
+The website's `/docs` guide and `/docs.md` representation share their content
+in `apps/web/lib/discovery.ts`. The homepage links to that guide and `/llms.txt`;
+`/sitemap.xml` lists public pages, and `/robots.txt` excludes the dashboard and
+demo entry. Static hosting must preserve `apps/web/public/_headers` for Markdown
+content types and dashboard indexing rules. These files describe local stdio
+MCP and browser WebMCP; they do not advertise a hosted HTTP MCP service.
 
 Requires Node 22+ and pnpm 11.
 
