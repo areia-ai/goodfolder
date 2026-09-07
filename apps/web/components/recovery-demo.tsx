@@ -77,18 +77,20 @@ export function RecoveryDemo() {
       <div className="gf-recovery__workspace">
         <div className="gf-recovery__agent">
           <div className="gf-recovery__bar"><img src="/partners/codex.svg" alt="" width="20" height="20" /><b>Codex</b><span>On your computer</span></div>
-          <div key={scene} className="gf-recovery__exchange">
+          <div className="gf-recovery__exchange">
             <p className="gf-recovery__prompt">{current.prompt}</p>
-            <div className="gf-recovery__typing" aria-hidden="true"><i /><i /><i /></div>
             <p className="gf-recovery__reply">{current.reply}</p>
           </div>
           <div className="gf-recovery__composer">
-            <span className="gf-recovery__composer-add">+</span>
-            <span className="gf-recovery__approval"><span>⌘</span> Approve for me</span>
-            <span className="gf-recovery__composer-spacer" />
-            <span className="gf-recovery__model"><i />5.6 Sol <small>Light</small>⌄</span>
-            <span className="gf-recovery__mic" aria-hidden="true">♩</span>
-            <span className="gf-recovery__send" aria-hidden="true">↑</span>
+            <p className="gf-recovery__composer-text">{current.prompt}</p>
+            <div className="gf-recovery__composer-row">
+              <span className="gf-recovery__composer-add">+</span>
+              <span className="gf-recovery__approval"><span>!</span> Full access</span>
+              <span className="gf-recovery__composer-spacer" />
+              <span className="gf-recovery__model"><i />GPT-Reserve Medium <small>⌄</small></span>
+              <span className="gf-recovery__mic" aria-hidden="true">♩</span>
+              <span className="gf-recovery__send" aria-hidden="true">↑</span>
+            </div>
           </div>
           <div className="gf-recovery__connected"><BrandMark size={19} title="" />GoodFolder connected</div>
         </div>
