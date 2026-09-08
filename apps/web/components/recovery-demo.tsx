@@ -32,6 +32,18 @@ const SCENES = [
   },
 ] as const;
 
+/** Composer chrome, drawn rather than typed so it survives font substitution. */
+function ComposerIcon({ name }: { name: "add" | "shield" | "chevron" | "mic" | "send" }) {
+  const paths = {
+    add: <path d="M12 5.5v13M5.5 12h13" />,
+    shield: <><path d="M12 3.2 5.5 5.8v5.1c0 3.9 2.6 6.7 6.5 8.3 3.9-1.6 6.5-4.4 6.5-8.3V5.8L12 3.2Z" /><path d="m9.3 11.7 1.9 1.9 3.5-3.7" /></>,
+    chevron: <path d="m6.5 9.5 5.5 5 5.5-5" />,
+    mic: <><rect x="9.25" y="3" width="5.5" height="10.5" rx="2.75" /><path d="M5.75 11.4a6.25 6.25 0 0 0 12.5 0M12 17.7V21m-2.75 0h5.5" /></>,
+    send: <path d="M12 19V5.6M6.2 11.4 12 5.6l5.8 5.8" />,
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+}
+
 export function RecoveryDemo() {
   const [scene, setScene] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -79,17 +91,20 @@ export function RecoveryDemo() {
           <div className="gf-recovery__bar"><img src="/partners/codex.svg" alt="" width="20" height="20" /><b>Codex</b><span>On your computer</span></div>
           <div className="gf-recovery__exchange">
             <p className="gf-recovery__prompt">{current.prompt}</p>
-            <p className="gf-recovery__reply">{current.reply}</p>
+            <div className="gf-recovery__answer">
+              <span className="gf-recovery__avatar" aria-hidden="true"><img src="/partners/codex.svg" alt="" width="14" height="14" /></span>
+              <p className="gf-recovery__reply">{current.reply}</p>
+            </div>
           </div>
           <div className="gf-recovery__composer">
-            <p className="gf-recovery__composer-text">{current.prompt}</p>
+            <p className="gf-recovery__composer-text"><span className="gf-recovery__caret" aria-hidden="true" />Message Codex</p>
             <div className="gf-recovery__composer-row">
-              <span className="gf-recovery__composer-add">+</span>
-              <span className="gf-recovery__approval"><span>!</span> Full access</span>
+              <span className="gf-recovery__composer-add" aria-hidden="true"><ComposerIcon name="add" /></span>
+              <span className="gf-recovery__approval"><ComposerIcon name="shield" /><span>Auto</span></span>
               <span className="gf-recovery__composer-spacer" />
-              <span className="gf-recovery__model"><i />GPT-Reserve Medium <small>⌄</small></span>
-              <span className="gf-recovery__mic" aria-hidden="true">♩</span>
-              <span className="gf-recovery__send" aria-hidden="true">↑</span>
+              <span className="gf-recovery__model"><b>5.6 Sol</b><small>Light</small><ComposerIcon name="chevron" /></span>
+              <span className="gf-recovery__mic" aria-hidden="true"><ComposerIcon name="mic" /></span>
+              <span className="gf-recovery__send" aria-hidden="true"><ComposerIcon name="send" /></span>
             </div>
           </div>
           <div className="gf-recovery__connected"><BrandMark size={19} title="" />GoodFolder connected</div>
