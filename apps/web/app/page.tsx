@@ -386,7 +386,6 @@ export default function Landing() {
               <p className="gf-lead mt-5">Sync carries your saved files and their history to another computer. You or your next agent can read what happened and continue from there.</p>
             </div>
             <div className="mt-9"><HeroAgentDemo /></div>
-            <p className="gf-faint mt-4 text-[13px]">Illustrated example. A remote agent needs access to a computer holding the folder.</p>
           </div>
         </section>
 
