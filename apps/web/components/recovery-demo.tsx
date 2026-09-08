@@ -72,19 +72,19 @@ export function RecoveryDemo() {
   const current = SCENES[scene];
   return (
     <figure ref={root} className="gf-recovery" aria-label="Illustrated example of saving and restoring a report with a local agent">
-      <div className="gf-recovery__heading">
-        <div><p className="gf-eyebrow">An example, from Save to Restore</p><h2 className="gf-h3 mt-2">Try the change. Keep a way back.</h2></div>
+      {/* One control strip, not a heading block plus a tab bar plus a play
+          box. The step index carries the ordering the circled numbers used
+          to, and the transport sits at the end of the same row. */}
+      <div className="gf-recovery__steps" role="group" aria-label="Example steps">
+        {SCENES.map((item, index) => <button key={item.label} type="button" aria-pressed={scene === index} onClick={() => { setScene(index); setPlaying(false); }}>
+          <span className="gf-recovery__step-index">{String(index + 1).padStart(2, "0")}</span>{item.label}
+        </button>)}
         <button type="button" className="gf-recovery__play" aria-label={playing ? "Pause example" : scene === SCENES.length - 1 ? "Replay example" : "Play example"} onClick={() => {
           if (!playing && scene === SCENES.length - 1) setScene(0);
           setPlaying(!playing);
         }}>
           <svg viewBox="0 0 24 24" aria-hidden="true">{playing ? <path d="M8 6v12M16 6v12" /> : <path d="m9 6 9 6-9 6Z" />}</svg>
         </button>
-      </div>
-      <div className="gf-recovery__steps" role="group" aria-label="Example steps">
-        {SCENES.map((item, index) => <button key={item.label} type="button" aria-pressed={scene === index} onClick={() => { setScene(index); setPlaying(false); }}>
-          <span>{index + 1}</span>{item.label}
-        </button>)}
       </div>
       <div className="gf-recovery__workspace">
         <div className="gf-recovery__agent">
@@ -126,7 +126,7 @@ export function RecoveryDemo() {
           </div>
         </div>
       </div>
-      <figcaption><b>{current.title}</b><span>Save and Restore run through your agent on the computer holding the folder. Restore creates a new Save.</span></figcaption>
+      <figcaption><b>{current.title}</b><span>Save and Restore run through your agent, on the computer holding the folder.</span></figcaption>
     </figure>
   );
 }

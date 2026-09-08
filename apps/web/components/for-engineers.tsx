@@ -49,10 +49,12 @@ export function ForEngineers({ sourceUrl }: { sourceUrl: string }) {
   return (
     <section id="engine" className="gf-band scroll-mt-16">
       <div className="gf-wrap">
-        <div className="gf-head grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-10">
+        <div className="gf-head">
+          <p className="gf-eyebrow"><span className="gf-eyebrow-index">07</span>For the people who need to inspect the foundation</p>
+        </div>
+        <div className="mt-7 grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-10">
           <div>
-            <p className="gf-eyebrow">For the people who need to inspect the foundation</p>
-            <h2 className="gf-h2 mt-4">Git underneath. A clear way back on top.</h2>
+            <h2 className="gf-h2">Git underneath. <em>A clear way back on top.</em></h2>
             <p className="gf-lead mt-5">
               GoodFolder puts Save, Sync, Timeline, and Restore around an ordinary folder. Underneath, its history
               stays in a standard Git repository your engineers can inspect, while everyone else gets a clear way to

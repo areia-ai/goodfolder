@@ -238,38 +238,48 @@ export default function Landing() {
 
       <main id="main">
         {/* ---------------------------------------------------------------- Hero */}
-        <section className="overflow-hidden pb-12 pt-16 sm:pb-16 sm:pt-24 lg:pb-20">
+        <section className="overflow-hidden pb-[var(--gf-section-y)] pt-16 sm:pt-24">
           <div className="gf-wrap">
-            <div className="mx-auto grid max-w-5xl items-center gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6">
-              <div className="text-center lg:text-left">
-                <p className="gf-eyebrow">For documents, spreadsheets, decks, web pages, and media</p>
-                <h1 className="gf-display-xl mt-5">
-                  Let AI agents work on your files.
-                  <br />
-                  <i>Keep a way back.</i>
-                </h1>
-                <p className="gf-lead mx-auto mt-7 max-w-2xl lg:mx-0">
+            <p className="gf-eyebrow"><span className="gf-eyebrow-index">01</span>For documents, spreadsheets, decks, web pages, and media</p>
+            <h1 className="gf-display-xl mt-7">
+              Let AI agents work on your files.
+              <br />
+              <i>Keep a way back.</i>
+            </h1>
+            <div className="mt-10 grid items-end gap-8 lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-12">
+              <div>
+                <p className="gf-lead max-w-[56ch]">
                   GoodFolder gives your working folder a readable history. Save changes made by you or your agents,
                   see who changed which files, and return to an earlier saved version. Keep using your existing apps.
                 </p>
-                <div className="mt-7 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
+                <div className="mt-8 flex flex-wrap items-center gap-4">
                   <Link href="/dashboard" className="gf-button-primary gf-button-lg">
                     Get started <ArrowRightIcon />
                   </Link>
                   <a href="#how" className="gf-button-ghost">See how setup works</a>
                 </div>
-                <p className="gf-faint mt-4 text-[13px]">Sign in by email, then connect a folder from your computer with a compatible agent.</p>
+                <p className="gf-faint mt-5 text-[13px]">Sign in by email, then connect a folder from your computer with a compatible agent.</p>
               </div>
               <MascotPose
                 pose="hero"
                 priority
-                className="mx-auto w-[230px] -scale-x-100 sm:w-[270px] lg:w-[320px] lg:-translate-x-3"
+                className="w-[200px] -scale-x-100 sm:w-[240px] lg:w-[280px]"
               />
             </div>
           </div>
+        </section>
 
-          <div className="gf-wrap mt-14 sm:mt-20">
-            <RecoveryDemo />
+        {/* ------------------------------------------------------- Save/Restore */}
+        {/* The first thing under the headline is the product working, on the
+            page's own ink. No card, no tint, no second heading repeating the
+            hero: the step row and one caption carry it. */}
+        <section className="gf-band gf-band-ink">
+          <div className="gf-wrap">
+            <div className="gf-head">
+              <p className="gf-eyebrow"><span className="gf-eyebrow-index">02</span>An example, from Save to Restore</p>
+              <h2 className="gf-h2 mt-4">Try the change. <em>Keep a way back.</em></h2>
+            </div>
+            <div className="mt-9"><RecoveryDemo /></div>
           </div>
         </section>
 
@@ -284,8 +294,8 @@ export default function Landing() {
                   so the objection forming right here is "that isn't my work".
                   The answer is the breadth, and the browser view is the
                   evidence for it rather than the point of it. */}
-              <p className="gf-eyebrow">Your files, your apps</p>
-              <h2 className="gf-h2 mt-4">One history for the whole folder.</h2>
+              <p className="gf-eyebrow"><span className="gf-eyebrow-index">03</span>Your files, your apps</p>
+              <h2 className="gf-h2 mt-4">One history <em>for the whole folder.</em></h2>
               <p className="gf-lead mt-5">
                 Word files, spreadsheets, PDFs, slide decks, HTML pages, and media keep their original formats and
                 get the same readable history. Open them here when you want to see what an agent did, then carry on
@@ -308,24 +318,24 @@ export default function Landing() {
                 its own illustration. The read-only reassurance that used to
                 sit under it is an objection, and it is answered where
                 objections are answered — in the questions near the foot. */}
-            <figure className="mx-auto mt-10 max-w-5xl">
+            <figure className="gf-figure-wide mt-12">
               <Image
                 src="/shots/file-previews-illustrated.png"
                 width={1672}
                 height={941}
                 alt="A graphical GoodFolder browser showing a document, spreadsheet, presentation, photo, video, and audio file"
                 className="gf-shot"
-                sizes="(max-width: 1120px) calc(100vw - 40px), 1000px"
+                sizes="(max-width: 1400px) 100vw, 1400px"
               />
             </figure>
           </div>
         </section>
 
         {/* --------------------------------------------------------------- Setup */}
-        <section id="how" className="gf-band scroll-mt-16">
+        <section id="how" className="gf-band gf-band-tint scroll-mt-16">
           <div className="gf-wrap grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,.86fr)] lg:gap-16">
             <div>
-              <p className="gf-eyebrow">Start with the folder you have</p>
+              <p className="gf-eyebrow"><span className="gf-eyebrow-index">04</span>Start with the folder you have</p>
               <h2 className="gf-h2 mt-4">Start with a folder you already use.</h2>
               <p className="gf-lead mt-5">
                 Set up GoodFolder with a compatible agent on the computer holding your folder. There’s no desktop installer yet; the guide walks you through setup from source.
@@ -340,7 +350,7 @@ export default function Landing() {
               <ol className="mt-8 grid gap-5">
                 {STEPS.map((step, i) => (
                   <li key={step.title} className="flex gap-4">
-                    <span className="gf-step-number gf-num shrink-0">{i + 1}</span>
+                    <span className="gf-step-number gf-num shrink-0">{String(i + 1).padStart(2, "0")}</span>
                     <span className="min-w-0">
                       <span className="gf-h3 block">{step.title}</span>
                       <span className="gf-body mt-1 block text-[14px]">{step.body}</span>
@@ -368,11 +378,11 @@ export default function Landing() {
         </section>
 
         {/* -------------------------------------------------------------- Handoff */}
-        <section className="gf-band gf-band-tint">
+        <section className="gf-band gf-band-ink">
           <div className="gf-wrap">
             <div className="gf-head">
-              <p className="gf-eyebrow">One folder, wherever you work</p>
-              <h2 className="gf-h2 mt-4">Pick up with another computer or agent.</h2>
+              <p className="gf-eyebrow"><span className="gf-eyebrow-index">05</span>One folder, wherever you work</p>
+              <h2 className="gf-h2 mt-4">Pick up <em>with another computer or agent.</em></h2>
               <p className="gf-lead mt-5">Sync carries your saved files and their history to another computer. You or your next agent can read what happened and continue from there.</p>
             </div>
             <div className="mt-9"><HeroAgentDemo /></div>
@@ -381,11 +391,11 @@ export default function Landing() {
         </section>
 
         {/* --------------------------------------------------------------- WebMCP */}
-        <section id="webmcp" className="gf-band gf-band-tint scroll-mt-16">
+        <section id="webmcp" className="gf-band scroll-mt-16">
           <div className="gf-wrap">
             <div className="max-w-3xl">
-              <p className="gf-eyebrow">Your assistant, beside your files</p>
-              <h2 className="gf-h2 mt-4">Review your assistant’s changes before accepting them.</h2>
+              <p className="gf-eyebrow"><span className="gf-eyebrow-index">06</span>Your assistant, beside your files</p>
+              <h2 className="gf-h2 mt-4">Review your assistant’s changes <em>before accepting them.</em></h2>
               <p className="gf-lead mt-5">
                 In compatible browsers, your assistant can read the open file and prepare a Change Proposal beside it.
                 You review the result and decide whether to accept it. Browser assistants can propose work; they cannot accept it or Save it themselves.
@@ -403,23 +413,24 @@ export default function Landing() {
                 is a W3C Community Group draft; without it the dashboard works as usual.
               </p>
             </div>
-            <div className="mt-10 grid gap-5">
-              <figure className="overflow-hidden rounded-[var(--gf-radius)] border border-[var(--gf-blue-line-soft)] bg-white shadow-[var(--gf-shadow)]">
-                <figcaption className="flex items-center gap-2 border-b border-[var(--gf-line)] px-4 py-3 text-[13px] font-semibold">
-                  <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--gf-blue-ink)] text-[11px] text-white">1</span>
-                  <span>Your assistant prepares a <span className="text-[var(--gf-blue-ink)]">Change Proposal</span></span>
+            <div className="gf-figure-wide mt-12 grid gap-[var(--gf-section-y)]">
+              <figure>
+                <figcaption className="gf-figure-label">
+                  <span className="gf-eyebrow-index">01</span>
+                  Your assistant prepares a Change Proposal
                 </figcaption>
                 <Image
                   src="/shots/webmcp-proposal.png"
                   alt="Codex beside GoodFolder, where the assistant has prepared a Change Proposal that adds a generated image and its Markdown reference to a recipe."
                   width={3814}
                   height={2074}
-                  className="block h-auto w-full"
+                  className="gf-shot mt-5"
+                  sizes="(max-width: 1400px) 100vw, 1400px"
                 />
               </figure>
-              <figure className="overflow-hidden rounded-[var(--gf-radius)] border border-[var(--gf-line)] bg-white shadow-[var(--gf-shadow)]">
-                <figcaption className="flex items-center gap-2 border-b border-[var(--gf-line)] px-4 py-3 text-[13px] font-semibold">
-                  <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--gf-blue-ink)] text-[11px] text-white">2</span>
+              <figure>
+                <figcaption className="gf-figure-label">
+                  <span className="gf-eyebrow-index">02</span>
                   You review and accept it in GoodFolder
                 </figcaption>
                 <Image
@@ -427,7 +438,8 @@ export default function Landing() {
                   alt="Codex beside GoodFolder, showing the accepted image rendered inline in the recipe between the ingredients and preparation steps."
                   width={3814}
                   height={2080}
-                  className="block h-auto w-full"
+                  className="gf-shot mt-5"
+                  sizes="(max-width: 1400px) 100vw, 1400px"
                 />
               </figure>
             </div>
@@ -438,8 +450,8 @@ export default function Landing() {
         <section id="pricing" className="gf-band gf-band-tint scroll-mt-16">
           <div className="gf-wrap">
             <div className="gf-head">
-              <p className="gf-eyebrow">Run it yourself, or let us run it</p>
-              <h2 className="gf-h2 mt-4">Three hosted plans. No folder or contributor limits.</h2>
+              <p className="gf-eyebrow"><span className="gf-eyebrow-index">08</span>Run it yourself, or let us run it</p>
+              <h2 className="gf-h2 mt-4">Three hosted plans. <em>No folder or contributor limits.</em></h2>
               <p className="gf-lead mt-5">
                 Choose capacity for your current files and retained history. Every plan includes unlimited folders and contributors. Documents usually need less space than photos and video.
               </p>
@@ -459,33 +471,37 @@ export default function Landing() {
         <section id="questions" className="gf-band gf-band-tint scroll-mt-16">
           <div className="gf-wrap">
             <div className="mx-auto max-w-3xl">
-              <p className="gf-eyebrow">Questions</p>
-              <h2 className="gf-h2 mt-4">Fair questions before you trust it with a folder.</h2>
+              <p className="gf-eyebrow"><span className="gf-eyebrow-index">09</span>Questions</p>
+              <h2 className="gf-h2 mt-4">Fair questions <em>before you trust it with a folder.</em></h2>
               <Faq items={QUESTIONS} />
             </div>
           </div>
         </section>
 
         {/* -------------------------------------------------------------- Final CTA */}
-        <section className="gf-wrap py-[var(--gf-section-y)]">
-          <div className="gf-panel-dark flex flex-col items-center px-6 py-14 text-center sm:px-14 sm:py-20">
+        <section className="gf-band gf-band-blue">
+          <div className="gf-wrap grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-16">
+            <div>
+              <h2 className="gf-display-xl">Start with a folder you already use.</h2>
+              <p className="mt-8 max-w-[46ch] text-[17px] leading-relaxed text-[color-mix(in_srgb,var(--gf-black)_74%,transparent)]">
+                Sign in by email, then follow the agent setup guide to connect a folder on your computer.
+                Make your first Save and see its history here.
+              </p>
+              <div className="mt-9 flex flex-wrap items-center gap-5">
+                <Link href="/dashboard" className="gf-button-primary gf-button-lg">
+                  Get started <ArrowRightIcon />
+                </Link>
+                <Link href="/docs" className="underline underline-offset-4">Agent setup guide</Link>
+              </div>
+              <p className="mt-7 text-[13px] text-[color-mix(in_srgb,var(--gf-black)_64%,transparent)]">
+                No password to remember. Your original files keep their names, formats, and location.
+              </p>
+            </div>
             <CtaScope>
               <span className="gf-cta-scope-window">
                 <MascotPose pose="wave" className="gf-cta-mascot" />
               </span>
             </CtaScope>
-            <h2 className="gf-h2 mt-7 max-w-2xl">Start with a folder you already use.</h2>
-            <p className="gf-on-dark mt-5 max-w-lg text-[16px] leading-relaxed">
-              Sign in by email, then follow the agent setup guide to connect a folder on your computer.
-              Make your first Save and see its history here.
-            </p>
-            <Link href="/dashboard" className="gf-button-secondary gf-button-lg mt-9">
-              Get started <ArrowRightIcon />
-            </Link>
-            <Link href="/docs" className="gf-on-dark mt-4 underline underline-offset-2">Agent setup guide</Link>
-            <p className="gf-on-dark-faint mt-6 text-[13px]">
-              No password to remember. Your original files keep their names, formats, and location.
-            </p>
           </div>
         </section>
       </main>

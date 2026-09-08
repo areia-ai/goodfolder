@@ -156,19 +156,31 @@ img, svg { max-width: 100%; }
   text-wrap: balance;
 }
 .gf-h2 {
-  font-size: clamp(1.625rem, 3vw, 2.375rem);
+  font-size: clamp(1.75rem, 3.6vw, 3rem);
   font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.12;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
   text-wrap: balance;
 }
+.gf-h2 em { font-style: normal; color: var(--gf-ink-faint); }
 .gf-h3 { font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.015em; line-height: 1.35; }
 .gf-lead { font-size: clamp(1.0625rem, 1.2vw, 1.1875rem); line-height: 1.6; color: var(--gf-ink-soft); text-wrap: pretty; }
 .gf-body { line-height: 1.65; color: var(--gf-ink-soft); text-wrap: pretty; }
 .gf-eyebrow {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-size: 11.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  display: flex; align-items: baseline; gap: 14px;
+  font-size: 13px; font-weight: 500; letter-spacing: 0.005em;
+  color: var(--gf-ink-faint);
+}
+/* The chapter index. Monospace tabular numerals and a short rule: the page
+   gets a spine you can count, and the accent lands on four characters
+   instead of a whole line of capitals. */
+.gf-eyebrow-index {
+  display: inline-flex; align-items: center; gap: 14px; flex: none;
+  font: 600 12px/1 var(--gf-font-mono); font-variant-numeric: tabular-nums;
   color: var(--gf-blue-ink);
+}
+.gf-eyebrow-index::after {
+  content: ""; width: 26px; height: 1px; background: var(--gf-line-heavy); align-self: center;
 }
 .gf-muted { color: var(--gf-ink-soft); }
 .gf-faint { color: var(--gf-ink-faint); }
@@ -242,6 +254,9 @@ img, svg { max-width: 100%; }
 .gf-button-lg { min-height: 46px; padding: 12px 20px; font-size: 15px; border-radius: var(--gf-radius); }
 .gf-button-block { width: 100%; }
 /* On black panels the primary flips to a white button so it stays legible. */
+.gf-band-blue .gf-button-primary { background: var(--gf-black); color: var(--gf-white); border-color: var(--gf-black); }
+.gf-band-blue .gf-button-primary:hover { background: var(--gf-white); color: var(--gf-black); border-color: var(--gf-white); }
+.gf-band-blue :where(a, button):focus-visible { box-shadow: 0 0 0 2px var(--gf-blue), 0 0 0 4px var(--gf-black); }
 .gf-panel-dark .gf-button-primary { background: var(--gf-white); color: var(--gf-black); border-color: var(--gf-white); }
 .gf-panel-dark .gf-button-primary:hover { background: var(--gf-blue); border-color: var(--gf-blue); color: var(--gf-black); }
 .gf-panel-dark .gf-button-secondary { background: transparent; color: var(--gf-white); border-color: var(--gf-line-on-dark); }
@@ -860,9 +875,9 @@ img, svg { max-width: 100%; }
 }
 .gf-feature-icon svg { height: 20px; width: 20px; }
 .gf-step-number {
-  display: grid; height: 28px; width: 28px; place-items: center;
-  border-radius: 999px; background: var(--gf-blue-ink); color: var(--gf-white);
-  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+  display: grid; width: 28px; place-items: start center;
+  font: 600 12px/1.5 var(--gf-font-mono); font-variant-numeric: tabular-nums;
+  color: var(--gf-blue-ink);
 }
 .gf-check { color: var(--gf-blue-ink); height: 17px; width: 17px; flex: none; margin-top: 2px; }
 .gf-panel-dark .gf-check { color: var(--gf-blue); }
@@ -1180,10 +1195,10 @@ img, svg { max-width: 100%; }
 /* The hero gets one size larger than anything else on the site. Nothing
    below it competes, which is what makes the first screen land. */
 .gf-display-xl {
-  font-size: clamp(2.5rem, 6.6vw, 4.75rem);
+  font-size: clamp(2.75rem, 7.6vw, 6rem);
   font-weight: 800;
-  letter-spacing: -0.045em;
-  line-height: 0.98;
+  letter-spacing: -0.05em;
+  line-height: 0.94;
   text-wrap: balance;
 }
 /* Second clause of a two-beat headline, stepped back rather than shrunk.
@@ -1197,9 +1212,40 @@ img, svg { max-width: 100%; }
 .gf-band { padding-block: var(--gf-section-y); }
 .gf-band-tint { background: var(--gf-surface-sunken); border-block: 1px solid var(--gf-line); }
 .gf-band-tight { padding-block: calc(var(--gf-section-y) * 0.62); }
+/* Ink and blue as fields rather than as cards. Square corners on purpose:
+   these bands are the page's structure, not objects sitting on it. */
+.gf-band-ink { background: var(--gf-black); color: var(--gf-white); }
+.gf-band-ink .gf-head { border-color: color-mix(in srgb, var(--gf-white) 20%, transparent); }
+.gf-band-ink .gf-eyebrow { color: var(--gf-on-dark-faint); }
+.gf-band-ink .gf-eyebrow-index { color: var(--gf-blue); }
+.gf-band-ink .gf-eyebrow-index::after { background: color-mix(in srgb, var(--gf-white) 32%, transparent); }
+.gf-band-ink .gf-lead, .gf-band-ink .gf-body { color: var(--gf-on-dark); }
+.gf-band-ink .gf-faint { color: var(--gf-on-dark-faint); }
+.gf-band-ink .gf-h2 em { color: var(--gf-on-dark-faint); }
+/* Black ink on the canonical blue, which the contrast gate already asserts.
+   White would only reach 3.8:1 and could not carry body copy. */
+.gf-band-blue { background: var(--gf-blue); color: var(--gf-black); }
+.gf-band-blue .gf-head { border-color: color-mix(in srgb, var(--gf-black) 22%, transparent); }
+.gf-band-blue .gf-eyebrow,
+.gf-band-blue .gf-lead,
+.gf-band-blue .gf-body { color: color-mix(in srgb, var(--gf-black) 72%, transparent); }
+.gf-band-blue .gf-eyebrow-index { color: var(--gf-black); }
+.gf-band-blue .gf-eyebrow-index::after { background: color-mix(in srgb, var(--gf-black) 30%, transparent); }
 
-/* Section opener: eyebrow, heading, one line of lead. Nothing else. */
-.gf-head { max-width: 44rem; }
+/* Section opener: a hairline the width of the page, then eyebrow, heading,
+   one line of lead. The rule spans the wrap; the reading measure does not. */
+.gf-head { max-width: none; border-top: 1px solid var(--gf-line); padding-top: clamp(22px, 2.4vw, 30px); }
+.gf-head > * { max-width: 44rem; }
+
+/* Wider than the reading column, narrower than the viewport: the picture is
+   the chapter's anchor without becoming a full-bleed banner. */
+.gf-figure-wide { width: min(100vw - 40px, 1400px); margin-inline: calc(50% - min(50vw - 20px, 700px)); }
+@media (min-width: 640px) { .gf-figure-wide { width: min(100vw - 56px, 1400px); margin-inline: calc(50% - min(50vw - 28px, 700px)); } }
+/* A picture's label is type above it, not a bar drawn around it. */
+.gf-figure-label {
+  display: flex; align-items: center; gap: 14px;
+  font-size: 14px; font-weight: 500; color: var(--gf-ink-soft);
+}
 
 /* Escape the wrap for a picture that should touch both edges. */
 .gf-bleed { margin-inline: calc(50% - 50vw); width: 100vw; max-width: 100vw; }
@@ -1516,39 +1562,19 @@ img, svg { max-width: 100%; }
 
 /* --- Hero agent handoff, scripted motion -------------------------------- */
 
+/* On the ink band the demo has no field of its own: the two windows sit
+   directly on the page. The blue glows and circle outlines that used to fill
+   this box were decoration, and on black they only made it murky. */
 .gf-hero-demo {
   --gf-demo-time: 26s;
   min-height: 0;
-  aspect-ratio: 16 / 10;
-  border: 1px solid color-mix(in srgb, var(--gf-blue) 22%, var(--gf-black));
-  background: color-mix(in srgb, var(--gf-blue) 7%, var(--gf-black));
-  box-shadow: 0 28px 80px -46px color-mix(in srgb, var(--gf-black) 86%, transparent);
+  aspect-ratio: 16 / 8.2;
+  border: 0;
+  background: transparent;
 }
 .gf-hero-demo::before,
 .gf-hero-demo::after { display: none; }
-.gf-hero-demo__ambient { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.gf-hero-demo__ambient::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 18% 46%, color-mix(in srgb, var(--gf-blue) 25%, transparent), transparent 32%),
-    radial-gradient(circle at 78% 40%, color-mix(in srgb, var(--gf-blue) 18%, transparent), transparent 34%);
-  animation: gf-demo-ambient var(--gf-demo-time) ease-in-out infinite;
-}
-.gf-hero-demo__ambient > i {
-  position: absolute;
-  border: 1px solid color-mix(in srgb, var(--gf-blue) 20%, transparent);
-  border-radius: 50%;
-}
-.gf-hero-demo__ambient > i:nth-child(1) { width: 42%; aspect-ratio: 1; left: -18%; top: 18%; }
-.gf-hero-demo__ambient > i:nth-child(2) { width: 34%; aspect-ratio: 1; right: -12%; top: -9%; }
-.gf-hero-demo__ambient > i:nth-child(3) { width: 20%; aspect-ratio: 1; right: 19%; bottom: -14%; }
-@keyframes gf-demo-ambient {
-  0%, 30% { opacity: .55; transform: scale(1); }
-  48%, 58% { opacity: .95; transform: scale(1.08); }
-  74%, 100% { opacity: .64; transform: scale(1.02); }
-}
+.gf-hero-demo__ambient { display: none; }
 
 .gf-demo-window-dots { display: inline-flex; flex: none; gap: clamp(4px, .55vw, 8px); }
 .gf-demo-window-dots i {
@@ -2843,17 +2869,21 @@ img, svg { max-width: 100%; }
 }
 
 /* Recovery example: the file and its history carry the story together. */
-.gf-recovery { border: 1px solid var(--gf-line); border-radius: var(--gf-radius-lg); overflow: hidden; background: var(--gf-blue-wash); }
-.gf-recovery__heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px; }
-.gf-recovery__steps { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); border-block: 1px solid var(--gf-line); background: white; }
-.gf-recovery__steps button { display: flex; align-items: center; gap: 9px; padding: 16px; text-align: left; font-size: 13px; font-weight: 600; color: var(--gf-ink-soft); }
-.gf-recovery__steps button[aria-pressed="true"] { background: var(--gf-blue-wash); color: var(--gf-blue-ink); box-shadow: inset 0 -3px var(--gf-blue-ink); }
-.gf-recovery__steps button span { display: grid; place-items: center; flex-shrink: 0; width: 23px; height: 23px; border: 1px solid currentColor; border-radius: 50%; font-size: 11px; }
-.gf-recovery__workspace { display: grid; grid-template-columns: minmax(0,.8fr) minmax(0,1.2fr); gap: 18px; padding: 24px; background: #10141e; }
-.gf-recovery__agent,.gf-recovery__folder { min-width: 0; border-radius: 12px; overflow: hidden; background: white; }
-.gf-recovery__agent { display: flex; flex-direction: column; background: #20242e; color: #f4f5f7; }
-.gf-recovery__bar { display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 14px 18px; border-bottom: 1px solid var(--gf-line); font-size: 13px; }
-.gf-recovery__agent .gf-recovery__bar { border-color: #424754; flex-wrap: wrap; }
+/* The demo sits directly on the page's ink band. No outer card, no tint, no
+   radius: it is the chapter's surface rather than an object placed on one. */
+.gf-recovery { color: var(--gf-white); }
+.gf-recovery__steps { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)) auto; border-block: 1px solid color-mix(in srgb, var(--gf-white) 16%, transparent); }
+.gf-recovery__steps button { display: flex; align-items: center; gap: 12px; padding: 15px 18px 15px 0; text-align: left; font-size: 13.5px; font-weight: 500; color: color-mix(in srgb, var(--gf-white) 52%, transparent); transition: color var(--gf-dur-base) var(--gf-ease-out), box-shadow var(--gf-dur-base) var(--gf-ease-out); }
+.gf-recovery__steps button:hover { color: color-mix(in srgb, var(--gf-white) 80%, transparent); }
+.gf-recovery__steps button[aria-pressed="true"] { color: var(--gf-white); box-shadow: inset 0 -2px var(--gf-blue); }
+.gf-recovery__step-index { flex: none; font: 600 12px/1 var(--gf-font-mono); font-variant-numeric: tabular-nums; color: var(--gf-blue); }
+.gf-recovery__steps button[aria-pressed="false"] .gf-recovery__step-index { color: color-mix(in srgb, var(--gf-white) 34%, transparent); }
+.gf-recovery__workspace { display: grid; grid-template-columns: minmax(0,.82fr) minmax(0,1.18fr); gap: 1px; margin-top: clamp(24px, 3vw, 40px); background: color-mix(in srgb, var(--gf-white) 16%, transparent); border: 1px solid color-mix(in srgb, var(--gf-white) 16%, transparent); }
+.gf-recovery__agent,.gf-recovery__folder { min-width: 0; background: white; }
+.gf-recovery__folder { color: var(--gf-ink); }
+.gf-recovery__agent { display: flex; flex-direction: column; background: #14171d; color: #f4f5f7; }
+.gf-recovery__bar { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 14px 18px; border-bottom: 1px solid var(--gf-line); font-size: 13px; }
+.gf-recovery__agent .gf-recovery__bar { border-color: color-mix(in srgb, var(--gf-white) 14%, transparent); flex-wrap: wrap; }
 .gf-recovery__bar > span { margin-left: auto; color: #b9c1cf; font-size: 11px; }
 .gf-recovery__agent .gf-recovery__bar img { filter: brightness(0) invert(1); }
 .gf-recovery__exchange { flex: 1; padding: 22px 18px 20px; }
@@ -2877,15 +2907,15 @@ img, svg { max-width: 100%; }
 .gf-recovery__history li svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
 .gf-recovery__history li b { display: block; color: var(--gf-ink); font-weight: 600; margin-bottom: 2px; }
 .gf-recovery__history li.gf-recovery__restored { color: var(--gf-blue-ink); }
-.gf-recovery figcaption { display: grid; gap: 5px; padding: 20px 28px; }
-.gf-recovery figcaption b { font-size: 16px; }
-.gf-recovery figcaption span { font-size: 12px; line-height: 1.6; color: var(--gf-ink-soft); }
+.gf-recovery figcaption { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding-top: 18px; }
+.gf-recovery figcaption b { font-size: clamp(15px, 1.5vw, 18px); font-weight: 600; letter-spacing: -.01em; }
+.gf-recovery figcaption span { font-size: 13px; line-height: 1.6; color: color-mix(in srgb, var(--gf-white) 56%, transparent); }
 @keyframes gf-recovery-enter { from { opacity: .4; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 760px) {
-  .gf-recovery__heading { padding: 18px; }
   .gf-recovery__steps { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .gf-recovery__steps button { padding: 12px; font-size: 12px; }
-  .gf-recovery__workspace { grid-template-columns: minmax(0,1fr); padding: 12px; gap: 12px; }
+  .gf-recovery__steps button { padding: 12px 12px 12px 0; font-size: 12.5px; gap: 9px; }
+  .gf-recovery__play { grid-column: 1 / -1; width: 100%; justify-content: flex-start; place-items: center start; padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--gf-white) 14%, transparent); }
+  .gf-recovery__workspace { grid-template-columns: minmax(0,1fr); }
   .gf-recovery__composer { margin: 0 14px; padding: 11px 11px 9px; }
   .gf-recovery__composer-row { gap: 6px; }
   .gf-recovery__exchange { padding: 14px 14px 16px; min-height: 246px; }
@@ -2905,9 +2935,9 @@ img, svg { max-width: 100%; }
   .gf-recovery__history { min-height: 260px; }
   .gf-recovery figcaption { min-height: 148px; }
 }
-.gf-recovery__play { display: grid; place-items: center; width: 42px; height: 42px; flex-shrink: 0; border: 1px solid var(--gf-line-strong); border-radius: 9px; background: white; color: var(--gf-ink); transition: border-color .2s, background .2s; }
-.gf-recovery__play:hover { border-color: var(--gf-blue-ink); background: var(--gf-blue-wash); }
-.gf-recovery__play svg { width: 18px; height: 18px; fill: currentColor; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.gf-recovery__play { display: grid; place-items: center; width: 46px; flex: none; color: color-mix(in srgb, var(--gf-white) 52%, transparent); transition: color var(--gf-dur-base) var(--gf-ease-out); }
+.gf-recovery__play:hover { color: var(--gf-white); }
+.gf-recovery__play svg { width: 15px; height: 15px; fill: currentColor; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .gf-recovery__composer { container: gf-composer / inline-size; display: grid; gap: 12px; margin: 0 18px; padding: 12px 12px 10px; border: 1px solid #4b5059; border-radius: 16px; background: #2b2f38; box-shadow: 0 1px 0 rgb(255 255 255 / .04) inset; }
 .gf-recovery__composer-text { display: flex; align-items: center; gap: 1px; min-width: 0; padding: 2px 2px 0; overflow: hidden; color: #868d9b; font-size: 13.5px; line-height: 1.5; white-space: nowrap; text-overflow: ellipsis; }
 .gf-recovery__caret { flex: none; width: 1.5px; height: 16px; margin-right: 3px; background: #f4f4f2; animation: gf-recovery-caret 1.1s steps(1) infinite; }
