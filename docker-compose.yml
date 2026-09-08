@@ -159,7 +159,8 @@ services:
       LABEL_MODEL: ${LABEL_MODEL:-}
       WEB_ORIGINS: ${WEB_ORIGINS:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
-      MAIL_FROM: ${MAIL_FROM:-GoodFolder <onboarding@resend.dev>}
+      MAIL_FROM: ${MAIL_FROM:-GoodFolder <auth@trygoodfolder.com>}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-contact@trygoodfolder.com}
       MAGIC_LINK_DEBUG: ${MAGIC_LINK_DEBUG:-}
       DEV_API_KEY: ${DEV_API_KEY:-}
       BILLING_MODE: ${BILLING_MODE:-disabled}

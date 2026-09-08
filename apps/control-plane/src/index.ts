@@ -257,7 +257,8 @@ function openDelivery(code: string, blob: Buffer): string | null {
 }
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const MAIL_FROM = process.env.MAIL_FROM ?? "GoodFolder <onboarding@resend.dev>";
+const MAIL_FROM = process.env.MAIL_FROM ?? "GoodFolder <auth@trygoodfolder.com>";
+const MAIL_REPLY_TO = process.env.MAIL_REPLY_TO ?? "contact@trygoodfolder.com";
 const MAGIC_LINK_DEBUG = process.env.MAGIC_LINK_DEBUG === "1";
 
 async function sendMagicLink(email: string, link: string): Promise<void> {
@@ -271,6 +272,7 @@ async function sendMagicLink(email: string, link: string): Promise<void> {
         },
         body: JSON.stringify({
           from: MAIL_FROM,
+          reply_to: MAIL_REPLY_TO,
           to: email,
           subject: "Sign in to GoodFolder",
           text:
@@ -300,6 +302,7 @@ async function sendCollaborationInvite(email: string, folderName: string, link: 
     headers: { authorization: `Bearer ${RESEND_API_KEY}`, "content-type": "application/json" },
     body: JSON.stringify({
       from: MAIL_FROM,
+      reply_to: MAIL_REPLY_TO,
       to: email,
       subject: `${folderName} was shared with you`,
       text: `You've been invited to contribute to “${folderName}” in GoodFolder.\n\nOpen the invitation:\n${link}\n`,
