@@ -240,15 +240,17 @@ export default function Landing() {
         {/* ---------------------------------------------------------------- Hero */}
         <section className="overflow-hidden pb-[var(--gf-section-y)] pt-16 sm:pt-24">
           <div className="gf-wrap">
-            <p className="gf-eyebrow"><span className="gf-eyebrow-index">01</span>For documents, spreadsheets, decks, web pages, and media</p>
-            <h1 className="gf-display-xl mt-7">
-              Let AI agents work on your files.
-              <br />
-              <i>Keep a way back.</i>
-            </h1>
-            <div className="mt-10 grid items-end gap-8 lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-12">
+            <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-14">
               <div>
-                <p className="gf-lead max-w-[56ch]">
+                <p className="gf-eyebrow"><span className="gf-eyebrow-index">01</span>For documents, spreadsheets, decks, web pages, and media</p>
+                <h1 className="gf-display-xl mt-7">
+                  Let AI agents
+                  <br />
+                  work on your files.
+                  <br />
+                  <i>Keep a way back.</i>
+                </h1>
+                <p className="gf-lead mt-9 max-w-[52ch]">
                   GoodFolder gives your working folder a readable history. Save changes made by you or your agents,
                   see who changed which files, and return to an earlier saved version. Keep using your existing apps.
                 </p>
@@ -263,7 +265,7 @@ export default function Landing() {
               <MascotPose
                 pose="hero"
                 priority
-                className="w-[200px] -scale-x-100 sm:w-[240px] lg:w-[280px]"
+                className="w-[220px] -scale-x-100 sm:w-[280px] lg:w-[clamp(280px,26vw,400px)]"
               />
             </div>
           </div>

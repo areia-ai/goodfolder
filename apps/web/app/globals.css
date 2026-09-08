@@ -1195,11 +1195,11 @@ img, svg { max-width: 100%; }
 /* The hero gets one size larger than anything else on the site. Nothing
    below it competes, which is what makes the first screen land. */
 .gf-display-xl {
-  font-size: clamp(2.75rem, 7.6vw, 6rem);
+  font-size: clamp(2.5rem, 5.9vw, 5rem);
   font-weight: 800;
   letter-spacing: -0.05em;
   line-height: 0.94;
-  text-wrap: balance;
+  text-wrap: pretty;
 }
 /* Second clause of a two-beat headline, stepped back rather than shrunk.
    Large text, so --gf-ink-faint clears its 3:1 requirement comfortably. */
