@@ -240,7 +240,7 @@ export default function Landing() {
         {/* ---------------------------------------------------------------- Hero */}
         <section className="overflow-hidden pb-[var(--gf-section-y)] pt-16 sm:pt-24">
           <div className="gf-wrap">
-            <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-14">
+            <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-8">
               <div>
                 <p className="gf-eyebrow"><span className="gf-eyebrow-index">01</span>For documents, spreadsheets, decks, web pages, and media</p>
                 <h1 className="gf-display-xl mt-7">
@@ -265,7 +265,7 @@ export default function Landing() {
               <MascotPose
                 pose="hero"
                 priority
-                className="w-[220px] -scale-x-100 sm:w-[280px] lg:w-[clamp(280px,26vw,400px)]"
+                className="w-[220px] -scale-x-100 sm:w-[280px] lg:w-[clamp(240px,22vw,340px)]"
               />
             </div>
           </div>
