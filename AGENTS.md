@@ -79,6 +79,20 @@ tools/              the gates CI runs: vocabulary, brand SVG, contrast
     the document endpoint, and everything it points at is carried into it as
     `data:` addresses before it is handed over. Both have tests; if one fails,
     change the change.
+13. A folder's credential is never written into the folder — not into its
+    settings, not into the transport address, not left behind by the
+    large-file helper. It lives in the person's own credential file and is
+    handed to the engine through the environment for one command at a time
+    (`apps/cli/src/config.ts`, `transportEnv`). The reason is the product's
+    own premise: an agent that reads the folder must not thereby hold a key
+    to the account. The folder renews the credential itself before it runs
+    out, so nothing here may assume a token that lasts forever, or one that
+    a person has to refresh by hand. `apps/cli/src/config.test.ts` checks
+    this; if it fails, change the change.
+14. The transport proxy forwards exactly three paths — `info/refs`,
+    `git-upload-pack`, `git-receive-pack` — and refuses the rest before any
+    credential is attached (`apps/control-plane/src/transport.ts`). Every
+    JSON route reads its body only after it has been refused by size.
 
 ## Working on it
 
