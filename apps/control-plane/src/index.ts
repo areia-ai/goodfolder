@@ -100,8 +100,11 @@ app.get("/healthz", (c) => c.json({ ok: true }));
 // ---------------------------------------------------------------------------
 // CORS — browser origins allowed to call /api/*. Must register BEFORE auth:
 // preflight OPTIONS requests carry no Authorization header. Web origins come
-// from WEB_ORIGINS (comma-separated); localhost and *.pages.dev are always
-// allowed for dev/preview.
+// from WEB_ORIGINS (comma-separated). localhost is always allowed for
+// development. Preview deployments are allowed by project, not by host: with
+// credentials in play, a wildcard over every *.pages.dev site would let any
+// stranger's page call this API as whoever is signed in, and only the
+// cookie's own same-site rule would stand in the way.
 // ---------------------------------------------------------------------------
 
 const allowedOrigins = new Set(
@@ -110,11 +113,17 @@ const allowedOrigins = new Set(
     .map((o) => o.trim())
     .filter(Boolean),
 );
+/** Cloudflare Pages project names whose previews may call the API. */
+const previewProjects = (process.env.WEB_PREVIEW_PROJECTS ?? "")
+  .split(",")
+  .map((p) => p.trim().toLowerCase())
+  .filter((p) => /^[a-z0-9-]+$/.test(p));
 
 function originAllowed(origin: string): boolean {
   if (allowedOrigins.has(origin)) return true;
   if (/^http:\/\/localhost:\d+$/.test(origin)) return true;
-  if (/^https:\/\/[a-z0-9-]+\.pages\.dev$/.test(origin)) return true;
+  const preview = /^https:\/\/(?:[a-z0-9-]+\.)?([a-z0-9-]+)\.pages\.dev$/.exec(origin);
+  if (preview && previewProjects.includes(preview[1]!)) return true;
   return false;
 }
 
@@ -341,12 +350,13 @@ async function sendCollaborationInvite(email: string, folderName: string, link: 
 function safeNextPath(next: unknown): string {
   if (typeof next === "string") {
     if (/^\/(pair\/[a-f0-9]{32}|account)?$/.test(next)) return next;
-    // Back to the human site after signing in from its dashboard.
-    if (
-      /^https:\/\/(?:www\.)?trygoodfolder\.com(?:\/[^\s]*)?$/i.test(next) ||
-      /^https:\/\/[a-z0-9-]+\.pages\.dev(?:\/[^\s]*)?$/i.test(next)
-    ) {
-      return next;
+    // Back to the human site after signing in from its dashboard: only an
+    // origin the API already trusts, so a link can never send someone on.
+    try {
+      const url = new URL(next);
+      if (/^https?:$/.test(url.protocol) && originAllowed(url.origin)) return next;
+    } catch {
+      /* not an absolute address */
     }
   }
   return "/account";
@@ -459,6 +469,9 @@ Start again from the app that asked to connect.</p>`));
 
   const session = await sessionAccount(c);
   const device = escapeHtml(String(pr.deviceName));
+  // The same short code the terminal printed. Someone handed this link by a
+  // stranger has no terminal showing it, which is their cue to stop.
+  const check = code.slice(0, 6).toUpperCase();
 
   if (session) {
     return c.html(
@@ -467,6 +480,8 @@ Start again from the app that asked to connect.</p>`));
         `<h1>Approve “${device}”?</h1>
 <p>It will be able to save, sync, and open folders on your GoodFolder account
 <strong>${escapeHtml(session.email)}</strong>.</p>
+<p class="ok">Your terminal shows the code <strong>${check}</strong>. If it doesn't — or you
+didn't just run GoodFolder on a computer — close this page instead of approving.</p>
 <button id="approve">Approve this computer</button>
 <p id="msg"></p>
 <script>
@@ -794,6 +809,26 @@ async function accountFrom(c: {
   return { kind: "account", accountId: session.accountId, email: session.email, accountDeviceId: "session" };
 }
 
+/**
+ * How long a folder token lives. The folder renews it on its own before it
+ * runs out (see /api/folder-token/renew), so this is the longest a folder can
+ * go unused before it has to be reconnected, not how often anyone is asked
+ * to do anything.
+ */
+const FOLDER_TOKEN_DAYS = 90;
+
+async function mintFolderToken(
+  tx: typeof sql,
+  deviceId: string,
+): Promise<{ raw: string; expiresAt: string }> {
+  const tok = newToken();
+  const rows = await tx`
+    INSERT INTO transfer_tokens (token_hash, device_id, expires_at)
+    VALUES (${tok.hash}, ${deviceId}, now() + (${FOLDER_TOKEN_DAYS} || ' days')::interval)
+    RETURNING expires_at::text AS "expiresAt"`;
+  return { raw: tok.raw, expiresAt: new Date(String(rows[0]!.expiresAt)).toISOString() };
+}
+
 function billingError(error: unknown): { code: string; message: string; status: 400 | 402 | 409 | 503 } {
   const code = (error as Error).message;
   if (code === "billing-unavailable") return { code, message: "Hosted billing is not available on this server.", status: 503 };
@@ -883,6 +918,46 @@ app.post("/api/access/challenge/redeem", async (c) => {
   await sql`INSERT INTO audit_log (actor, action, detail)
     VALUES (${acct.email}, 'access.challenge_redeem', ${sql.json({ campaign: CHALLENGE_CAMPAIGN, expiresAt: challengeExpiry.toISOString() })})`;
   return c.json({ ok: true, expiresAt: challengeExpiry.toISOString() });
+});
+
+/**
+ * The computers approved on this account. Every one holds a credential that
+ * can create and open folders, so the person can see them and take one back.
+ */
+app.get("/api/account/devices", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const rows = await sql`
+    SELECT id, name, created_at::text AS "approvedAt", last_used_at::text AS "lastUsedAt",
+           (id = ${acct.accountDeviceId}) AS "thisOne"
+    FROM account_devices
+    WHERE account_id = ${acct.accountId} AND revoked_at IS NULL
+    ORDER BY created_at DESC`;
+  return c.json({ devices: rows });
+});
+
+app.delete("/api/account/devices/:deviceId", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const deviceId = c.req.param("deviceId");
+  const rows = await sql`
+    UPDATE account_devices SET revoked_at = now()
+    WHERE id = ${deviceId} AND account_id = ${acct.accountId} AND revoked_at IS NULL
+    RETURNING name`;
+  if (!rows.length) return c.json({ error: { code: "not-found", message: "No such approved computer on this account." } }, 404);
+  await sql`INSERT INTO audit_log (actor, action, detail)
+    VALUES (${acct.email}, 'device.revoked', ${sql.json({ deviceId, name: String(rows[0]!.name) })})`;
+  return c.json({ ok: true });
+});
+
+/** Sign out of the browser everywhere: every session on the account ends. */
+app.post("/api/auth/logout-everywhere", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  await sql`DELETE FROM sessions WHERE account_id = ${acct.accountId}`;
+  await sql`INSERT INTO audit_log (actor, action, detail) VALUES (${acct.email}, 'auth.signed_out_everywhere', '{}')`;
+  c.header("Set-Cookie", clearedSessionCookie());
+  return c.json({ ok: true });
 });
 
 app.get("/api/plans", (c) => c.json(PLANS));
@@ -1000,7 +1075,7 @@ app.post("/api/workspace-proposals/:id/review", async (c) => {
   if (body.action === "accept" && !rateLimit("project-create", acct.accountId, 30, 3_600_000)) {
     return c.json({ error: { code: "rate", message: "too many folders created — try again later" } }, 429);
   }
-  const projectId = crypto.randomUUID(); const deviceId = crypto.randomUUID(); const token = newToken();
+  const projectId = crypto.randomUUID(); const deviceId = crypto.randomUUID();
   const proposal = await sql.begin(async (tx) => {
     const rows = await tx`SELECT id, name, status FROM workspace_proposals WHERE id = ${c.req.param("id")} AND account_id = ${acct.accountId} FOR UPDATE`;
     const current = rows[0] as { id: string; name: string; status: "open" | "accepted" | "rejected" } | undefined;
@@ -1011,7 +1086,7 @@ app.post("/api/workspace-proposals/:id/review", async (c) => {
     }
     await tx`INSERT INTO projects (id, account_id, name) VALUES (${projectId}, ${acct.accountId}, ${current.name})`;
     await tx`INSERT INTO devices (id, project_id, name, kind) VALUES (${deviceId}, ${projectId}, 'Made in the browser', 'user')`;
-    await tx`INSERT INTO transfer_tokens (token_hash, device_id, expires_at) VALUES (${token.hash}, ${deviceId}, now() + interval '30 days')`;
+    await mintFolderToken(tx as unknown as typeof sql, deviceId);
     await tx`UPDATE workspace_proposals SET status = 'accepted', reviewed_at = now(), reviewed_by = ${acct.accountId}, created_project_id = ${projectId} WHERE id = ${current.id}`;
     return { ...current, status: "accepted" as const };
   });
@@ -1050,17 +1125,14 @@ app.post("/api/projects", async (c) => {
 
   const projectId = crypto.randomUUID();
   const deviceId = crypto.randomUUID();
-  const tok = newToken();
-  await sql.begin(async (tx) => {
+  const tok = await sql.begin(async (tx) => {
     await tx`
       INSERT INTO projects (id, account_id, name)
       VALUES (${projectId}, ${acct.accountId}, ${name})`;
     await tx`
       INSERT INTO devices (id, project_id, name, kind)
       VALUES (${deviceId}, ${projectId}, ${deviceName}, 'user')`;
-    await tx`
-      INSERT INTO transfer_tokens (token_hash, device_id, expires_at)
-      VALUES (${tok.hash}, ${deviceId}, now() + interval '30 days')`;
+    return mintFolderToken(tx as unknown as typeof sql, deviceId);
   });
 
   const repo = await repos.ensureRepo(projectId);
@@ -1068,7 +1140,7 @@ app.post("/api/projects", async (c) => {
     INSERT INTO audit_log (actor, action, detail)
     VALUES (${acct.email}, 'project.create', ${sql.json({ projectId, name, repo })})`;
 
-  return c.json({ projectId, deviceId, token: tok.raw, repo });
+  return c.json({ projectId, deviceId, token: tok.raw, expiresAt: tok.expiresAt, repo });
 });
 
 /** Rename a folder only when its owner explicitly asks to. */
@@ -1133,7 +1205,6 @@ app.post("/api/projects/:id/token", async (c) => {
   const denied = await writeAccessError(acct.accountId);
   if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const deviceId = crypto.randomUUID();
-  const tok = newToken();
   const body = await c.req.json<{ deviceName?: string }>().catch(
     () => ({}) as { deviceName?: string },
   );
@@ -1141,18 +1212,16 @@ app.post("/api/projects/:id/token", async (c) => {
     typeof body?.deviceName === "string"
       ? body.deviceName.replace(/\s+/g, " ").trim().slice(0, 60) || "Paired device"
       : "Paired device";
-  await sql.begin(async (tx) => {
+  const tok = await sql.begin(async (tx) => {
     await tx`
       INSERT INTO devices (id, project_id, name, kind)
       VALUES (${deviceId}, ${projectId}, ${deviceName}, 'user')`;
-    await tx`
-      INSERT INTO transfer_tokens (token_hash, device_id, expires_at)
-      VALUES (${tok.hash}, ${deviceId}, now() + interval '30 days')`;
+    return mintFolderToken(tx as unknown as typeof sql, deviceId);
   });
   await sql`
     INSERT INTO audit_log (actor, action, detail)
     VALUES (${acct.email}, 'project.token_minted', ${sql.json({ projectId })})`;
-  return c.json({ projectId, token: tok.raw });
+  return c.json({ projectId, token: tok.raw, expiresAt: tok.expiresAt });
 });
 
 /** Timeline read — powers the dashboard, site tools, and CLI log alike. */
@@ -2911,6 +2980,32 @@ function fallbackOf(ai?: { summary: string }): string {
   return ai?.summary ? `Updated files (${ai.summary.split(".")[0]})` : "Saved changes";
 }
 
+/**
+ * A folder renews its own token before it runs out. The new token belongs to
+ * the same device, so the timeline keeps attributing saves to the same
+ * computer; the old one keeps working for a few minutes so a second process
+ * mid-command is not cut off while the first writes the new one down.
+ */
+const RENEWED_TOKEN_GRACE_MINUTES = 10;
+
+app.post("/api/folder-token/renew", async (c) => {
+  const scope = c.get("scope");
+  const raw = tokenFromAuthHeader(c.req.header("Authorization"));
+  if (!scope || !raw) return c.json({ error: { code: "project-scope", message: "folder token required" } }, 403);
+  if (!rateLimit("token-renew", scope.deviceId, 10, 3_600_000)) {
+    return c.json({ error: { code: "rate", message: "too many renewals — try again later" } }, 429);
+  }
+  const fresh = await sql.begin(async (tx) => {
+    const minted = await mintFolderToken(tx as unknown as typeof sql, scope.deviceId);
+    await tx`
+      UPDATE transfer_tokens
+      SET expires_at = LEAST(expires_at, now() + (${RENEWED_TOKEN_GRACE_MINUTES} || ' minutes')::interval)
+      WHERE token_hash = ${sha256(raw)}`;
+    return minted;
+  });
+  return c.json({ token: fresh.raw, expiresAt: fresh.expiresAt });
+});
+
 app.get("/api/save/preflight", async (c) => {
   const scope = c.get("scope");
   if (!scope) return c.json({ error: { code: "project-scope", message: "folder token required" } }, 403);
@@ -3120,22 +3215,38 @@ async function gitProxy(req: import("node:http").IncomingMessage, res: import("n
     if (!["transfer-encoding", "content-encoding", "content-length"].includes(k)) outHeaders[k] = v;
   });
   res.writeHead(upstreamRes.status, outHeaders);
-  if (upstreamRes.body) {
-    const reader = upstreamRes.body.getReader();
-    void (async () => {
-      try {
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (!res.write(value)) await new Promise<void>((r) => res.once("drain", r));
-        }
-      } finally {
-        res.end();
-      }
-    })();
-  } else {
+  relay(upstreamRes, res);
+}
+
+/**
+ * Stream an upstream answer to the client, and stop reading upstream the
+ * moment the client goes away — a half-downloaded history should not keep
+ * the repository service busy for someone who is no longer there.
+ */
+function relay(upstreamRes: Response, res: import("node:http").ServerResponse): void {
+  if (!upstreamRes.body) {
     res.end();
+    return;
   }
+  const reader = upstreamRes.body.getReader();
+  let gone = false;
+  res.once("close", () => {
+    gone = true;
+    void reader.cancel().catch(() => {});
+  });
+  void (async () => {
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done || gone) break;
+        if (!res.write(value)) await new Promise<void>((r) => res.once("drain", r));
+      }
+    } catch {
+      /* upstream closed or client cancelled — either way there is nothing left to send */
+    } finally {
+      res.end();
+    }
+  })();
 }
 
 const listener = getRequestListener(app.fetch);
@@ -3172,22 +3283,7 @@ async function lfsProxy(req: import("node:http").IncomingMessage, res: import("n
       if (!["transfer-encoding", "content-encoding", "content-length"].includes(k)) outHeaders[k] = v;
     });
     res.writeHead(upstreamRes.status, outHeaders);
-    if (upstreamRes.body) {
-      const reader = upstreamRes.body.getReader();
-      void (async () => {
-        try {
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (!res.write(value)) await new Promise<void>((r) => res.once("drain", r));
-          }
-        } finally {
-          res.end();
-        }
-      })();
-    } else {
-      res.end();
-    }
+    relay(upstreamRes, res);
   } catch (e) {
     console.error("lfs proxy failed:", e);
     res.writeHead(502);
@@ -3202,8 +3298,21 @@ const server = createServer((req, res) => {
   return listener(req, res);
 });
 
+/**
+ * Let go of credentials and one-time links that can no longer be used. None
+ * of these are needed for an audit (audit_log holds that); they only make
+ * the tables grow and the lookups slower.
+ */
+async function sweepExpiredCredentials(): Promise<void> {
+  await sql`DELETE FROM sessions WHERE expires_at <= now()`;
+  await sql`DELETE FROM magic_links WHERE expires_at <= now() - interval '1 day'`;
+  await sql`DELETE FROM pairing_requests WHERE expires_at <= now() - interval '1 day'`;
+  await sql`DELETE FROM transfer_tokens WHERE expires_at <= now() - interval '7 days'`;
+}
+
 const stagingSweep = setInterval(() => {
   void sweepStagedUploads().catch((error) => console.error("sweep of unaccepted uploads failed:", error));
+  void sweepExpiredCredentials().catch((error) => console.error("sweep of expired credentials failed:", error));
 }, 6 * 60 * 60_000);
 stagingSweep.unref();
 

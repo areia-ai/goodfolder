@@ -454,7 +454,7 @@ export async function runSavePipeline(
   let pushSkipped = opts.skipPush ?? false;
   if (!pushSkipped) {
     await trace("push", async () => {
-      const push = pushCurrentHistory(folder);
+      const push = pushCurrentHistory(folder, cfg);
       if (push.code !== 0) {
         if (/non-fast-forward|rejected/i.test(push.stderr)) {
           throw new CliError("✗ Another device saved first. Run: goodfolder sync");

@@ -56,15 +56,22 @@ const presignS3: ReturnType<typeof makeS3> | null = presignOn
     } as ServerConfig)
   : null;
 
+/**
+ * An upload address is signed for the exact number of bytes the client
+ * declared, so the object that lands is the object that was reserved. Without
+ * this a client could reserve one byte and send any number, and the count
+ * would only catch up at the daily reconciliation.
+ */
 async function presign(
   op: "upload" | "download",
   key: string,
+  sizeBytes?: number,
 ): Promise<string> {
   const cmd =
     op === "upload"
-      ? new PutObjectCommand({ Bucket: cfg.s3Bucket, Key: key })
+      ? new PutObjectCommand({ Bucket: cfg.s3Bucket, Key: key, ContentLength: sizeBytes })
       : new GetObjectCommand({ Bucket: cfg.s3Bucket, Key: key });
-  return getSignedUrl(presignS3!, cmd, { expiresIn: 3600 });
+  return getSignedUrl(presignS3!, cmd, { expiresIn: 3600, ...(op === "upload" ? { signableHeaders: new Set(["content-length"]) } : {}) });
 }
 
 const OID_RE = /^[a-f0-9]{64}$/;
@@ -199,7 +206,7 @@ app.post("/lfs/:projectId/objects/batch", async (c) => {
     }
     if (presignOn && presignS3) {
       // Direct-to-storage: auth lives in the URL signature.
-      const href = await presign(op, key);
+      const href = await presign(op, key, op === "upload" ? Number(o.size ?? 0) : undefined);
       const actions = op === "upload"
         ? {
             upload: { href },

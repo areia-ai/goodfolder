@@ -9,7 +9,7 @@ import { cmdUndo } from "./undo.ts";
 import { cmdLog } from "./log.ts";
 import { cmdCreate } from "./create.ts";
 import { cmdClone } from "./clone.ts";
-import { cmdLogin } from "./auth.ts";
+import { cmdDevices, cmdLogin } from "./auth.ts";
 import { cmdProtect, cmdSkipped } from "./protect.ts";
 import { cmdRename } from "./rename.ts";
 
@@ -27,6 +27,8 @@ const HELP = `goodfolder — keep your folder safe
   goodfolder skipped              Show what isn't being protected, and why
   goodfolder protect <name>       Protect something that is being left out
   goodfolder login                Approve this computer (one-time setup)
+  goodfolder devices              Show the computers approved on your account
+  goodfolder devices forget <n>   Take an approval back
 
 Set GF_API_URL to use a GoodFolder server you run yourself. Folders remember
 the server they were set up against, so this only affects new ones.
@@ -69,16 +71,19 @@ async function main() {
       await cmdConnect(resolve(positional[0] ?? folder));
       break;
     case "skipped":
-      cmdSkipped(folder);
+      await cmdSkipped(folder);
       break;
     case "protect":
-      cmdProtect(folder, positional);
+      await cmdProtect(folder, positional);
       break;
     case "login":
       await cmdLogin();
       break;
+    case "devices":
+      await cmdDevices(positional[0], positional[1]);
+      break;
     case "save":
-      await cmdSave(folder, requireConnection(folder).cfg, flags);
+      await cmdSave(folder, (await requireConnection(folder)).cfg, flags);
       break;
     case "sync":
       await cmdSync(folder);

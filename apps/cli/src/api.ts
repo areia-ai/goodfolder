@@ -83,6 +83,7 @@ export interface ProjectCreateResponse {
   projectId: string;
   deviceId: string;
   token: string;
+  expiresAt?: string;
   repo?: string;
 }
 
@@ -121,8 +122,22 @@ export function mintProjectToken(
   projectId: string,
   accountToken: string,
   deviceName?: string,
-): Promise<{ projectId: string; token: string }> {
+): Promise<{ projectId: string; token: string; expiresAt?: string }> {
   return accountCall(apiUrl, accountToken, "POST", `/api/projects/${projectId}/token`, deviceName ? { deviceName } : undefined);
+}
+
+/**
+ * Trade the folder's current token for a fresh one. Answers null when the
+ * current token no longer works (expired, or the folder was deleted), and
+ * throws only when the server could not be reached.
+ */
+export async function renewFolderToken(cfg: FolderConfig): Promise<{ token: string; expiresAt: string } | null> {
+  const result = await call(cfg, "POST", "/api/folder-token/renew");
+  if (result.status === 401 || result.status === 403 || result.status === 404) return null;
+  if (!result.ok || typeof result.json?.token !== "string") {
+    throw new CliError(`✗ ${result.json?.error?.message ?? `GoodFolder request failed (${result.status})`}`);
+  }
+  return { token: result.json.token, expiresAt: String(result.json.expiresAt ?? "") };
 }
 
 export function recordSave(

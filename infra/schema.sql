@@ -45,11 +45,15 @@ CREATE TABLE saves (
 CREATE INDEX saves_project_created ON saves (project_id, created_at DESC);
 
 -- v0 auth: bearer tokens bound to one device + one project.
+-- A device may briefly hold two: a folder renews its token before it runs
+-- out, and the old one keeps working for a few minutes while the new one is
+-- written down.
 CREATE TABLE transfer_tokens (
   token_hash TEXT PRIMARY KEY, -- sha256 hex of the raw token
-  device_id UUID NOT NULL UNIQUE REFERENCES devices(id),
+  device_id UUID NOT NULL REFERENCES devices(id),
   expires_at TIMESTAMPTZ NOT NULL
 );
+CREATE INDEX IF NOT EXISTS transfer_tokens_device ON transfer_tokens (device_id);
 
 CREATE TABLE audit_log (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

@@ -89,6 +89,7 @@ export async function pairDevice(
 
   console.log(`\nOne-time setup — approve "${deviceName}" to connect this computer.`);
   console.log("Your browser should open in a moment. Sign in, then choose Approve.");
+  console.log(`The page will show the code  ${pairingCheckCode(start.code)}  — approve only if it matches.`);
   console.log(`If nothing opened, visit:\n  ${start.url}\n`);
   openBrowser(start.url);
 
@@ -136,6 +137,53 @@ export async function pairDevice(
   throw new CliError(
     "✗ Gave up waiting for approval after 10 minutes.\n  Start again: goodfolder login",
   );
+}
+
+/**
+ * The short code shown both here and on the approval page. Someone sent an
+ * approval link they did not ask for sees a code and no terminal to compare
+ * it with, which is the moment to stop. Mirrors the server's own derivation.
+ */
+export function pairingCheckCode(code: string): string {
+  return code.slice(0, 6).toUpperCase();
+}
+
+/** The computers approved on this account, and taking one back. */
+export async function cmdDevices(action?: string, target?: string): Promise<void> {
+  const accountToken = loadAccountToken();
+  if (!accountToken) throw new CliError(`✗ ${authHint()}`);
+  const { accountCall } = await import("./api.ts");
+  type Device = { id: string; name: string; approvedAt: string; lastUsedAt: string | null; thisOne: boolean };
+  const listed = await accountCall<{ devices: Device[] }>(DEFAULT_API_URL, accountToken, "GET", "/api/account/devices");
+  const devices = listed.devices ?? [];
+
+  if (action === "forget") {
+    const wanted = (target ?? "").trim().toLowerCase();
+    const match = devices.filter((d) => d.id === wanted || d.name.toLowerCase() === wanted);
+    if (!wanted || match.length === 0) {
+      throw new CliError(`✗ No approved computer called "${target ?? ""}". Run: goodfolder devices`);
+    }
+    if (match.length > 1) {
+      throw new CliError(`✗ More than one computer is called "${target}". Use its id from: goodfolder devices`);
+    }
+    const [device] = match;
+    await accountCall(DEFAULT_API_URL, accountToken, "DELETE", `/api/account/devices/${device!.id}`);
+    console.log(`✓ "${device!.name}" can no longer act for your account.`);
+    if (device!.thisOne) console.log("  That was this computer. Run goodfolder login to approve it again.");
+    return;
+  }
+
+  if (devices.length === 0) {
+    console.log("No computers are approved on this account.");
+    return;
+  }
+  console.log("Computers approved on your account:\n");
+  for (const d of devices) {
+    const used = d.lastUsedAt ? `last used ${d.lastUsedAt.slice(0, 10)}` : "not used yet";
+    console.log(`  ${d.name}${d.thisOne ? "  (this computer)" : ""}`);
+    console.log(`      approved ${d.approvedAt.slice(0, 10)} · ${used} · id ${d.id}`);
+  }
+  console.log("\nTo take one back:  goodfolder devices forget <name or id>");
 }
 
 /** Explicit re-approval (new machine, revoked key, or troubleshooting). */

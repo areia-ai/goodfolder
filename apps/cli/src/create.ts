@@ -78,6 +78,7 @@ export async function cmdCreate(
     token: boot.token,
     connectedAt: new Date().toISOString(),
   };
+  if (boot.expiresAt) cfg.tokenExpiresAt = boot.expiresAt;
   bindRepo(dir, gitDir, cfg);
 
   console.log(`✓ Created "${clean}" at ${dir}`);

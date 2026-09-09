@@ -2,15 +2,15 @@ import { CliError } from "./cli-error.ts";
 import { requireConnection } from "./connect.ts";
 import { git, gitOk } from "./git.ts";
 import { recordSave } from "./api.ts";
-import { GF_REMOTE, pushCurrentHistory } from "./repo-setup.ts";
+import { fetchHistory, GF_REMOTE, pushCurrentHistory } from "./repo-setup.ts";
 
 export async function cmdSync(
   folder: string,
   opts: { harness?: string | undefined } = {},
 ): Promise<void> {
-  const { cfg } = requireConnection(folder);
+  const { cfg } = await requireConnection(folder);
 
-  const fetchRes = git(folder, ["fetch", GF_REMOTE]);
+  const fetchRes = fetchHistory(folder, cfg);
   if (fetchRes.code !== 0) {
     throw new CliError(`✗ Could not reach GoodFolder: ${fetchRes.stderr.trim()}`, 1);
 
@@ -54,7 +54,7 @@ export async function cmdSync(
       );
     }
     const sha = git(folder, ["rev-parse", "HEAD"]).stdout.trim();
-    const push = pushCurrentHistory(folder);
+    const push = pushCurrentHistory(folder, cfg);
     if (push.code !== 0) {
       throw new CliError("✗ Combined locally but could not upload. Try again.", 1);
 

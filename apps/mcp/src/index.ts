@@ -138,7 +138,7 @@ server.tool(
       ),
   },
   async ({ folder, label }) => {
-    const { cfg } = requireConnection(folder);
+    const { cfg } = await requireConnection(folder);
     const r = await run(() =>
       cmdSave(folder, cfg, { message: label, harness: clientHarness() }),
     );

@@ -14,8 +14,8 @@ import { skippedGroups } from "./skip.ts";
  * the opinion and overrule it, which is what these two are for.
  */
 
-export function cmdSkipped(folder: string): void {
-  const { cfg } = requireConnection(folder);
+export async function cmdSkipped(folder: string): Promise<void> {
+  const { cfg } = await requireConnection(folder);
   const alsoProtect = cfg.alsoProtect ?? [];
   const groups = skippedGroups(folder, alsoProtect);
 
@@ -45,8 +45,8 @@ export function cmdSkipped(folder: string): void {
   }
 }
 
-export function cmdProtect(folder: string, paths: string[]): void {
-  const { gitDir, cfg } = requireConnection(folder);
+export async function cmdProtect(folder: string, paths: string[]): Promise<void> {
+  const { gitDir, cfg } = await requireConnection(folder);
   if (paths.length === 0) {
     throw new CliError(
       "Which one? Run goodfolder skipped to see what is being left out.",

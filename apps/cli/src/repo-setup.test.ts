@@ -75,7 +75,12 @@ test("upload keeps the existing local history name untouched", () => {
     assert.equal(git(folder, ["remote", "add", GF_REMOTE, remote]).code, 0);
 
     const localHead = git(folder, ["rev-parse", "HEAD"]).stdout.trim();
-    const pushed = pushCurrentHistory(folder);
+    const pushed = pushCurrentHistory(folder, {
+      projectId: "00000000-0000-4000-8000-000000000000",
+      apiUrl: "http://gf.test",
+      token: "not-used-for-a-local-remote",
+      connectedAt: new Date().toISOString(),
+    });
 
     assert.equal(pushed.code, 0, pushed.stderr);
     assert.equal(git(folder, ["branch", "--show-current"]).stdout.trim(), "master");

@@ -1,4 +1,4 @@
-import { DEFAULT_API_URL, saveConfig, withCredentials, type FolderConfig } from "./config.ts";
+import { DEFAULT_API_URL, largeFileUrl, saveConfig, transportEnv, transportUrl, type FolderConfig } from "./config.ts";
 import { git, type GitResult } from "./git.ts";
 import { configureRepo } from "./perf.ts";
 import { applySkipRules } from "./skip.ts";
@@ -43,8 +43,13 @@ export function ensureSaveAuthor(folder: string): void {
  * keeps the local branch untouched while giving GoodFolder its stable remote
  * name.
  */
-export function pushCurrentHistory(folder: string): GitResult {
-  return git(folder, ["push", GF_REMOTE, "HEAD:main"]);
+export function pushCurrentHistory(folder: string, cfg: FolderConfig): GitResult {
+  return git(folder, ["push", GF_REMOTE, "HEAD:main"], undefined, transportEnv(cfg));
+}
+
+/** Bring history down from GoodFolder. */
+export function fetchHistory(folder: string, cfg: FolderConfig): GitResult {
+  return git(folder, ["fetch", GF_REMOTE], undefined, transportEnv(cfg));
 }
 
 /**
@@ -57,16 +62,8 @@ export function bindRepo(
   gitDir: string,
   cfg: FolderConfig,
 ): void {
-  const pid = cfg.projectId;
   saveConfig(gitDir, cfg);
   ensureRemote(folder, cfg);
-  // The stock derived large-file endpoint would point at the hidden forge;
-  // ours lives on the public API origin with the same project-scoped grant.
-  git(folder, [
-    "config",
-    "lfs.url",
-    `${withCredentials(cfg.apiUrl, cfg.token)}/lfs/${pid}`,
-  ]);
   applySkipRules(folder, gitDir);
   ensureSaveAuthor(folder);
   // Large-folder performance: fsmonitor + untracked cache + index v4.
@@ -80,7 +77,11 @@ export function bindRepo(
  * first use rather than failing.
  */
 export function ensureRemote(folder: string, cfg: FolderConfig): void {
-  const url = `${withCredentials(cfg.apiUrl, cfg.token)}/git/${cfg.projectId}`;
+  // Both addresses are written without the credential. Folders set up before
+  // this carried it in the address itself, and are rewritten here on their
+  // next command; the credential travels with each command instead
+  // (config.ts, transportEnv).
+  const url = transportUrl(cfg);
   const existing = git(folder, ["remote", "get-url", GF_REMOTE]);
   if (existing.code === 0) {
     if (existing.stdout.trim() !== url) {
@@ -88,6 +89,23 @@ export function ensureRemote(folder: string, cfg: FolderConfig): void {
     }
   } else {
     git(folder, ["remote", "add", GF_REMOTE, url]);
+  }
+  // The stock derived large-file endpoint would point at the hidden forge;
+  // ours lives on the public API origin with the same project-scoped grant.
+  const lfs = git(folder, ["config", "--get", "lfs.url"]);
+  if (lfs.code !== 0 || lfs.stdout.trim() !== largeFileUrl(cfg)) {
+    git(folder, ["config", "lfs.url", largeFileUrl(cfg)]);
+  }
+  // The large-file helper once wrote its locking probe under the full
+  // credentialed address. Take any such entry out, and settle the question
+  // so it never writes one again.
+  const leaked = git(folder, ["config", "--local", "--name-only", "--get-regexp", "^lfs\\.https?://[^/]*@"]);
+  for (const name of leaked.stdout.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    const section = name.slice(0, name.lastIndexOf("."));
+    git(folder, ["config", "--local", "--remove-section", section]);
+  }
+  if (git(folder, ["config", "--local", "--get", "lfs.locksverify"]).stdout.trim() !== "false") {
+    git(folder, ["config", "--local", "lfs.locksverify", "false"]);
   }
   // Folders set up before this name existed carry GoodFolder under the
   // default name. Retire that entry, but only once it is proven to be ours

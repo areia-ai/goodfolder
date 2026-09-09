@@ -106,6 +106,7 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       LABEL_MODEL: ${LABEL_MODEL}
       WEB_ORIGINS: ${WEB_ORIGINS}
+      WEB_PREVIEW_PROJECTS: ${WEB_PREVIEW_PROJECTS:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-GoodFolder <auth@trygoodfolder.com>}
       MAIL_REPLY_TO: ${MAIL_REPLY_TO:-contact@trygoodfolder.com}

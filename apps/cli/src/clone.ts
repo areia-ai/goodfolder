@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_API_URL, withCredentials, type FolderConfig } from "./config.ts";
+import { DEFAULT_API_URL, transportEnv, transportUrl, type FolderConfig } from "./config.ts";
 import { CliError } from "./cli-error.ts";
 import { findGitDir, git } from "./git.ts";
-import { bindRepo } from "./repo-setup.ts";
+import { bindRepo, GF_REMOTE } from "./repo-setup.ts";
 import { dedupePath, defaultParent, sanitizeName, type CreatedFolder } from "./create.ts";
 import { listProjects, mintProjectToken } from "./api.ts";
 import { ensureAccount, friendlyDeviceName } from "./auth.ts";
@@ -59,20 +59,19 @@ export async function cmdClone(
   const dir = dedupePath(join(parent, sanitizeName(project.name)));
 
   console.log(`Downloading "${project.name}"…`);
-  const remote = `${withCredentials(DEFAULT_API_URL, minted.token)}/git/${project.id}`;
-  const clone = git(parent, ["clone", remote, dir]);
-  // An empty project clones with a warning and exit code 0 — fine.
-  if (clone.code !== 0 && !/empty repository/i.test(clone.stderr)) {
-    throw new CliError(`✗ Download failed: ${clone.stderr.trim()}`);
-  }
-  const gitDir = findGitDir(dir)!;
-
   const cfg: FolderConfig = {
     projectId: project.id,
     apiUrl: DEFAULT_API_URL,
     token: minted.token,
     connectedAt: new Date().toISOString(),
   };
+  if (minted.expiresAt) cfg.tokenExpiresAt = minted.expiresAt;
+  const clone = git(parent, ["clone", "--origin", GF_REMOTE, transportUrl(cfg), dir], undefined, transportEnv(cfg));
+  // An empty project clones with a warning and exit code 0 — fine.
+  if (clone.code !== 0 && !/empty repository/i.test(clone.stderr)) {
+    throw new CliError(`✗ Download failed: ${clone.stderr.trim()}`);
+  }
+  const gitDir = findGitDir(dir)!;
   bindRepo(dir, gitDir, cfg);
 
   console.log(

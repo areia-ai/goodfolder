@@ -1,10 +1,11 @@
 import { createInterface } from "node:readline/promises";
 import { friendlyHarness, type SaveCounts } from "@goodfolder/shared";
 import { CliError } from "./cli-error.ts";
+import type { FolderConfig } from "./config.ts";
 import { requireConnection } from "./connect.ts";
 import { git, gitOk } from "./git.ts";
 import { listSaves, recordSave, type TimelineEntry } from "./api.ts";
-import { GF_REMOTE, pushCurrentHistory } from "./repo-setup.ts";
+import { fetchHistory, pushCurrentHistory } from "./repo-setup.ts";
 
 export interface UndoOptions {
   /** Skip the interactive preview and undo the single most recent save. */
@@ -144,10 +145,10 @@ function meaningfulUnsaved(folder: string): string[] {
   return paths;
 }
 
-function ensureObjects(folder: string, sha: string): void {
+function ensureObjects(folder: string, cfg: FolderConfig, sha: string): void {
   if (gitOk(folder, ["cat-file", "-e", `${sha}^{commit}`])) return;
   console.log("Getting that save's contents…");
-  git(folder, ["fetch", GF_REMOTE]);
+  fetchHistory(folder, cfg);
   if (!gitOk(folder, ["cat-file", "-e", `${sha}^{commit}`])) {
     throw new CliError(
       "✗ Could not download that save's contents. Check your connection.",
@@ -168,7 +169,7 @@ async function confirm(question: string, choices: string[], fallback: string): P
 }
 
 export async function cmdUndo(folder: string, opts: UndoOptions = {}): Promise<void> {
-  const { cfg } = requireConnection(folder);
+  const { cfg } = await requireConnection(folder);
   const saves = await listSaves(cfg);
 
   if (saves.length === 0) {
@@ -258,7 +259,7 @@ export async function cmdUndo(folder: string, opts: UndoOptions = {}): Promise<v
     );
   }
 
-  ensureObjects(folder, proceedTarget.commit_sha);
+  ensureObjects(folder, cfg, proceedTarget.commit_sha);
 
   // Materialize the tracked tree at the target save, then drop files that
   // were added afterwards (restore --source leaves them behind).
@@ -281,7 +282,7 @@ export async function cmdUndo(folder: string, opts: UndoOptions = {}): Promise<v
   }
   const sha = git(folder, ["rev-parse", "HEAD"]).stdout.trim();
 
-  const push = pushCurrentHistory(folder);
+  const push = pushCurrentHistory(folder, cfg);
   if (push.code !== 0) {
     if (/non-fast-forward|rejected/i.test(push.stderr)) {
       throw new CliError(

@@ -3,15 +3,65 @@ import { basename, resolve } from "node:path";
 import {
   DEFAULT_API_URL,
   loadConfig,
+  saveConfig,
   type FolderConfig,
 } from "./config.ts";
 import { bindRepo, ensureRemote } from "./repo-setup.ts";
 import { CliError } from "./cli-error.ts";
 import { findGitDir, git, gitOk } from "./git.ts";
 import { ensureAccount, friendlyDeviceName } from "./auth.ts";
-import { createProject } from "./api.ts";
+import { createProject, mintProjectToken, renewFolderToken } from "./api.ts";
+import { loadAccountToken } from "./credentials.ts";
 
-export function requireConnection(folder: string): { gitDir: string; cfg: FolderConfig } {
+/**
+ * How close to running out a folder token gets before it is renewed. Tokens
+ * last ninety days; renewing with a month to spare means a folder that is
+ * touched even once in two months never needs anyone to do anything.
+ */
+const RENEW_WHEN_LEFT_MS = 30 * 86_400_000;
+
+/**
+ * Keep the folder's token alive without asking. Called before every command
+ * that reaches the server.
+ *
+ * Three cases. The token is fresh: nothing happens. It is getting old, or its
+ * age is unknown (set up before expiry was written down): it is traded for a
+ * new one. It no longer works at all — the folder sat unused for months, or
+ * was copied from another computer: a new one is issued through this
+ * computer's account approval, and only when that is missing too is the
+ * person asked to do something.
+ *
+ * A server that cannot be reached is not an error here; the command that
+ * follows will say so in its own words.
+ */
+async function ensureFreshToken(folder: string, gitDir: string, cfg: FolderConfig): Promise<void> {
+  const left = cfg.tokenExpiresAt ? Date.parse(cfg.tokenExpiresAt) - Date.now() : Number.NaN;
+  if (cfg.token && Number.isFinite(left) && left > RENEW_WHEN_LEFT_MS) return;
+
+  let fresh: { token: string; expiresAt?: string } | null = null;
+  try {
+    if (cfg.token) fresh = await renewFolderToken(cfg);
+    if (!fresh) {
+      const accountToken = loadAccountToken();
+      if (!accountToken) {
+        throw new CliError(
+          "✗ This folder's connection to GoodFolder needs approving again.\n" +
+            "  Fix: run  goodfolder login  and then try again.",
+        );
+      }
+      fresh = await mintProjectToken(cfg.apiUrl, cfg.projectId, accountToken, await friendlyDeviceName());
+    }
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    return; // unreachable server: the command itself will report it
+  }
+  cfg.token = fresh.token;
+  if (fresh.expiresAt) cfg.tokenExpiresAt = fresh.expiresAt;
+  else delete cfg.tokenExpiresAt;
+  saveConfig(gitDir, cfg);
+}
+
+export async function requireConnection(folder: string): Promise<{ gitDir: string; cfg: FolderConfig }> {
   const gitDir = findGitDir(folder);
   const cfg = gitDir ? loadConfig(gitDir) : null;
   if (!gitDir || !cfg) {
@@ -20,8 +70,10 @@ export function requireConnection(folder: string): { gitDir: string; cfg: Folder
     );
 
   }
-  // Folders set up before GoodFolder used its own transport name heal here,
-  // on the first command that needs it, rather than failing.
+  await ensureFreshToken(folder, gitDir, cfg);
+  // Folders set up before GoodFolder used its own transport name, or carried
+  // the credential in the address, heal here on the first command that needs
+  // it, rather than failing.
   ensureRemote(folder, cfg);
   return { gitDir, cfg };
 }
@@ -99,6 +151,7 @@ export async function cmdConnect(folder: string): Promise<void> {
     token: boot.token,
     connectedAt: new Date().toISOString(),
   };
+  if (boot.expiresAt) cfg.tokenExpiresAt = boot.expiresAt;
   bindRepo(folder, gitDir!, cfg);
 
   console.log(`✓ Connected "${name}" at ${resolve(folder)} to GoodFolder.`);

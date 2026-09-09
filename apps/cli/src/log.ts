@@ -13,7 +13,7 @@ function countSummary(added = 0, changed = 0, removed = 0): string {
 }
 
 export async function cmdLog(folder: string): Promise<void> {
-  const { cfg } = requireConnection(folder);
+  const { cfg } = await requireConnection(folder);
   const saves = (await listSaves(cfg)) as unknown as TimelineReceipt[];
   if (saves.length === 0) {
     console.log("No saves yet. Your first one is one command away: goodfolder save");

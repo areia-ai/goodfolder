@@ -50,7 +50,12 @@ function finishCapture(cap: TempCapture): void {
 }
 
 /** Run a git command in a folder. Never throws; callers decide on failure. */
-export function git(cwd: string, args: string[], input?: string): GitResult {
+export function git(
+  cwd: string,
+  args: string[],
+  input?: string,
+  env?: Record<string, string>,
+): GitResult {
   const cap = tempCapture();
   try {
     // Only commands fed on stdin open one; everything else keeps stdin shut,
@@ -59,6 +64,7 @@ export function git(cwd: string, args: string[], input?: string): GitResult {
       cwd,
       stdio: [input === undefined ? "ignore" : "pipe", ...cap.fds],
       ...(input === undefined ? {} : { input }),
+      ...(env ? { env: { ...process.env, ...env } } : {}),
     });
     const stdout = readFileSync(cap.paths[0], "utf8");
     let stderr = readFileSync(cap.paths[1], "utf8");
@@ -131,6 +137,7 @@ export function gitStream(
   cwd: string,
   args: string[],
   onProgress?: (fragment: string) => void,
+  env?: Record<string, string>,
 ): { done: Promise<GitAsyncResult>; kill: () => void } {
   const base = join(
     tmpdir(),
@@ -144,7 +151,11 @@ export function gitStream(
   const errFd = openSync(errPath, "r+");
   let errCursor = 0;
 
-  const child = spawn("git", args, { cwd, stdio: ["ignore", outFd, errFd] });
+  const child = spawn("git", args, {
+    cwd,
+    stdio: ["ignore", outFd, errFd],
+    ...(env ? { env: { ...process.env, ...env } } : {}),
+  });
   const kill = () => child.kill("SIGTERM");
 
   const poller =

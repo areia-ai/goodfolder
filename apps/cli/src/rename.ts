@@ -8,7 +8,7 @@ export async function cmdRename(folder: string, name: string): Promise<void> {
   if (name.length === 0 || name.trim().length === 0) {
     throw new CliError("✗ Enter a name for this folder.");
   }
-  const { cfg } = requireConnection(folder);
+  const { cfg } = await requireConnection(folder);
   const accountToken = await ensureAccount(cfg.apiUrl);
   const result = await accountCall<{ name: string }>(
     cfg.apiUrl,

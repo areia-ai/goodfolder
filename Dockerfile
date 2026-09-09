@@ -37,4 +37,6 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /out/index.js ./index.js
+# Uploads are spooled under the temp directory; nothing else is written.
+USER node
 CMD ["node", "index.js"]
