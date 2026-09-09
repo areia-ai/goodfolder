@@ -4,3 +4,7 @@ packages:
 allowBuilds:
   esbuild: true
   sharp: false
+overrides:
+  # Next pins postcss 8.4.31, which carries the source-map path traversal
+  # and </style> escaping advisories. Only the build reads it; keep it patched.
+  "postcss@<8.5.23": 8.5.26

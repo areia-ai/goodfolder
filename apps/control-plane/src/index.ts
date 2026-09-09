@@ -14,6 +14,7 @@ import {
 } from "node:crypto";
 import { getRequestListener } from "@hono/node-server";
 import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from "docx";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import PptxGenJS = require("pptxgenjs");
@@ -41,6 +42,7 @@ import { HostedBilling } from "./hosted-billing.ts";
 import { safeDocumentPath } from "./collaboration.ts";
 import { ROUTING_CEILING_BYTES } from "@goodfolder/shared";
 import { checkWrite, filesUnder } from "./write-gate.ts";
+import { transportRoute } from "./transport.ts";
 import { acceptStagedFile, forgetStagedFile, hashFile, putStoredFileFromPath, stagingKey } from "./stored-file.ts";
 import {
   TABLE_EDIT_CAP,
@@ -128,6 +130,30 @@ app.use("/api/*", async (c, next) => {
   }
   if (c.req.method === "OPTIONS") return c.body(null, 204);
   await next();
+});
+
+// ---------------------------------------------------------------------------
+// Body size — every JSON route reads its body whole, and this container has a
+// hard memory cap, so a body is refused by size before it is read. Registered
+// before any route so it also covers the ones that answer without a token.
+// The two upload routes are left out: they stream to disk and cut off at the
+// routing ceiling themselves, and buffering them here would undo that.
+// ---------------------------------------------------------------------------
+
+const BODY_LIMIT_DEFAULT = 2 * 1024 * 1024;
+/** Save receipts carry every changed path; generated files carry two images. */
+const BODY_LIMIT_LARGE = 16 * 1024 * 1024;
+const STREAMED_BODY = /^\/api\/projects\/[^/]+\/(files\/upload|staged-files)$/;
+const LARGE_BODY = /^\/api\/(saves|projects\/[^/]+\/generated-files)$/;
+
+app.use("/api/*", async (c, next) => {
+  const path = c.req.path;
+  if (STREAMED_BODY.test(path)) return next();
+  const limit = bodyLimit({
+    maxSize: LARGE_BODY.test(path) ? BODY_LIMIT_LARGE : BODY_LIMIT_DEFAULT,
+    onError: (ctx) => ctx.json({ error: { code: "too-large", message: "That request is too large." } }, 413),
+  });
+  return limit(c, next);
 });
 
 // ---------------------------------------------------------------------------
@@ -3008,16 +3034,17 @@ async function gitProxy(req: import("node:http").IncomingMessage, res: import("n
   };
 
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
-  // Path shape: /git/<projectId><gitea-repo-path>
-  const m = /^\/git\/([0-9a-f-]{36})(\/.*)$/.exec(url.pathname);
-  if (!m) return deny(404, "malformed git path");
+  // Path shape: /git/<projectId>/<one of the three smart HTTP endpoints>.
+  // Anything else never reaches the repository service (transport.ts).
+  const route = transportRoute(url);
+  if (!route) return deny(404, "malformed git path");
 
   const raw = tokenFromAuthHeader(req.headers.authorization);
   const scope = raw ? await resolveScope(sql, raw) : null;
   if (!scope) return deny(401, "unauthorized");
-  if (m[1] !== scope.projectId) return deny(403, "token not valid for this project");
+  if (route.projectId !== scope.projectId) return deny(403, "token not valid for this project");
 
-  const isWrite = /\/git-receive-pack$/.test(m[2]!) || url.searchParams.get("service") === "git-receive-pack";
+  const isWrite = route.isWrite;
   let remainingBytes = Number.POSITIVE_INFINITY;
   if (isWrite) {
     const denied = await writeAccessError(scope.ownerAccountId);
@@ -3041,7 +3068,7 @@ async function gitProxy(req: import("node:http").IncomingMessage, res: import("n
     }
   }
 
-  const upstream = `${cfg.giteaInternalUrl}/${cfg.giteaAdminUser}/${m[1]}.git${m[2]}${url.search}`;
+  const upstream = `${cfg.giteaInternalUrl}/${cfg.giteaAdminUser}/${route.projectId}.git${route.subpath}${url.search}`;
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
     const key = k.toLowerCase();

@@ -6,6 +6,7 @@ import { mkdtemp, open, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import {
   tokenFromAuthHeader,
   GetObjectCommand,
@@ -135,6 +136,16 @@ async function confirmObject(scope: TokenScope, oid: string, actualBytes: number
 const app = new Hono<{ Variables: { scope: TokenScope } }>();
 
 app.get("/healthz", (c) => c.json({ ok: true }));
+
+// The batch and verify bodies are small JSON; refuse anything else by size
+// before reading it. The stream-through PUT spools to disk and is left out.
+app.use("/lfs/*", async (c, next) => {
+  if (c.req.method === "PUT") return next();
+  return bodyLimit({
+    maxSize: 1024 * 1024,
+    onError: (ctx) => ctx.json({ error: { code: "too-large", message: "That request is too large." } }, 413),
+  })(c, next);
+});
 
 app.use("*", async (c, next) => {
   if (c.req.path === "/healthz") return next();

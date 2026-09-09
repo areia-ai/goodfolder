@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS workspace_proposals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   reviewed_at TIMESTAMPTZ,
   reviewed_by UUID REFERENCES accounts(id),
-  created_project_id UUID REFERENCES projects(id)
+  created_project_id UUID REFERENCES projects(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS workspace_proposals_account
   ON workspace_proposals(account_id, created_at DESC);
