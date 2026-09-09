@@ -238,6 +238,18 @@ export const redeemChallengeAccess = (code: string) =>
 
 export const me = () => get<{ id: string; email: string }>("/api/me");
 
+/** A computer approved to act for the account, from the one-time pairing. */
+export interface ApprovedDevice {
+  id: string;
+  name: string;
+  approvedAt: string;
+  lastUsedAt: string | null;
+  thisOne: boolean;
+}
+export const listDevices = () => get<{ devices: ApprovedDevice[] }>("/api/account/devices");
+export const forgetDevice = (deviceId: string) => destroy<{ ok: true }>(`/api/account/devices/${encodeURIComponent(deviceId)}`, {});
+export const signOutEverywhere = () => send<{ ok: true }>("/api/auth/logout-everywhere", {});
+
 export const listFolders = () => get<Folder[]>("/api/projects");
 
 export const listWorkspaceProposals = () => get<{ proposals: WorkspaceProposal[] }>("/api/workspace-proposals");

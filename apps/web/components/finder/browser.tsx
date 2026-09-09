@@ -44,7 +44,7 @@ import { useCompact } from "@/components/finder/use-compact";
 import { useSelection, type ClickModifiers } from "@/components/finder/use-selection";
 import { droppedFiles, useFileVerbs } from "@/components/finder/use-file-verbs";
 import {
-  ChallengeCodeDialog, DeleteFolderDialog, NameFolderDialog, RemoveDialog, RenameDialog,
+  ChallengeCodeDialog, DeleteFolderDialog, DevicesDialog, NameFolderDialog, RemoveDialog, RenameDialog,
 } from "@/components/finder/verb-dialogs";
 
 /**
@@ -88,6 +88,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   const [deleteFolderError, setDeleteFolderError] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState(false);
   const [challengeCodeOpen, setChallengeCodeOpen] = useState(false);
+  const [devicesOpen, setDevicesOpen] = useState(false);
   const [challengeCode, setChallengeCode] = useState("");
   const [redeemingChallenge, setRedeemingChallenge] = useState(false);
   const [challengeError, setChallengeError] = useState<string | null>(null);
@@ -824,6 +825,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
           onSignOut={onSignOut}
           onManagePlan={() => openInspector("info")}
           onRedeemChallenge={() => setChallengeCodeOpen(true)}
+          onManageDevices={() => setDevicesOpen(true)}
         />
       </div>
 
@@ -859,6 +861,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
               onSignOut={onSignOut}
               onManagePlan={() => openInspector("info")}
               onRedeemChallenge={() => setChallengeCodeOpen(true)}
+              onManageDevices={() => setDevicesOpen(true)}
             />
           </div>
         </>
@@ -1100,6 +1103,12 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             error={challengeError}
             onCancel={() => { setChallengeCodeOpen(false); setChallengeError(null); }}
             onRedeem={() => void redeemChallenge()}
+          />
+        )}
+        {devicesOpen && (
+          <DevicesDialog
+            onCancel={() => setDevicesOpen(false)}
+            onSignedOutEverywhere={() => { setDevicesOpen(false); onSignOut(); }}
           />
         )}
 

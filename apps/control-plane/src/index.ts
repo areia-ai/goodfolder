@@ -43,6 +43,7 @@ import { safeDocumentPath } from "./collaboration.ts";
 import { ROUTING_CEILING_BYTES } from "@goodfolder/shared";
 import { checkWrite, filesUnder } from "./write-gate.ts";
 import { transportRoute } from "./transport.ts";
+import { formulaRefusal } from "./formula.ts";
 import { acceptStagedFile, forgetStagedFile, hashFile, putStoredFileFromPath, stagingKey } from "./stored-file.ts";
 import {
   TABLE_EDIT_CAP,
@@ -1989,6 +1990,22 @@ app.post("/api/projects/:id/generated-files", async (c) => {
       (artifactType === "spreadsheet" && (sheets.length < 1 || sheets.some((sheet) => typeof sheet.name !== "string" || !sheet.name.trim() || !Array.isArray(sheet.rows) || sheet.rows.length > 500))) ||
       (artifactType === "image" && (!/^data:image\/(png|jpeg|jpg|webp);base64,[a-z0-9+/=\r\n]+$/i.test(imageDataUrl) || Buffer.byteLength(imageDataUrl, "utf8") > 7_000_000))) {
     return c.json({ error: { code: "generated-file", message: "The generated file content is missing, malformed, or exceeds its safe limits." } }, 400);
+  }
+  if (artifactType === "spreadsheet") {
+    // A formula that reaches outside the workbook is refused here, not
+    // reviewed: the person accepting the file would only see a number.
+    for (const sheet of sheets) {
+      for (const row of sheet.rows as unknown[]) {
+        if (!Array.isArray(row)) continue;
+        for (const cell of row) {
+          if (typeof cell !== "object" || !cell || !("formula" in cell)) continue;
+          const refusal = formulaRefusal(String((cell as { formula: unknown }).formula));
+          if (refusal) {
+            return c.json({ error: { code: "formula", message: `A cell in “${String(sheet.name).trim()}” was refused: ${refusal}. Formulas may calculate from the workbook's own cells only.` } }, 400);
+          }
+        }
+      }
+    }
   }
   const tree = await repos.tree(projectId);
   const waiting = await sql`

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@/components/dialog";
+import { forgetDevice, listDevices, signOutEverywhere, whenLabel, type ApprovedDevice } from "@/lib/gf-api";
 
 /**
  * The questions the window has to ask before it changes a folder.
@@ -237,6 +238,116 @@ export function ChallengeCodeDialog(props: {
         disabled={props.busy}
       />
       {props.error && <p className="mt-2 text-[13px] font-semibold" role="alert">{props.error}</p>}
+    </Dialog>
+  );
+}
+
+/**
+ * The computers approved to act for this account. Each one came from a
+ * one-time pairing in this browser and holds a credential that can create
+ * and open folders, so the person can see them here and take one back. The
+ * list is read when the dialog opens; nothing is fetched otherwise.
+ */
+export function DevicesDialog(props: { onCancel: () => void; onSignedOutEverywhere: () => void }) {
+  const [devices, setDevices] = useState<ApprovedDevice[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmingAll, setConfirmingAll] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    listDevices()
+      .then((result) => { if (live) setDevices(result.devices); })
+      .catch(() => { if (live) { setDevices([]); setError("Could not read the list of approved computers."); } });
+    return () => { live = false; };
+  }, []);
+
+  async function forget(device: ApprovedDevice) {
+    setBusy(device.id);
+    setError(null);
+    try {
+      await forgetDevice(device.id);
+      setDevices((current) => (current ?? []).filter((item) => item.id !== device.id));
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function signOutAll() {
+    setBusy("everywhere");
+    setError(null);
+    try {
+      await signOutEverywhere();
+      props.onSignedOutEverywhere();
+    } catch (failure) {
+      setError((failure as Error).message);
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={props.onCancel}
+      busy={busy !== null}
+      width="30rem"
+      title="Approved computers"
+      description="Each of these can save, sync, and open the folders on your account. Take one back if you no longer have it or no longer trust it."
+      actions={
+        <>
+          {confirmingAll ? (
+            <>
+              <button type="button" className="gf-button-secondary" onClick={() => setConfirmingAll(false)} disabled={busy !== null}>Keep signed in</button>
+              <button type="button" className="gf-button-primary" onClick={() => void signOutAll()} disabled={busy !== null}>
+                {busy === "everywhere" ? "Signing out…" : "Sign out of every browser"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="gf-button-secondary" onClick={() => setConfirmingAll(true)} disabled={busy !== null}>Sign out everywhere</button>
+              <button type="button" className="gf-button-primary" onClick={props.onCancel} disabled={busy !== null}>Done</button>
+            </>
+          )}
+        </>
+      }
+    >
+      {devices === null && <p className="gf-faint mt-4 text-[13px]">Reading…</p>}
+      {devices !== null && devices.length === 0 && !error && (
+        <p className="gf-faint mt-4 text-[13px]">No computers are approved on this account. The command line asks for approval the first time it connects a folder.</p>
+      )}
+      {devices && devices.length > 0 && (
+        <ul className="mt-4 divide-y divide-[var(--gf-line)]">
+          {devices.map((device) => (
+            <li key={device.id} className="flex items-center gap-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-semibold">
+                  {device.name}
+                  {device.thisOne && <span className="gf-faint font-normal"> · this computer</span>}
+                </p>
+                <p className="gf-faint text-[12px]">
+                  Approved {whenLabel(device.approvedAt)}
+                  {device.lastUsedAt ? ` · last used ${whenLabel(device.lastUsedAt)}` : " · not used yet"}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="gf-button-ghost"
+                onClick={() => void forget(device)}
+                disabled={busy !== null}
+                aria-label={`Take back the approval for ${device.name}`}
+              >
+                {busy === device.id ? "Taking back…" : "Take back"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {confirmingAll && (
+        <p className="mt-3 text-[13px]">Every browser signed in to this account will be signed out, including this one. Approved computers are not affected.</p>
+      )}
+      {error && <p className="mt-2 text-[13px] font-semibold" role="alert">{error}</p>}
     </Dialog>
   );
 }

@@ -1549,6 +1549,12 @@ function generatedSize(content: unknown): number {
   return new Blob([JSON.stringify(content ?? {})]).size;
 }
 
+/** The computers a demo account has approved. Taking one back just removes it. */
+const demoDevices = [
+  { id: "demo-device-laptop", name: "Your laptop", approvedAt: "2026-08-25T09:12:00.000Z", lastUsedAt: new Date().toISOString(), thisOne: true },
+  { id: "demo-device-studio", name: "Studio desktop", approvedAt: "2026-09-01T15:40:00.000Z", lastUsedAt: "2026-09-06T18:02:00.000Z", thisOne: false },
+];
+
 async function handle(pathname: string, search: URLSearchParams, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? "GET").toUpperCase();
   // An added file arrives as bytes, not as JSON. Everything else is JSON.
@@ -1561,6 +1567,15 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
   if (pathname === "/api/auth/logout") return json({ ok: true });
   if (pathname === "/api/plans") return json(PLANS);
   if (pathname === "/api/account/plan") return json(PLAN);
+  if (pathname === "/api/account/devices" && method === "GET") return json({ devices: demoDevices });
+  if (pathname.startsWith("/api/account/devices/") && method === "DELETE") {
+    const id = decodeURIComponent(pathname.split("/")[4] ?? "");
+    const index = demoDevices.findIndex((device) => device.id === id);
+    if (index < 0) return fail(404, "not-found", "No such approved computer on this account.");
+    demoDevices.splice(index, 1);
+    return json({ ok: true });
+  }
+  if (pathname === "/api/auth/logout-everywhere") return json({ ok: true });
   if (pathname === "/api/projects" && method === "GET") {
     return json(folders().map((entry) => ({ ...entry.folder, openProposalCount: countOpen(entry) })));
   }

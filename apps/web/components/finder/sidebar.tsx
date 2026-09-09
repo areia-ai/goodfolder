@@ -56,6 +56,7 @@ export function Sidebar({
   onSignOut,
   onManagePlan,
   onRedeemChallenge,
+  onManageDevices,
 }: {
   folders: Folder[];
   location: Location;
@@ -66,6 +67,7 @@ export function Sidebar({
   onSignOut: () => void;
   onManagePlan: () => void;
   onRedeemChallenge: () => void;
+  onManageDevices: () => void;
 }) {
   const sharedCount = folders.filter((folder) => folder.role === "contributor").length;
   const reviewCount = folders.reduce((total, folder) => total + Number(folder.openProposalCount ?? 0), 0);
@@ -164,6 +166,7 @@ export function Sidebar({
           }
           items={[
             { id: "plan", label: "Plan and storage", onSelect: onManagePlan },
+            { id: "devices", label: "Approved computers", onSelect: onManageDevices },
             { id: "challenge", label: "Redeem challenge code", onSelect: onRedeemChallenge },
             { id: "out", label: "Sign out", onSelect: onSignOut, dividerBefore: true },
           ]}
