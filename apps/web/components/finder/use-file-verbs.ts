@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { createProposal, removeFiles, renameFile, stageFile, uploadFile } from "@/lib/gf-api";
 import { done, problem, type NoticeMessage } from "@/components/ui";
 import type { Role } from "@/components/document-surface";
+import { captureProductEvent } from "@/lib/analytics";
 
 /**
  * Adding, renaming and taking files out, from the window.
@@ -87,6 +88,13 @@ export function useFileVerbs(input: {
         setProgress(null);
         setBusy(false);
       }
+      if (!suggesting && added.length > 0) {
+        captureProductEvent("save_created", {
+          area: "file_add",
+          result: refused.length > 0 ? "partial" : "success",
+          itemCount: added.length,
+        });
+      }
       await onChanged();
       if (refused.length > 0 && added.length === 0) {
         onNotice(problem(refused.length === 1 ? refused[0]! : `None of the ${refused.length} files went in. ${refused[0]}`));
@@ -121,6 +129,7 @@ export function useFileVerbs(input: {
           onNotice(done(`Sent to the folder's owner. “${nameOf(from)}” keeps its name until they accept it.`));
         } else {
           await renameFile(folderId, { from, to, baseHead: head });
+          captureProductEvent("save_created", { area: "file_rename", result: "success", itemCount: 1 });
           await onChanged();
           onNotice(done(`“${nameOf(from)}” is now “${nameOf(to)}”. The next Sync carries the change to your computers.`));
         }
@@ -157,6 +166,7 @@ export function useFileVerbs(input: {
           ));
         } else {
           const result = await removeFiles(folderId, { paths: [...paths], baseHead: head });
+          captureProductEvent("save_created", { area: "file_remove", result: "success", itemCount: result.removed.length });
           await onChanged();
           const what = result.removed.length === 1
             ? `“${nameOf(result.removed[0]!)}” is`

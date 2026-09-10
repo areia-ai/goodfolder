@@ -9,6 +9,7 @@ import { Notice, Skeleton, problem, type NoticeMessage } from "@/components/ui";
 import { API, me, requestSignInLink } from "@/lib/gf-api";
 import { unregisterDashboardTools } from "@/lib/webmcp";
 import { demoActive, installDemoTransport } from "@/lib/demo";
+import { captureProductEvent } from "@/lib/analytics";
 
 interface Me {
   id: string;
@@ -48,8 +49,10 @@ export default function Dashboard() {
     setNotice(null);
     try {
       await requestSignInLink(clean);
+      captureProductEvent("sign_in_link_requested", { area: "auth", result: "success" });
       setState({ phase: "email-sent", email: clean });
     } catch (e) {
+      captureProductEvent("sign_in_link_requested", { area: "auth", result: "error" });
       setNotice(problem((e as Error).message));
     } finally {
       setBusy(false);
@@ -81,7 +84,7 @@ export default function Dashboard() {
     );
   }
 
-  return <FinderBrowser email={state.me.email} onSignOut={logout} />;
+  return <FinderBrowser accountId={state.me.id} email={state.me.email} onSignOut={logout} />;
 }
 
 /* ---------------------------------------------------------------- Sign in */

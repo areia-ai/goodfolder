@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { PostHogClient } from "@/components/posthog-client";
 import "./globals.css";
 
 // Fetched once at build time and served from our own output, so the page
@@ -34,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`scroll-smooth ${inter.variable}`}>
       <head><link rel="alternate" type="text/plain" href="/llms.txt" title="GoodFolder agent index" /></head>
-      <body className="bg-white text-black antialiased">{children}</body>
+      <body className="bg-white text-black antialiased"><PostHogClient />{children}</body>
     </html>
   );
 }

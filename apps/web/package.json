@@ -16,6 +16,7 @@
     "fflate": "^0.8.2",
     "mammoth": "^1.12.1",
     "next": "^15.5.25",
+    "posthog-js": "^1.428.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"

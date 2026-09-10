@@ -38,6 +38,7 @@ import {
   type SaveRow,
 } from "./gf-api.ts";
 import { pageRenderReport } from "./page-report.ts";
+import { captureProductEvent } from "./analytics.ts";
 import { extensionOfPath, previewKindFor } from "./preview.ts";
 import {
   parseDelimitedTable,
@@ -746,9 +747,19 @@ async function registerDashboardToolsForContext(rawMc: ModelContextLike): Promis
           ? {
               execute: async (args: unknown, options?: AbortOptionsLike) => {
                 throwIfAborted(options);
-                const result = await waitWithAbort(originalExecute(args, options), options?.signal);
-                throwIfAborted(options);
-                return result;
+                try {
+                  const result = await waitWithAbort(originalExecute(args, options), options?.signal);
+                  throwIfAborted(options);
+                  captureProductEvent("webmcp_tool_called", {
+                    area: "webmcp",
+                    toolName: name,
+                    result: result && typeof result === "object" && "error" in result ? "error" : "success",
+                  });
+                  return result;
+                } catch (error) {
+                  captureProductEvent("webmcp_tool_called", { area: "webmcp", toolName: name, result: "error" });
+                  throw error;
+                }
               },
             }
           : {}),

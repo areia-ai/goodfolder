@@ -8,6 +8,7 @@ import {
   type AccountPlan, type ApprovedDevice, type BillingInterval, type PlanCode, type PlanDefinition,
 } from "@/lib/gf-api";
 import { formatBytes } from "@/lib/preview";
+import { captureProductEvent } from "@/lib/analytics";
 
 /**
  * The questions the window has to ask before it changes a folder.
@@ -418,6 +419,7 @@ export function BillingDialog(props: {
     setBusy("checkout");
     setError(null);
     try {
+      captureProductEvent("checkout_started", { area: "billing", planId: selectedPlan, interval, result: "started" });
       const result = await startHostedTrial(selectedPlan, interval);
       window.location.assign(result.url);
     } catch (failure) {

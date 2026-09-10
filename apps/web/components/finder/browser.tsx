@@ -17,6 +17,8 @@ import { ProgressToast, Toast, Toasts } from "@/components/toast";
 import { DocumentSurface } from "@/components/document-surface";
 import { registerDashboardTools, webMcpSupported } from "@/lib/webmcp";
 import { formatBytes } from "@/lib/preview";
+import { captureProductEvent } from "@/lib/analytics";
+import { PostHogIdentityBridge } from "@/components/posthog-identity-bridge";
 import {
   ROOT_SCOPE_LABEL, baseName, breadcrumb, descendantFiles, filterNodes, filterRoot,
   flattenRows, folderChildren, groupNodes, locationKey, locationOf, parentLocation,
@@ -61,7 +63,7 @@ const withPath = (nodes: readonly VfsNode[]): NamedNode[] =>
  * One window over everything: the folders at the top, and the files inside
  * each one, in the same hierarchy people have used since folders existed.
  */
-export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: () => void }) {
+export function FinderBrowser({ accountId, email, onSignOut }: { accountId: string; email: string; onSignOut: () => void }) {
   const nav = useNavigation();
   const { location } = nav;
 
@@ -146,7 +148,20 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     if (!validPlan && !checkoutComplete) return;
     if (validPlan) setBillingSelection({ plan: requestedPlan as PlanCode, interval: requestedInterval });
     setBillingOpen(true);
-    if (checkoutComplete) setNotice(done("Stripe received your payment details. Refresh the plan status if the trial is not shown yet."));
+    if (checkoutComplete) {
+      setNotice(done("Stripe received your payment details. Refresh the plan status if the trial is not shown yet."));
+      void getAccountPlan().then((current) => {
+        setPlan(current);
+        if (current.status === "trialing" || current.status === "active") {
+          captureProductEvent("subscription_completed", {
+            area: "billing",
+            planId: current.planCode ?? "none",
+            interval: requestedInterval,
+            result: current.status,
+          });
+        }
+      }).catch(() => {});
+    }
     const clean = new URL(window.location.href);
     clean.searchParams.delete("plan");
     clean.searchParams.delete("interval");
@@ -343,6 +358,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       setNaming(false);
       try {
         await createFolder(clean);
+        captureProductEvent("folder_created", { area: "dashboard", result: "success", itemCount: 1 });
         await loadFolders();
         setNotice(
           done(
@@ -469,6 +485,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
         const result = await reviewProposal(location.folderId, proposal.id, { action });
         await store.refresh(location.folderId);
         if (result.saveNumber) {
+          captureProductEvent("save_created", { area: "change_proposal", result: "accepted", itemCount: 1 });
           setNotice(done(`Accepted the change and saved #${result.saveNumber}.`));
         } else if (result.status === "needs-review") {
           setNotice(problem("This suggestion no longer matches the current file. Nothing was changed."));
@@ -486,6 +503,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
 
   const openInspector = useCallback(
     (tab: InspectorTab) => {
+      if (tab === "history") captureProductEvent("timeline_opened", { area: "folder" });
       setInspectorTab(tab);
       setPreference({ previewPane: true });
     },
@@ -813,6 +831,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       const result = await redeemChallengeAccess(challengeCode);
       setChallengeCodeOpen(false);
       setChallengeCode("");
+      captureProductEvent("challenge_code_redeemed", { area: "challenge", result: "success" });
       setNotice(done(`Challenge access is active until ${new Date(result.expiresAt).toLocaleString()}.`));
       setPlan(await getAccountPlan().catch(() => null));
     } catch (error) {
@@ -820,6 +839,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       // backdrop sit in the top layer, above anything the page can raise. A
       // toast from here arrives dimmed behind the scrim, in the far corner,
       // and cannot be clicked. The delete dialog already does it this way.
+      captureProductEvent("challenge_code_redeemed", { area: "challenge", result: "error" });
       setChallengeError((error as Error).message);
     } finally {
       setRedeemingChallenge(false);
@@ -837,6 +857,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
       style={{ "--gf-sidebar-width": `${sidebarPanel.width}px` } as React.CSSProperties}
     >
       <a href="#listing" className="gf-skip-link">Skip to the files</a>
+      <PostHogIdentityBridge accountId={accountId} planId={plan?.planCode ?? null} />
 
       <div className={`gf-win-sidebar-pane hidden ${prefs.sidebarCollapsed ? "" : "md:block"}`}>
         <Sidebar

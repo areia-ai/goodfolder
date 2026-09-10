@@ -18,6 +18,7 @@ import type { TableEdit } from "@/lib/table";
 import { ArrowLeftIcon, ChevronDownIcon, CommentIcon, DownloadIcon } from "@/components/icons";
 import { ReviewBadge, done, problem, type NoticeMessage } from "@/components/ui";
 import { useResizablePanel } from "@/components/use-resizable-panel";
+import { captureProductEvent } from "@/lib/analytics";
 
 /* --------------------------------------------------------------------------
    Reading and changing one file.
@@ -419,6 +420,7 @@ export function DocumentSurface(props: DocumentSurfaceProps) {
           label: `Edited ${props.file.path}`,
         });
         setDirty(false);
+        captureProductEvent("save_created", { area: "document", result: "success", itemCount: 1 });
         props.onSaved(result.head);
       } else {
         if (tableEditable) {
