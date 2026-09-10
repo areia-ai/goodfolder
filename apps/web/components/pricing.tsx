@@ -181,7 +181,7 @@ export function PricingTiers({ selfHostUrl }: { selfHostUrl: string }) {
                 ))}
               </ul>
               <Link
-                href="/dashboard"
+                href={`/dashboard?plan=${tier.code}&interval=${interval}`}
                 className="gf-button-secondary mt-7"
               >
                 {tier.highlight ? <>Get started <ArrowRightIcon /></> : "Get started"}

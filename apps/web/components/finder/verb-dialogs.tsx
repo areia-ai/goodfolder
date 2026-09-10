@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@/components/dialog";
-import { forgetDevice, listDevices, signOutEverywhere, whenLabel, type ApprovedDevice } from "@/lib/gf-api";
+import {
+  forgetDevice, getAccountPlan, getPlans, listDevices, openBillingPortal, setOverageCap,
+  signOutEverywhere, startHostedTrial, whenLabel,
+  type AccountPlan, type ApprovedDevice, type BillingInterval, type PlanCode, type PlanDefinition,
+} from "@/lib/gf-api";
+import { formatBytes } from "@/lib/preview";
 
 /**
  * The questions the window has to ask before it changes a folder.
@@ -348,6 +353,230 @@ export function DevicesDialog(props: { onCancel: () => void; onSignedOutEverywhe
         <p className="mt-3 text-[13px]">Every browser signed in to this account will be signed out, including this one. Approved computers are not affected.</p>
       )}
       {error && <p className="mt-2 text-[13px] font-semibold" role="alert">{error}</p>}
+    </Dialog>
+  );
+}
+
+const BILLING_PLANS: PlanCode[] = ["starter", "plus", "studio"];
+const BILLING_STATUSES = new Set<AccountPlan["status"]>(["trialing", "active", "past_due", "canceled", "paused"]);
+
+function money(cents: number): string {
+  return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+}
+
+function dateLabel(value: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString(undefined, { dateStyle: "medium" });
+}
+
+function planName(code: PlanCode | null): string {
+  return code ? code[0].toUpperCase() + code.slice(1) : "Hosted";
+}
+
+/** Account billing actions live here so every route is still behind the signed-in dashboard. */
+export function BillingDialog(props: {
+  plan: AccountPlan | null;
+  initialPlan?: PlanCode;
+  initialInterval?: BillingInterval;
+  onCancel: () => void;
+  onPlanUpdated: (plan: AccountPlan) => void;
+}) {
+  const [plans, setPlans] = useState<Record<PlanCode, PlanDefinition> | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<PlanCode>(props.initialPlan ?? "plus");
+  const [interval, setInterval] = useState<BillingInterval>(props.initialInterval ?? "month");
+  const [cap, setCap] = useState(String(props.plan?.overageCapCents ?? 0));
+  const [busy, setBusy] = useState<"checkout" | "portal" | "cap" | "refresh" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    getPlans()
+      .then((result) => { if (live) setPlans(result); })
+      .catch((failure) => { if (live) setError((failure as Error).message); });
+    return () => { live = false; };
+  }, []);
+
+  useEffect(() => {
+    setCap(String(props.plan?.overageCapCents ?? 0));
+  }, [props.plan?.overageCapCents]);
+
+  const refresh = async () => {
+    setBusy("refresh");
+    setError(null);
+    try {
+      const current = await getAccountPlan();
+      props.onPlanUpdated(current);
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const checkout = async () => {
+    setBusy("checkout");
+    setError(null);
+    try {
+      const result = await startHostedTrial(selectedPlan, interval);
+      window.location.assign(result.url);
+    } catch (failure) {
+      setError((failure as Error).message);
+      setBusy(null);
+    }
+  };
+
+  const portal = async () => {
+    setBusy("portal");
+    setError(null);
+    try {
+      const result = await openBillingPortal();
+      window.location.assign(result.url);
+    } catch (failure) {
+      setError((failure as Error).message);
+      setBusy(null);
+    }
+  };
+
+  const saveCap = async () => {
+    setBusy("cap");
+    setError(null);
+    try {
+      const updated = await setOverageCap(Number(cap));
+      props.onPlanUpdated(updated);
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const current = props.plan;
+  const hasHostedBilling = current?.billingMode === "stripe";
+  const canManage = current ? BILLING_STATUSES.has(current.status) : false;
+  const canStart = current ? !["trialing", "active", "past_due"].includes(current.status) : false;
+  const canSetCap = current?.status === "active" || current?.status === "past_due";
+  const selectedDefinition = plans?.[selectedPlan];
+  const currentPeriod = dateLabel(current?.currentPeriodEnd ?? null);
+  const trialEnd = dateLabel(current?.trialEndsAt ?? null);
+
+  return (
+    <Dialog
+      open
+      onClose={props.onCancel}
+      busy={busy !== null}
+      width="35rem"
+      title="Plan and storage"
+      description="Choose the amount of protected storage you need. Hosted plans start with a 7-day trial; billing is handled securely by Stripe."
+      actions={
+        <>
+          <button type="button" className="gf-button-secondary" onClick={props.onCancel} disabled={busy !== null}>Done</button>
+          {canManage && (
+            <button type="button" className="gf-button-primary" onClick={() => void portal()} disabled={busy !== null}>
+              {busy === "portal" ? "Opening…" : "Manage billing"}
+            </button>
+          )}
+        </>
+      }
+    >
+      {current === null && <p className="gf-faint mt-4 text-[13px]">Reading your plan…</p>}
+      {current && (
+        <div className="mt-4 rounded-xl border border-[var(--gf-line)] bg-[var(--gf-paper)] p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="gf-eyebrow">Current access</p>
+              <p className="mt-1 text-[18px] font-semibold">{planName(current.planCode)}</p>
+              <p className="gf-faint mt-1 text-[13px]">
+                {current.status === "self_hosted" ? "Self-hosted account" : current.status === "none" ? "No hosted plan yet" : `${current.status.replace("_", " ")}${trialEnd ? ` · trial ends ${trialEnd}` : currentPeriod ? ` · renews ${currentPeriod}` : ""}`}
+              </p>
+            </div>
+            <button type="button" className="gf-button-ghost" onClick={() => void refresh()} disabled={busy !== null}>
+              {busy === "refresh" ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+          {current.authorizedBytes !== null && (
+            <p className="gf-faint mt-3 text-[13px]">
+              {formatBytes(current.usageBytes + current.reservedBytes)} of {formatBytes(current.authorizedBytes)} protected
+            </p>
+          )}
+        </div>
+      )}
+
+      {current?.billingMode === "disabled" && (
+        <p className="mt-4 rounded-lg border border-[var(--gf-line)] px-3 py-2 text-[13px]" role="status">
+          Hosted billing is not enabled for this account yet. The checkout actions will become available when Stripe is enabled.
+        </p>
+      )}
+
+      {hasHostedBilling && current && canStart && (
+        <>
+          <div className="mt-5 flex items-center justify-between gap-3">
+            <p className="gf-eyebrow">Choose a plan</p>
+            <div className="inline-flex rounded-full border border-[var(--gf-line)] bg-white p-1" role="tablist" aria-label="Billing interval">
+              {(["month", "year"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={interval === value}
+                  onClick={() => setInterval(value)}
+                  className={`rounded-full px-3 py-1 text-[12px] font-medium ${interval === value ? "bg-[var(--gf-ink)] text-white" : "text-[var(--gf-ink-soft)]"}`}
+                >
+                  {value === "month" ? "Monthly" : "Yearly · save 20%"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Hosted plan">
+            {BILLING_PLANS.map((code) => {
+              const definition = plans?.[code];
+              const active = selectedPlan === code;
+              const price = definition ? (interval === "month" ? definition.monthlyPriceCents : definition.annualPriceCents) : null;
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setSelectedPlan(code)}
+                  className={`rounded-xl border p-3 text-left ${active ? "border-[var(--gf-blue-ink)] bg-[var(--gf-blue-soft)]" : "border-[var(--gf-line)]"}`}
+                >
+                  <span className="block text-[13px] font-semibold">{planName(code)}</span>
+                  <span className="gf-faint mt-1 block text-[12px]">{definition ? `${formatBytes(definition.includedBytes)} included` : "Reading…"}</span>
+                  <span className="mt-2 block text-[15px] font-semibold">{price === null ? "—" : `${money(price)}${interval === "month" ? "/mo" : "/yr"}`}</span>
+                </button>
+              );
+            })}
+          </div>
+          {selectedDefinition && <p className="gf-faint mt-3 text-[12px]">Extra capacity is {money(selectedDefinition.overageCentsPerGbMonth)} per GB-month.</p>}
+          {error && <p className="mt-3 text-[13px] font-semibold" role="alert">{error}</p>}
+          <button type="button" className="gf-button-primary mt-4 w-full" onClick={() => void checkout()} disabled={busy !== null || !selectedDefinition}>
+            {busy === "checkout" ? "Opening secure checkout…" : `Start ${planName(selectedPlan)} trial`}
+          </button>
+        </>
+      )}
+
+      {canSetCap && (
+        <div className="mt-5 border-t border-[var(--gf-line)] pt-4">
+          <p className="gf-eyebrow">Extra-capacity spending limit</p>
+          <p className="gf-faint mt-1 text-[12px]">Set the maximum monthly overage charge. Choose $0 to pause extra capacity.</p>
+          <div className="mt-3 flex items-end gap-2">
+            <label className="flex-1">
+              <span className="sr-only">Monthly overage cap</span>
+              <select className="gf-input" value={cap} onChange={(event) => setCap(event.target.value)} disabled={busy !== null}>
+                {Array.from({ length: 11 }, (_, index) => index * 1000).map((value) => (
+                  <option key={value} value={value}>{money(value)} per month</option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="gf-button-secondary" onClick={() => void saveCap()} disabled={busy !== null || Number(cap) === current?.overageCapCents}>
+              {busy === "cap" ? "Saving…" : "Save limit"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && !(hasHostedBilling && current && canStart) && <p className="mt-3 text-[13px] font-semibold" role="alert">{error}</p>}
     </Dialog>
   );
 }

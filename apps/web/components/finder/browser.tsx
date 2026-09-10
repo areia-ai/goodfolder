@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   acceptInvitation, createFolder, deleteFolder, getAccountPlan, listFolders, listWorkspaceProposals, openFile as openFolderFile, redeemChallengeAccess,
   reviewWorkspaceProposal, type WorkspaceProposal,
-  reviewProposal, type AccountPlan, type ChangeProposal, type Folder, type OpenedFile,
+  reviewProposal, type AccountPlan, type BillingInterval, type ChangeProposal, type Folder, type OpenedFile, type PlanCode,
 } from "@/lib/gf-api";
 import { QuickLook } from "@/components/finder/quick-look";
 import { ContextMenu, type ContextMenuState } from "@/components/finder/context-menu";
@@ -44,7 +44,7 @@ import { useCompact } from "@/components/finder/use-compact";
 import { useSelection, type ClickModifiers } from "@/components/finder/use-selection";
 import { droppedFiles, useFileVerbs } from "@/components/finder/use-file-verbs";
 import {
-  ChallengeCodeDialog, DeleteFolderDialog, DevicesDialog, NameFolderDialog, RemoveDialog, RenameDialog,
+  BillingDialog, ChallengeCodeDialog, DeleteFolderDialog, DevicesDialog, NameFolderDialog, RemoveDialog, RenameDialog,
 } from "@/components/finder/verb-dialogs";
 
 /**
@@ -89,6 +89,8 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   const [dropTarget, setDropTarget] = useState(false);
   const [challengeCodeOpen, setChallengeCodeOpen] = useState(false);
   const [devicesOpen, setDevicesOpen] = useState(false);
+  const [billingOpen, setBillingOpen] = useState(false);
+  const [billingSelection, setBillingSelection] = useState<{ plan: PlanCode; interval: BillingInterval } | null>(null);
   const [challengeCode, setChallengeCode] = useState("");
   const [redeemingChallenge, setRedeemingChallenge] = useState(false);
   const [challengeError, setChallengeError] = useState<string | null>(null);
@@ -134,6 +136,23 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
   useEffect(() => {
     void loadFolders();
   }, [loadFolders]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedPlan = params.get("plan");
+    const requestedInterval = params.get("interval") === "year" ? "year" : "month";
+    const validPlan = requestedPlan === "starter" || requestedPlan === "plus" || requestedPlan === "studio";
+    const checkoutComplete = params.get("billing") === "complete";
+    if (!validPlan && !checkoutComplete) return;
+    if (validPlan) setBillingSelection({ plan: requestedPlan as PlanCode, interval: requestedInterval });
+    setBillingOpen(true);
+    if (checkoutComplete) setNotice(done("Stripe received your payment details. Refresh the plan status if the trial is not shown yet."));
+    const clean = new URL(window.location.href);
+    clean.searchParams.delete("plan");
+    clean.searchParams.delete("interval");
+    clean.searchParams.delete("billing");
+    window.history.replaceState({}, "", `${clean.pathname}${clean.search}${clean.hash}`);
+  }, []);
 
   useEffect(() => {
     setPrefs(readPrefs());
@@ -472,6 +491,11 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
     },
     [setPreference],
   );
+
+  const openBilling = useCallback((selection?: { plan: PlanCode; interval: BillingInterval }) => {
+    setBillingSelection(selection ?? null);
+    setBillingOpen(true);
+  }, []);
 
   useEffect(() => {
     function onProposalCreated(event: Event) {
@@ -823,7 +847,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
           onGo={go}
           onTogglePin={(id) => setPrefs((current) => togglePinned(current, id))}
           onSignOut={onSignOut}
-          onManagePlan={() => openInspector("info")}
+          onManagePlan={() => openBilling()}
           onRedeemChallenge={() => setChallengeCodeOpen(true)}
           onManageDevices={() => setDevicesOpen(true)}
         />
@@ -859,7 +883,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
               }}
               onTogglePin={(id) => setPrefs((current) => togglePinned(current, id))}
               onSignOut={onSignOut}
-              onManagePlan={() => openInspector("info")}
+              onManagePlan={() => openBilling()}
               onRedeemChallenge={() => setChallengeCodeOpen(true)}
               onManageDevices={() => setDevicesOpen(true)}
             />
@@ -1111,6 +1135,15 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             onSignedOutEverywhere={() => { setDevicesOpen(false); onSignOut(); }}
           />
         )}
+        {billingOpen && (
+          <BillingDialog
+            plan={plan}
+            initialPlan={billingSelection?.plan}
+            initialInterval={billingSelection?.interval}
+            onCancel={() => setBillingOpen(false)}
+            onPlanUpdated={setPlan}
+          />
+        )}
 
         <Toasts>
           {verbs.progress && (
@@ -1147,7 +1180,7 @@ export function FinderBrowser({ email, onSignOut }: { email: string; onSignOut: 
             bytes={location.folderId ? totalBytes : null}
             plan={plan}
             note={statusNote}
-            onManagePlan={() => openInspector("info")}
+            onManagePlan={() => openBilling()}
           />
         </div>
       </div>
