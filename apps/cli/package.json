@@ -5,7 +5,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/areia-ai/goodfolder.git",
+    "url": "git+https://github.com/areia-ai/goodfolder.git",
     "directory": "apps/cli"
   },
   "homepage": "https://trygoodfolder.com",
@@ -17,7 +17,7 @@
     "README.md"
   ],
   "bin": {
-    "goodfolder": "./dist/index.js"
+    "goodfolder": "dist/index.js"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

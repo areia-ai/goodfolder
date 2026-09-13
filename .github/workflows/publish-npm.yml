@@ -1,8 +1,14 @@
 # Publishes @goodfolder/cli and @goodfolder/mcp to npm.
 #
 # Runs when a v* tag is pushed — the tag is the release, the workflow is the
-# delivery — and on demand from the Actions tab. Requires an NPM_TOKEN secret
-# with publish rights on the @goodfolder scope.
+# delivery — and on demand from the Actions tab.
+#
+# Authenticates with npm trusted publishing (OIDC): no token is stored
+# anywhere. Each package's settings on npmjs.com name this repository and
+# this file (publish-npm.yml) as a trusted publisher, and pnpm exchanges the
+# job's identity for a short-lived credential. The first release of a new
+# package has to be published by hand, because the trusted publisher is
+# configured on a package that already exists.
 
 name: publish-npm
 
@@ -11,6 +17,10 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   publish:
@@ -39,10 +49,6 @@ jobs:
 
       - name: Publish @goodfolder/cli
         run: pnpm --filter @goodfolder/cli publish --no-git-checks --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @goodfolder/mcp
         run: pnpm --filter @goodfolder/mcp publish --no-git-checks --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
