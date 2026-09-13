@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git } from "./git.ts";
@@ -35,6 +35,20 @@ function folderWithForeignHistory(): string {
 }
 
 const cleanup = (dir: string) => rmSync(dir, { recursive: true, force: true });
+
+/**
+ * Whether the temp directory's filesystem treats `a` and `A` as one file.
+ * True on a Mac, false on the Linux machines CI runs on.
+ */
+function tmpIsCaseInsensitive(): boolean {
+  const dir = mkdtempSync(join(tmpdir(), "gf-case-probe-"));
+  try {
+    writeFileSync(join(dir, "probe"), "");
+    return existsSync(join(dir, "PROBE"));
+  } finally {
+    cleanup(dir);
+  }
+}
 
 test("an ordinary folder inside a folder is left completely alone", () => {
   const dir = mkdtempSync(join(tmpdir(), "gf-plain-"));
@@ -136,7 +150,10 @@ test("the paths are known before the bytes are read, so routing can run first", 
   }
 });
 
-test("a colliding pair inside such a folder is still refused before it can do harm", async () => {
+// The hazard this guards against only exists where two spellings name one
+// file on disk. On a case-sensitive disk the second spelling is simply not
+// there, so there is nothing to collide and nothing to refuse.
+test("a colliding pair inside such a folder is still refused before it can do harm", { skip: !tmpIsCaseInsensitive() && "needs a case-insensitive filesystem" }, async () => {
   const { runSavePipeline } = await import("./save-core.ts");
   const { applySkipRules } = await import("./skip.ts");
   const dir = mkdtempSync(join(tmpdir(), "gf-nested-case-"));
