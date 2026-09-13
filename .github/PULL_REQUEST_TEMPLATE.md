@@ -9,5 +9,5 @@
 - [ ] `node tools/validate-brand.mjs` and `node tools/check-contrast.mjs` pass (if `apps/web` changed)
 - [ ] Tests near the change run and pass
 - [ ] No engine vocabulary on a user-facing surface
-- [ ] `README.md` / `SELF_HOSTING.md` updated if behaviour changed
+- [ ] `README.md` / `docs/self-hosting.md` updated if behaviour changed
 - [ ] Commits are under my own name and email

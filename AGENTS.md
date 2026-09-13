@@ -145,7 +145,7 @@ for wrong-sibling routing and any reach for an accept/save tool. The
 folders and storage rows, so only run them against a server you control, with a
 plan to clean up after.
 
-To watch the whole stack run, follow `SELF_HOSTING.md`:
+To watch the whole stack run, follow `docs/self-hosting.md`:
 `docker compose up -d --build` brings up Postgres, MinIO, Gitea and both
 services on your machine.
 
@@ -159,7 +159,7 @@ services on your machine.
   file by date and write it to run exactly once.
 - For anything that renders, check the rendered result. Code that compiles is
   not proof the screen is right.
-- Keep `README.md` and `SELF_HOSTING.md` true when behaviour changes.
+- Keep `README.md` and `docs/self-hosting.md` true when behaviour changes.
 - Commit under your own name and email. `git config user.name` and
   `git config user.email` should be you, whatever the repo you cloned or forked
   from was set to.

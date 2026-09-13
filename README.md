@@ -49,7 +49,7 @@ npm install -g @goodfolder/cli
 GF_API_URL=http://localhost:4100 goodfolder connect ~/some-folder
 ```
 
-[SELF_HOSTING.md](SELF_HOSTING.md) covers signing in without an email provider,
+[docs/self-hosting.md](docs/self-hosting.md) covers signing in without an email provider,
 putting it behind a domain, and what each service does.
 
 ## What is in here
@@ -104,7 +104,7 @@ Expect this gate to reject wording a normal person would not say.
 
 ## Documentation
 
-- [SELF_HOSTING.md](SELF_HOSTING.md) — run the whole stack with Docker
+- [docs/self-hosting.md](docs/self-hosting.md) — run the whole stack with Docker (also on the site at /docs)
 - [docs/configuration.md](docs/configuration.md) — every environment variable
 - [docs/reverse-proxy.md](docs/reverse-proxy.md) — putting it behind a domain
 - [docs/development.md](docs/development.md) — the contributor loop

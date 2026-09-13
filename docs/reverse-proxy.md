@@ -1,3 +1,9 @@
+---
+title: Reverse proxy
+description: Put a self-hosted GoodFolder behind TLS on four hostnames.
+order: 70
+---
+
 # Putting GoodFolder behind a reverse proxy
 
 The compose file binds every published port to `127.0.0.1`, so a real

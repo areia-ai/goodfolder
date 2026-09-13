@@ -1,3 +1,9 @@
+---
+title: Configuration
+description: Every setting a self-hosted install reads.
+order: 60
+---
+
 # Configuration
 
 `.env` beside `docker-compose.yml` — copied from `.env.example` — is the only

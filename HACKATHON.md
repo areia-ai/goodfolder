@@ -45,7 +45,7 @@ then run:
 docker compose up -d --build
 ```
 
-`SELF_HOSTING.md` contains the complete local setup. The app uses local
+`docs/self-hosting.md` contains the complete local setup. The app uses local
 Postgres, MinIO, and Gitea in that setup, so it does not require a cloud,
 email, billing, or model account to run.
 

@@ -26,7 +26,7 @@ if [ "$have_table" != "1" ]; then
       -c "INSERT INTO schema_migrations (name) VALUES ('$name') ON CONFLICT DO NOTHING"
   done
   echo "No record of earlier upgrades was found, so the schema is assumed current."
-  echo "If this installation predates 2026-09-13, see SELF_HOSTING.md -> Upgrading."
+  echo "If this installation predates 2026-09-13, see docs/self-hosting.md -> Upgrading."
   exit 0
 fi
 

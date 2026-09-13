@@ -46,7 +46,7 @@ change must not break, and how to run the gates. Read it first.
 
 [docs/development.md](docs/development.md) is the contributor loop —
 infrastructure in Docker, services from source with `pnpm dev`.
-[SELF_HOSTING.md](SELF_HOSTING.md) is for running the stack, not changing it.
+[docs/self-hosting.md](docs/self-hosting.md) is for running the stack, not changing it.
 
 ## About the agreement
 

@@ -28,7 +28,7 @@ the reports that matter are the ones about that boundary:
 
 ## Not a vulnerability
 
-`docker-compose.yml` binds every port to `127.0.0.1`, and `SELF_HOSTING.md`
+`docker-compose.yml` binds every port to `127.0.0.1`, and `docs/self-hosting.md`
 covers putting a TLS proxy in front for a real deployment. "I exposed MinIO to
 the internet with the example password" is a deployment mistake, not a bug in
 GoodFolder.
@@ -36,4 +36,4 @@ GoodFolder.
 ## Supported versions
 
 The latest tagged release. Older releases get fixes only by upgrading — see
-SELF_HOSTING.md → Upgrading for how a self-hosted install moves forward.
+docs/self-hosting.md → Upgrading for how a self-hosted install moves forward.

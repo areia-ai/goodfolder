@@ -7,7 +7,7 @@
 #
 # The web image is built with the localhost API address baked in
 # (NEXT_PUBLIC_API_URL is a build-time value). Anyone serving the dashboard
-# on a domain builds that one service locally — see SELF_HOSTING.md.
+# on a domain builds that one service locally — see docs/self-hosting.md.
 #
 # Manual runs (Actions tab) publish a sha tag only.
 

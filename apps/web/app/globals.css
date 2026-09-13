@@ -2957,3 +2957,31 @@ img, svg { max-width: 100%; }
 @container gf-composer (max-width: 250px) { .gf-recovery__model { display: none; } }
 @container gf-composer (max-width: 180px) { .gf-recovery__approval span { display: none; } }
 @media (prefers-reduced-motion: reduce) { .gf-recovery__caret { animation: none; } }
+
+/* Documentation pages (/docs/*). Body copy on the site's own tokens — long
+   form, so measures and spacing get their own scale rather than the landing
+   page's display classes. */
+.gf-doc { max-width: 44rem; font-size: 15.5px; line-height: 1.7; color: var(--gf-ink); }
+.gf-doc p { margin-top: 1rem; }
+.gf-doc h1 { font-size: 1.9rem; font-weight: 650; letter-spacing: -0.015em; margin-top: 2.5rem; scroll-margin-top: 5rem; }
+.gf-doc h2 { font-size: 1.45rem; font-weight: 650; letter-spacing: -0.01em; margin-top: 2.25rem; scroll-margin-top: 5rem; }
+.gf-doc h3 { font-size: 1.15rem; font-weight: 600; margin-top: 1.75rem; scroll-margin-top: 5rem; }
+.gf-doc h4, .gf-doc h5, .gf-doc h6 { font-size: 1rem; font-weight: 600; margin-top: 1.5rem; scroll-margin-top: 5rem; }
+.gf-doc a { color: var(--gf-blue-ink); text-decoration: underline; text-underline-offset: 3px; }
+.gf-doc ul, .gf-doc ol { margin-top: 1rem; padding-left: 1.5rem; display: grid; gap: 0.4rem; }
+.gf-doc ul { list-style: disc; }
+.gf-doc ol { list-style: decimal; }
+.gf-doc li { padding-left: 0.15rem; }
+.gf-doc blockquote { margin-top: 1.25rem; padding-left: 1rem; border-left: 3px solid var(--gf-line-strong); color: var(--gf-ink-soft); }
+.gf-doc pre { margin-top: 1.25rem; overflow-x: auto; border-radius: 10px; background: var(--gf-surface-sunken); border: 1px solid var(--gf-line); padding: 1rem 1.15rem; font-size: 13px; line-height: 1.55; }
+.gf-doc code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; }
+/* Long setting names and commands are unbreakable tokens; without this they
+   widen the whole column on a phone. `anywhere` lets them wrap mid-token. */
+.gf-doc p code, .gf-doc li code { overflow-wrap: anywhere; }
+.gf-doc p code, .gf-doc li code, .gf-doc td code, .gf-doc th code { background: var(--gf-surface-sunken); border: 1px solid var(--gf-line); border-radius: 5px; padding: 0.1em 0.35em; }
+.gf-doc table { margin-top: 1.25rem; width: 100%; border-collapse: collapse; font-size: 13.5px; display: block; overflow-x: auto; }
+.gf-doc th, .gf-doc td { text-align: left; padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--gf-line); vertical-align: top; }
+.gf-doc th { font-weight: 600; color: var(--gf-ink); border-bottom-color: var(--gf-line-strong); white-space: nowrap; }
+.gf-doc td { color: var(--gf-ink-soft); }
+.gf-doc hr { margin-top: 2rem; border: 0; border-top: 1px solid var(--gf-line); }
+.gf-doc img { margin-top: 1.25rem; max-width: 100%; border-radius: 10px; }

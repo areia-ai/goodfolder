@@ -1,7 +1,14 @@
+---
+title: Working on GoodFolder
+description: The contributor loop — running the services and tests from source.
+order: 80
+site: false
+---
+
 # Working on GoodFolder
 
 The loop for changing the code itself. To *run* GoodFolder rather than work on
-it, see SELF_HOSTING.md.
+it, see [the self-hosting guide](self-hosting.md).
 
 ## What you need
 

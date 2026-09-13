@@ -24,7 +24,12 @@ COPY apps/web/package.json ./apps/web/
 RUN pnpm install --frozen-lockfile --filter "@goodfolder/web..."
 
 # The web app imports nothing from packages/, so only its own source is needed.
+# The docs build (tools/build-docs-public.mjs, lib/docs.ts) reads the repo's
+# docs/*.md and CHANGELOG.md at build time.
 COPY apps/web ./apps/web
+COPY docs ./docs
+COPY CHANGELOG.md ./CHANGELOG.md
+COPY tools/build-docs-public.mjs ./tools/build-docs-public.mjs
 
 # Baked into the static bundle at build time (see the header comment).
 # NEXT_PUBLIC_POSTHOG_KEY stays empty: no analytics on a self-hosted install.

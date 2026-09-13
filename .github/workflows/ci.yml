@@ -47,5 +47,8 @@ jobs:
       - name: Environment docs gate
         run: node tools/check-env-docs.mjs
 
+      - name: Docs gate
+        run: node tools/check-docs.mjs
+
       - name: Unit tests (all workspaces)
         run: pnpm test

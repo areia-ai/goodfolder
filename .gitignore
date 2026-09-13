@@ -45,3 +45,4 @@ docker-compose.override.yml
 .next/
 out/
 *.tsbuildinfo
+apps/web/public/docs/

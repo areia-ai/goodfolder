@@ -33,6 +33,15 @@ const TARGETS = [
   // Shared holds copy too now: the skip-category labels a person reads when a
   // save tells them what it left out.
   "packages/shared/src",
+  // docs/*.md renders on the site at /docs — the same wall applies.
+  "docs",
+];
+
+// Files inside a scanned root that stay out of the gate.
+const EXCLUDED = [
+  // Deliberately not rendered on the site: it names the engine for
+  // contributors, and AGENTS.md rule 10 reserves that for for-engineers.tsx.
+  "docs/development.md",
 ];
 
 // The wall between the engine and the person. Word-bounded, case-insensitive.
@@ -109,7 +118,7 @@ function targetFiles() {
     try {
       statSync(abs).isDirectory();
       for (const f of walk(abs)) {
-        if (/\.(ts|tsx)$/.test(f)) files.push(f);
+        if (/\.(ts|tsx|md)$/.test(f)) files.push(f);
       }
     } catch {
       files.push(abs); // single-file target
@@ -224,7 +233,17 @@ const violations = [];
 
 for (const file of targetFiles()) {
   const rel = relative(ROOT, file);
+  if (EXCLUDED.includes(rel)) continue;
   const src = readFileSync(file, "utf8");
+
+  // Markdown is scanned as whole text — every line a reader would see, one at
+  // a time, without the prose heuristic (a banned word in a table cell or a
+  // code fence still renders). There are no string literals to extract.
+  if (/\.md$/.test(file)) {
+    src.split("\n").forEach((value, idx) => judge(rel, idx + 1, value, violations, true));
+    continue;
+  }
+
   const lits = extractLiterals(src);
 
   // Group template fragments (shared tid) into single logical strings.
@@ -263,8 +282,8 @@ for (const file of targetFiles()) {
   }
 }
 
-function judge(rel, line, value, into) {
-  if (!isProse(value)) return;
+function judge(rel, line, value, into, strict = false) {
+  if (!strict && !isProse(value)) return;
   const hits = findBanned(value);
   if (!hits.length) return;
   const remaining = hits.filter(

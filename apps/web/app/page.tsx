@@ -221,6 +221,7 @@ export default function Landing() {
             {/* Ghost, not a button: the page has one primary action and this is
                 not it. No star count either, which would read as a scoreboard
                 rather than an invitation. */}
+            <Link href="/docs" className="gf-button-ghost">Docs</Link>
             <a
               href={SOURCE_URL}
               className="gf-button-ghost hidden sm:inline-flex"
@@ -342,7 +343,7 @@ export default function Landing() {
               <p className="gf-lead mt-5">
                 Set up GoodFolder with a compatible agent on the computer holding your folder. There’s no desktop installer yet; the guide walks you through setup from source.
               </p>
-              <Link href="/docs" className="gf-button-secondary mt-6">Read the agent setup guide <ArrowRightIcon /></Link>
+              <Link href="/docs/agents" className="gf-button-secondary mt-6">Read the agent setup guide <ArrowRightIcon /></Link>
               <div className="mt-7 grid gap-2.5">
                 <p className="gf-prompt">
                   <SparklesIcon />
@@ -492,7 +493,7 @@ export default function Landing() {
                 <Link href="/dashboard" className="gf-button-primary gf-button-lg">
                   Get started <ArrowRightIcon />
                 </Link>
-                <Link href="/docs" className="underline underline-offset-4">Agent setup guide</Link>
+                <Link href="/docs/agents" className="underline underline-offset-4">Agent setup guide</Link>
               </div>
               <p className="mt-7 text-[13px] text-[color-mix(in_srgb,var(--gf-black)_64%,transparent)]">
                 No password to remember. Your original files keep their names, formats, and location.
@@ -517,7 +518,8 @@ export default function Landing() {
         <div className="gf-wrap flex flex-col items-start justify-between gap-5 py-10 sm:flex-row sm:items-center">
           <BrandLockup size={30} />
           <nav aria-label="Resources" className="flex flex-wrap gap-4 text-[13px]">
-            <Link href="/docs" className="underline underline-offset-2">Agent setup</Link>
+            <Link href="/docs" className="underline underline-offset-2">Docs</Link>
+            <Link href="/docs/agents" className="underline underline-offset-2">Agent setup</Link>
             <a href="/llms.txt" className="underline underline-offset-2">Agent index</a>
           </nav>
           <p className="gf-faint text-[13px]">
