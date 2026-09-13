@@ -4,7 +4,7 @@ The GoodFolder CLI works on the computer that holds the folder. It connects a
 folder, makes Saves, carries work to another approved computer, and lets you
 return to an earlier Save.
 
-When this package is released, install it with:
+Install it with:
 
 ```bash
 npm install -g @goodfolder/cli
@@ -17,8 +17,15 @@ Then, from the folder you want to protect:
 goodfolder connect
 ```
 
-The command opens a browser once so you can approve that computer. To use a
-server you run yourself, set `GF_API_URL` before the first connection.
+The command opens a browser once so you can approve that computer.
 
-This package is kept private until the Hosted trial flow has passed live
-Stripe testing and the release is explicitly approved.
+## Running your own server
+
+Point the first connection at your own GoodFolder server with `GF_API_URL`:
+
+```bash
+GF_API_URL=http://localhost:4100 goodfolder connect ~/some-folder
+```
+
+A folder remembers the server it was set up against, so you only need the
+variable for that first connection.

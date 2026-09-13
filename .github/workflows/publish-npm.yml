@@ -1,0 +1,48 @@
+# Publishes @goodfolder/cli and @goodfolder/mcp to npm.
+#
+# Runs when a v* tag is pushed — the tag is the release, the workflow is the
+# delivery — and on demand from the Actions tab. Requires an NPM_TOKEN secret
+# with publish rights on the @goodfolder scope.
+
+name: publish-npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Builds both packages, packs them, installs the tarballs into a clean
+      # consumer, and runs each executable — a broken package fails here
+      # rather than on npm.
+      - name: Package smoke test
+        run: pnpm package:smoke
+
+      - name: Publish @goodfolder/cli
+        run: pnpm --filter @goodfolder/cli publish --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @goodfolder/mcp
+        run: pnpm --filter @goodfolder/mcp publish --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

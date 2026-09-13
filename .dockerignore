@@ -8,3 +8,6 @@ apps/web/out
 *.log
 .DS_Store
 .env
+**/.env.local
+**/.env.*.local
+**/.env.dev

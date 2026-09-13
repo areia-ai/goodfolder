@@ -40,6 +40,7 @@ import {
 } from "@goodfolder/serverlib";
 import { HostedBilling } from "./hosted-billing.ts";
 import { safeDocumentPath } from "./collaboration.ts";
+import { dashboardLink } from "./links.ts";
 import { ROUTING_CEILING_BYTES } from "@goodfolder/shared";
 import { checkWrite, filesUnder } from "./write-gate.ts";
 import { transportRoute } from "./transport.ts";
@@ -2249,7 +2250,7 @@ app.post("/api/projects/:id/proposals", async (c) => {
           explanation: textExplanation,
         })}, ${section}, ${before}, ${replacement}, ${textExplanation})`;
     });
-    return c.json({ ok: true, proposalId: id, title, suggestionCount: 2, url: `https://trygoodfolder.com/dashboard?folder=${projectId}&proposal=${id}` });
+    return c.json({ ok: true, proposalId: id, title, suggestionCount: 2, url: dashboardLink(`?folder=${projectId}&proposal=${id}`) });
   }
 
   /**
@@ -2330,7 +2331,7 @@ app.post("/api/projects/:id/proposals", async (c) => {
         INSERT INTO proposal_suggestions (id, proposal_id, document_path, kind, base_file_sha, operation, section_hint, before_text, replacement_text, explanation)
         VALUES (${crypto.randomUUID()}, ${id}, ${path}, ${stored}, ${here?.sha ?? null}, ${sql.json(operation)}, ${null}, ${""}, ${""}, ${explanation})`;
     });
-    return c.json({ ok: true, proposalId: id, title, suggestionCount: 1, url: `https://trygoodfolder.com/dashboard?folder=${projectId}&proposal=${id}` });
+    return c.json({ ok: true, proposalId: id, title, suggestionCount: 1, url: dashboardLink(`?folder=${projectId}&proposal=${id}`) });
   }
 
   if (rawOperations.some((item) => !item || !["text_replace", "table_update"].includes(item.kind ?? "text_replace"))) {
@@ -2451,7 +2452,7 @@ app.post("/api/projects/:id/proposals", async (c) => {
         VALUES (${crypto.randomUUID()}, ${id}, ${item.path!}, ${item.kind === "table_update" ? "table" : "text"}, ${currentFile.sha}, ${sql.json(item.operation)}, ${item.section}, ${item.before}, ${item.replacement}, ${item.explanation})`;
     }
   });
-  return c.json({ ok: true, proposalId: id, title, suggestionCount: clean.length, url: `https://trygoodfolder.com/dashboard?folder=${projectId}&proposal=${id}` });
+  return c.json({ ok: true, proposalId: id, title, suggestionCount: clean.length, url: dashboardLink(`?folder=${projectId}&proposal=${id}`) });
 });
 
 app.post("/api/projects/:id/proposals/:proposalId/comments", async (c) => {
@@ -2890,7 +2891,7 @@ app.post("/api/projects/:id/invitations", async (c) => {
     INSERT INTO project_invitations (id, project_id, email, role, invited_by, token_hash, expires_at)
     VALUES (${id}, ${projectId}, ${email}, 'contributor', ${acct.accountId}, ${invite.hash}, now() + interval '7 days')
     ON CONFLICT (project_id, email) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at, accepted_at = NULL`;
-  const link = `https://trygoodfolder.com/dashboard?invite=${encodeURIComponent(invite.raw)}`;
+  const link = dashboardLink(`?invite=${encodeURIComponent(invite.raw)}`);
   await sendCollaborationInvite(email, String(project[0]?.name ?? "A GoodFolder"), link);
   return c.json({ ok: true });
 });

@@ -1,9 +1,17 @@
 {
   "name": "@goodfolder/cli",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "license": "AGPL-3.0-only",
-  "private": true,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/areia-ai/goodfolder.git",
+    "directory": "apps/cli"
+  },
+  "homepage": "https://trygoodfolder.com",
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist",
     "README.md"

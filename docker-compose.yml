@@ -2,6 +2,7 @@
 #
 #   cp .env.example .env     # replace every CHANGE_ME value
 #   docker compose up -d --build
+#   open http://localhost:4300  # the dashboard
 #   GF_API_URL=http://localhost:4100 goodfolder connect ~/some-folder
 #
 # No third-party account is required: object storage is MinIO, sign-in links
@@ -143,6 +144,7 @@ services:
       PORT: "4100"
       DATABASE_URL: postgres://goodfolder:${GOODFOLDER_DB_PASSWORD}@goodfolder-postgres:5432/goodfolder
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:4100}
+      WEB_URL: ${WEB_URL:-http://localhost:4300}
       GITEA_INTERNAL_URL: http://goodfolder-gitea:3000
       GITEA_ADMIN_USER: ${GITEA_ADMIN_USER:-gf-service}
       GITEA_ADMIN_PASSWORD: ${GITEA_ADMIN_PASSWORD}
@@ -230,6 +232,22 @@ services:
         condition: service_healthy
       goodfolder-minio-setup:
         condition: service_completed_successfully
+    networks: [goodfolder-net]
+
+  # The dashboard, built for the PUBLIC_URL in your .env. Its API address is
+  # baked in at build time, so after changing PUBLIC_URL rebuild just this
+  # service: docker compose up -d --build goodfolder-web
+  goodfolder-web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-http://localhost:4100}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4300:80"
+    depends_on:
+      - goodfolder-api
     networks: [goodfolder-net]
 
 networks:

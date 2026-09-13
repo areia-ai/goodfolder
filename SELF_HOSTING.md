@@ -8,11 +8,15 @@ cp .env.example .env          # replace every CHANGE_ME value
 docker compose up -d --build  # first build takes a few minutes
 ```
 
-Then point the command-line tool at your own server:
+Then open http://localhost:4300 — the dashboard is part of the stack.
+
+## Command-line tool
+
+Install the `goodfolder` command (Node 22 or newer):
 
 ```bash
-export GF_API_URL=http://localhost:4100
-goodfolder connect ~/some-folder
+npm install -g @goodfolder/cli
+GF_API_URL=http://localhost:4100 goodfolder connect ~/some-folder
 ```
 
 A folder remembers the server it was set up against, so you only need that
@@ -27,6 +31,7 @@ variable when setting up a new one.
 | `goodfolder-gitea` | Internal transport only. Never published, no SSH, registration off. |
 | `goodfolder-api` | The control plane, on 4100. |
 | `goodfolder-lfs` | Large-file transfers, on 4101. |
+| `goodfolder-web` | The dashboard, on 4300. Built for the `PUBLIC_URL` in your .env. |
 
 Two one-shot containers run on first start and then exit: one creates the
 storage bucket, the other creates the service account the control plane signs
@@ -34,6 +39,7 @@ in as. Both are safe to re-run.
 
 ## Signing in without an email provider
 
+Open the dashboard at http://localhost:4300 and enter your email address.
 Leave `RESEND_API_KEY` empty and the one-time sign-in link is written to the
 server log instead of being emailed:
 
@@ -56,9 +62,18 @@ reachable from outside the machine as it stands. To host it for real, put a
 reverse proxy with TLS in front, then set:
 
 - `PUBLIC_URL` to the address people reach the control plane on
+- `WEB_URL` to the address people open the dashboard on — invitation and
+  review links are built from it
 - `PUBLIC_LFS_ORIGIN` and `PRESIGN_PUBLIC_ENDPOINT` to the addresses clients
   should upload to
 - `WEB_ORIGINS` to the origin your dashboard is served from
+
+The dashboard's API address is baked in when `goodfolder-web` is built, so
+changing `PUBLIC_URL` means rebuilding it:
+
+```bash
+docker compose up -d --build goodfolder-web
+```
 
 Leave `MAGIC_LINK_DEBUG` unset on anything reachable from outside: it returns
 sign-in links in the API response.
