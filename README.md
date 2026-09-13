@@ -79,12 +79,16 @@ Save, Sync, Timeline, Restore. There is no expert mode underneath.
 
 ## Working on it
 
-The website's `/docs` guide and `/docs.md` representation share their content
-in `apps/web/lib/discovery.ts`. The homepage links to that guide and `/llms.txt`;
-`/sitemap.xml` lists public pages, and `/robots.txt` excludes the dashboard and
-demo entry. Static hosting must preserve `apps/web/public/_headers` for Markdown
-content types and dashboard indexing rules. These files describe local stdio
-MCP and browser WebMCP; they do not advertise a hosted HTTP MCP service.
+The website's `/docs` pages are rendered at build time from the Markdown in
+`docs/` (and `CHANGELOG.md`); `apps/web/lib/docs.ts` is the loader. Every page
+has a raw twin at `/docs/<name>.md`, and `/llms.txt` lists them all. To add a
+page, add a `.md` file with `title`, `description` and `order` front matter —
+`pnpm docs:check` verifies the front matter and links, and `pnpm vocab` scans
+the prose. `docs/development.md` is deliberately not rendered. `/sitemap.xml`
+lists public pages, and `/robots.txt` excludes the dashboard and demo entry.
+Static hosting must preserve `apps/web/public/_headers` for Markdown content
+types and dashboard indexing rules. These files describe local stdio MCP and
+browser WebMCP; they do not advertise a hosted HTTP MCP service.
 
 Requires Node 22+ and pnpm 11.
 
