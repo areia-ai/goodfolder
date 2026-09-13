@@ -13,7 +13,7 @@
   "dependencies": {
     "@goodfolder/serverlib": "workspace:*",
     "@goodfolder/shared": "workspace:*",
-    "@hono/node-server": "^1.13.7",
+    "@hono/node-server": "^2.1.1",
     "docx": "^9.7.1",
     "hono": "^4.13.7",
     "pdf-lib": "^1.17.1",
