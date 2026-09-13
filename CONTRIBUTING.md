@@ -33,6 +33,10 @@ gets merged; every pull request is still read and decided on its own merits.
   the GoodFolder name and the brand assets under `apps/web/public/brand` — give
   your version its own name.
 
+Everywhere the project gathers is covered by
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — the Contributor Covenant, with
+reports going to the same address as security.
+
 ## Running an AI agent on the code
 
 [AGENTS.md](AGENTS.md) is written for that. It covers the layout, the rules a
@@ -40,9 +44,9 @@ change must not break, and how to run the gates. Read it first.
 
 ## Local setup
 
-[SELF_HOSTING.md](SELF_HOSTING.md) brings the whole stack up with
-`docker compose up -d --build`. For working on the code, `pnpm install` then
-`pnpm gate`.
+[docs/development.md](docs/development.md) is the contributor loop —
+infrastructure in Docker, services from source with `pnpm dev`.
+[SELF_HOSTING.md](SELF_HOSTING.md) is for running the stack, not changing it.
 
 ## About the agreement
 

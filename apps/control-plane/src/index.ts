@@ -17,7 +17,7 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from "docx";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import PptxGenJS = require("pptxgenjs");
+import PptxGenJS from "pptxgenjs";
 import * as XLSX from "xlsx";
 import {
   tokenFromAuthHeader,

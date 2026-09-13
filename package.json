@@ -12,6 +12,8 @@
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm -r build",
     "vocab": "node tools/vocabulary-gate.mjs",
+    "env:docs": "node tools/check-env-docs.mjs",
+    "dev": "pnpm -r --parallel --filter @goodfolder/control-plane --filter @goodfolder/lfs --filter @goodfolder/web dev",
     "brand:validate": "node tools/validate-brand.mjs",
     "contrast:check": "node tools/check-contrast.mjs",
     "package:smoke": "node tools/package-smoke.mjs",

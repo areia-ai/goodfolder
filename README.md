@@ -1,5 +1,7 @@
 # GoodFolder
 
+[![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
+
 A folder on your computer with a history you can read.
 
 When a piece of work is finished, GoodFolder records what changed, who changed
@@ -16,6 +18,8 @@ It exists because AI agents now edit real files on real computers, and an
 ordinary folder cannot tell you what one of them did. GoodFolder gives you a
 plain record and a way back.
 
+![The GoodFolder dashboard: a folder's files, with a document open for review](apps/web/public/shots/dashboard-readme.png)
+
 **All of it is here.** Not a client with the interesting parts held back: the
 command-line tool, the agent server, the dashboard, the control plane, the
 large-file service, and the infrastructure to run the lot. If you would rather
@@ -26,7 +30,10 @@ for people who would rather not run a server.
 
 ## Run it yourself
 
-You need Docker. No cloud account, no email provider, no AI key.
+You need Docker. No cloud account, no email provider, no AI key. Or try the
+dashboard with sample data at
+[trygoodfolder.com/dashboard?demo=1](https://trygoodfolder.com/dashboard?demo=1) —
+no account needed.
 
 ```bash
 cp .env.example .env          # replace every CHANGE_ME value
@@ -94,6 +101,15 @@ using it should never have to learn that. `tools/vocabulary-gate.mjs` holds the
 banned list and an allowlist where every exception carries a written reason.
 
 Expect this gate to reject wording a normal person would not say.
+
+## Documentation
+
+- [SELF_HOSTING.md](SELF_HOSTING.md) — run the whole stack with Docker
+- [docs/configuration.md](docs/configuration.md) — every environment variable
+- [docs/reverse-proxy.md](docs/reverse-proxy.md) — putting it behind a domain
+- [docs/development.md](docs/development.md) — the contributor loop
+- [AGENTS.md](AGENTS.md) — the working rules, for people and agents
+- [CHANGELOG.md](CHANGELOG.md) — what changed between releases
 
 ## How early this is
 

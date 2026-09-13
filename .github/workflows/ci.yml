@@ -4,7 +4,8 @@
 #   - Typecheck across every workspace
 #   - Vocabulary gate: engine vocabulary must never reach a user-facing surface
 #   - Brand SVG validation and contrast check
-#   - The site-tools unit tests, including the WebMCP schema/eval-suite gate
+#   - Environment docs match .env.example
+#   - The full unit-test suite across every workspace
 
 name: ci
 
@@ -43,8 +44,8 @@ jobs:
       - name: Contrast check
         run: node tools/check-contrast.mjs
 
-      - name: Unit tests (site tools logic)
-        run: >
-          node --experimental-transform-types --test
-          apps/web/lib/webmcp.test.ts
-          apps/web/lib/webmcp.evals.test.ts
+      - name: Environment docs gate
+        run: node tools/check-env-docs.mjs
+
+      - name: Unit tests (all workspaces)
+        run: pnpm test

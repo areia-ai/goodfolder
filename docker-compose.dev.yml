@@ -1,0 +1,21 @@
+# Development override — for working on the code, not for hosting.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d \
+#     goodfolder-postgres goodfolder-minio goodfolder-minio-setup \
+#     goodfolder-gitea goodfolder-gitea-setup goodfolder-migrate
+#
+# Publishes Postgres and Gitea on loopback so the services running on the
+# host under `pnpm dev` can reach them. Gitea is only reachable at
+# 127.0.0.1 even here — it stays an internal transport with no user-facing
+# surface. Bring the same file into a self-hosted run and it opens the same
+# two ports, so don't.
+name: goodfolder
+
+services:
+  goodfolder-postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  goodfolder-gitea:
+    ports:
+      - "127.0.0.1:3000:3000"
