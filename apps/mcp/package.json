@@ -27,7 +27,7 @@
   "devDependencies": {
     "@goodfolder/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.5.1",
     "typescript": "^5.9.2",
     "zod": "^4.4.3"
   }
