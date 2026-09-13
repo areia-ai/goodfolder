@@ -36,8 +36,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@types/node':
-        specifier: ^22.10.0
-        version: 22.20.1
+        specifier: ^22.20.2
+        version: 22.20.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -67,14 +67,14 @@ importers:
         version: 4.0.1
       stripe:
         specifier: ^22.6.2
-        version: 22.6.2(@types/node@22.20.1)
+        version: 22.6.2(@types/node@22.20.2)
       xlsx:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
     devDependencies:
       '@types/node':
-        specifier: ^22.10.0
-        version: 22.20.1
+        specifier: ^22.20.2
+        version: 22.20.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -92,8 +92,8 @@ importers:
         version: 4.13.7
     devDependencies:
       '@types/node':
-        specifier: ^22.10.0
-        version: 22.20.1
+        specifier: ^22.20.2
+        version: 22.20.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -107,8 +107,8 @@ importers:
         specifier: ^1.30.0
         version: 1.30.0(zod@4.6.1)
       '@types/node':
-        specifier: ^22.10.0
-        version: 22.20.1
+        specifier: ^22.20.2
+        version: 22.20.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -132,7 +132,7 @@ importers:
         version: 1.12.2
       next:
         specifier: ^15.5.25
-        version: 15.5.25(@types/node@22.20.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: 15.5.25(@types/node@22.20.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       posthog-js:
         specifier: ^1.429.2
         version: 1.429.2(@types/react@19.3.0)(react@19.3.0)
@@ -150,8 +150,8 @@ importers:
         specifier: ^4.0.0
         version: 4.3.3
       '@types/node':
-        specifier: ^22.10.0
-        version: 22.20.1
+        specifier: ^22.20.2
+        version: 22.20.2
       '@types/react':
         specifier: ^19
         version: 19.3.0
@@ -181,11 +181,11 @@ importers:
         version: 3.4.9
       stripe:
         specifier: ^22.6.2
-        version: 22.6.2(@types/node@22.20.1)
+        version: 22.6.2(@types/node@22.20.2)
     devDependencies:
       '@types/node':
-        specifier: ^22.10.0
-        version: 22.20.1
+        specifier: ^22.20.2
+        version: 22.20.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -193,8 +193,8 @@ importers:
   packages/shared:
     devDependencies:
       '@types/node':
-        specifier: ^22.10.0
-        version: 22.20.1
+        specifier: ^22.20.2
+        version: 22.20.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -846,6 +846,9 @@ packages:
 
   '@types/node@22.20.1':
     resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
+
+  '@types/node@22.20.2':
+    resolution: {integrity: sha512-xlvWf4Vs9n1PEVYwP1n4vvG07M6y8WgvJ2t0vbrWTmijsIHp1cS+uJ2kMIRdY3nHZK0nCYKrPeD171+SzF4/zw==}
 
   '@types/node@25.9.5':
     resolution: {integrity: sha512-OScDchr2fwuUmWdf4kZ9h7PcJiYDVInhJizG/biAq3cAvqwYktuy/TYGGdZNMtNTFUP7rnb0NU4TUdm82kt4Rg==}
@@ -2213,6 +2216,10 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/node@22.20.2':
+    dependencies:
+      undici-types: 6.21.0
+
   '@types/node@25.9.5':
     dependencies:
       undici-types: 7.24.6
@@ -2659,7 +2666,7 @@ snapshots:
     dependencies:
       content-type: 2.1.0
 
-  next@15.5.25(@types/node@22.20.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
+  next@15.5.25(@types/node@22.20.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
     dependencies:
       '@next/env': 15.5.25
       '@swc/helpers': 0.5.15
@@ -2677,7 +2684,7 @@ snapshots:
       '@next/swc-linux-x64-musl': 15.5.25
       '@next/swc-win32-arm64-msvc': 15.5.25
       '@next/swc-win32-x64-msvc': 15.5.25
-      sharp: 0.35.4(@types/node@22.20.1)
+      sharp: 0.35.4(@types/node@22.20.2)
     transitivePeerDependencies:
       - '@babel/core'
       - '@types/node'
@@ -2854,7 +2861,7 @@ snapshots:
 
   setprototypeof@1.2.0: {}
 
-  sharp@0.35.4(@types/node@22.20.1):
+  sharp@0.35.4(@types/node@22.20.2):
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
@@ -2885,7 +2892,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.35.4
       '@img/sharp-win32-ia32': 0.35.4
       '@img/sharp-win32-x64': 0.35.4
-      '@types/node': 22.20.1
+      '@types/node': 22.20.2
     optional: true
 
   sharp@0.35.4(@types/node@25.9.5):
@@ -2965,9 +2972,9 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  stripe@22.6.2(@types/node@22.20.1):
+  stripe@22.6.2(@types/node@22.20.2):
     optionalDependencies:
-      '@types/node': 22.20.1
+      '@types/node': 22.20.2
 
   styled-jsx@5.1.6(react@19.3.0):
     dependencies:
