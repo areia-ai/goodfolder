@@ -6,6 +6,18 @@ tag that the published packages and images are built from.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-13
+
+- `goodfolder --version` and `goodfolder-mcp --version` say which release is
+  installed. The agent server reports the same version to the agents that
+  connect to it.
+- Every part of GoodFolder now carries one version number. The command and
+  the agent server had moved to 0.1.1 ahead of the rest.
+- Self-hosting notes cover moving a port that is already taken, with an
+  override file Compose picks up on its own.
+- The hosted service runs the same schema-upgrade step as a self-hosted
+  install, so both move forward the same way.
+
 ## [0.1.1] - 2026-09-13
 
 - The `goodfolder` command and the `goodfolder-mcp` agent server are
