@@ -16,14 +16,14 @@
     "fflate": "^0.8.2",
     "mammoth": "^1.12.2",
     "next": "^15.5.25",
-    "posthog-js": "^1.429.2",
+    "posthog-js": "^1.429.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
-    "@types/node": "^22.10.0",
+    "@types/node": "^22.20.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "postcss": "^8.5.28",
