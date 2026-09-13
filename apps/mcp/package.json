@@ -29,6 +29,6 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/node": "^22.10.0",
     "typescript": "^5.9.2",
-    "zod": "^4.4.3"
+    "zod": "^4.6.1"
   }
 }
