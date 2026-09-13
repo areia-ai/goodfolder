@@ -6,6 +6,12 @@ tag that the published packages and images are built from.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-13
+
+- The `goodfolder` command and the `goodfolder-mcp` agent server are
+  published from the release workflow itself, with no stored credential.
+  No change to what either of them does.
+
 ## [0.1.0] - 2026-09-13
 
 The first tagged release.
