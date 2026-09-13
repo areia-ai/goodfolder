@@ -4,9 +4,12 @@ Everything GoodFolder needs is in `docker-compose.yml`. You need Docker and
 nothing else: no cloud account, no email provider, no AI key.
 
 ```bash
-cp .env.example .env          # replace every CHANGE_ME value
-docker compose up -d --build  # first build takes a few minutes
+cp .env.example .env    # replace every CHANGE_ME value
+docker compose up -d    # pulls the prebuilt images
 ```
+
+Or build from the source you have: `docker compose up -d --build` (the first
+build takes a few minutes).
 
 Then open http://localhost:4300 — the dashboard is part of the stack.
 
@@ -33,9 +36,11 @@ variable when setting up a new one.
 | `goodfolder-lfs` | Large-file transfers, on 4101. |
 | `goodfolder-web` | The dashboard, on 4300. Built for the `PUBLIC_URL` in your .env. |
 
-Two one-shot containers run on first start and then exit: one creates the
-storage bucket, the other creates the service account the control plane signs
-in as. Both are safe to re-run.
+Three one-shot containers run and then exit: one creates the storage bucket,
+one creates the service account the control plane signs in as, and one
+(`goodfolder-migrate`) brings the database schema up to the version of the
+release you are running. All are safe to re-run; the schema one runs on every
+`up` and does nothing when there is nothing new.
 
 ## Signing in without an email provider
 
@@ -77,6 +82,54 @@ docker compose up -d --build goodfolder-web
 
 Leave `MAGIC_LINK_DEBUG` unset on anything reachable from outside: it returns
 sign-in links in the API response.
+
+## Upgrading
+
+Fetch the release you want, then either set `GOODFOLDER_VERSION` in `.env` to
+its tag (for example `GOODFOLDER_VERSION=0.2.0`) and pull the images:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+or build from the new source with `docker compose up -d --build`.
+
+Either way, the schema upgrade runs by itself before the services start —
+`goodfolder-migrate` applies any files in `infra/migrations/` the database
+has not seen yet, in file-name order. Watch it with:
+
+```bash
+docker compose logs goodfolder-migrate
+```
+
+"schema up to date" means there was nothing to do.
+
+If your install predates tracked upgrades (2026-09-13), the runner cannot
+tell which old files already ran, so it records them all as applied. Apply
+the ones dated after your install by hand first — the files are mounted into
+the database container:
+
+```bash
+docker compose exec goodfolder-postgres \
+  psql -U goodfolder -d goodfolder -f /goodfolder-migrations/2026-XX-XX-name.sql
+docker compose exec goodfolder-postgres psql -U goodfolder -d goodfolder \
+  -c "INSERT INTO schema_migrations (name) VALUES ('2026-XX-XX-name.sql')"
+```
+
+## Backing up
+
+Everything the stack writes lives under `./data/` — Postgres, MinIO, and the
+transport store — plus your `.env`, which holds the secrets. Copy those and
+you have the whole install.
+
+For a consistent database copy without stopping anything:
+
+```bash
+docker compose exec goodfolder-postgres pg_dump -U goodfolder goodfolder > backup.sql
+```
+
+Or stop the stack (`docker compose stop`) and copy `./data/` at rest.
 
 ## Large files
 

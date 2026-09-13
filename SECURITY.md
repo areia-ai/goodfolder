@@ -33,6 +33,7 @@ covers putting a TLS proxy in front for a real deployment. "I exposed MinIO to
 the internet with the example password" is a deployment mistake, not a bug in
 GoodFolder.
 
-## Supported version
+## Supported versions
 
-The current `main`. GoodFolder is early; there are no back-ported fixes yet.
+The latest tagged release. Older releases get fixes only by upgrading — see
+SELF_HOSTING.md → Upgrading for how a self-hosted install moves forward.

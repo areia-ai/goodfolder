@@ -30,7 +30,7 @@ You need Docker. No cloud account, no email provider, no AI key.
 
 ```bash
 cp .env.example .env          # replace every CHANGE_ME value
-docker compose up -d --build  # first build takes a few minutes
+docker compose up -d          # prebuilt images; add --build to build from source
 ```
 
 Then open http://localhost:4300 — the dashboard comes up with the stack, and

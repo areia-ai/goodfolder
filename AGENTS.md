@@ -154,7 +154,9 @@ services on your machine.
 - Stage only what your change touches. Leave an unrelated mess in the worktree
   alone.
 - Migrations are additive: add a file under `infra/migrations/` and keep
-  `infra/schema.sql` matching it.
+  `infra/schema.sql` matching it. Self-hosted installs apply new files
+  themselves via `infra/selfhost/migrate.sh`, in file-name order — name each
+  file by date and write it to run exactly once.
 - For anything that renders, check the rendered result. Code that compiles is
   not proof the screen is right.
 - Keep `README.md` and `SELF_HOSTING.md` true when behaviour changes.

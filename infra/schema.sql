@@ -367,3 +367,11 @@ CREATE TABLE IF NOT EXISTS usage_settlements (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (account_id, period_start, period_end)
 );
+
+-- Bookkeeping for self-hosted upgrades: which files in infra/migrations have
+-- run against this database. Rows are written by the upgrade runner
+-- (infra/selfhost/migrate.sh) and by first-time initialisation.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  name TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
