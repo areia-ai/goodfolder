@@ -42,6 +42,25 @@ one creates the service account the control plane signs in as, and one
 release you are running. All are safe to re-run; the schema one runs on every
 `up` and does nothing when there is nothing new.
 
+## If a port is already taken
+
+Compose reads `docker-compose.override.yml` next to the main file
+automatically, so that is where a port move lives. To shift MinIO — the port
+most likely to clash, since uploads go straight to it:
+
+```yaml
+services:
+  goodfolder-minio:
+    ports: !override
+      - "127.0.0.1:9299:9000"
+```
+
+`!override` matters: without it Compose appends to the port list instead of
+replacing it, and the old 9100 mapping stays. Set `PRESIGN_PUBLIC_ENDPOINT` in
+`.env` to match (`http://localhost:9299`) so signed upload addresses point at
+the new port. The same file is where the Traefik labels in
+`docs/reverse-proxy.md` go. It is per-machine, so it is ignored.
+
 ## Signing in without an email provider
 
 Open the dashboard at http://localhost:4300 and enter your email address.

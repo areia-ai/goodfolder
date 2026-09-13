@@ -84,6 +84,27 @@ services:
       retries: 20
     networks: [goodfolder-net]
 
+  # One-shot schema upgrade, runs before api/lfs on every `up`. Ships in the
+  # kit as ./migrate.sh and ./migrations/ next to this file (copied from
+  # infra/selfhost/migrate.sh and infra/migrations/), same as postgres-init.sh.
+  goodfolder-migrate:
+    image: postgres:17-alpine
+    depends_on:
+      goodfolder-postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: goodfolder-postgres
+      PGUSER: goodfolder
+      PGPASSWORD: ${GOODFOLDER_DB_PASSWORD}
+      PGDATABASE: goodfolder
+    volumes:
+      - ./migrations:/goodfolder-migrations:ro
+      - ./migrate.sh:/migrate.sh:ro
+    entrypoint: ["bash", "/migrate.sh"]
+    restart: "no"
+    mem_limit: 64m
+    networks: [goodfolder-net]
+
   goodfolder-api:
     build:
       context: ./apps/control-plane
@@ -103,6 +124,7 @@ services:
       PUBLIC_LFS_ORIGIN: https://api.trygoodfolder.com
       LFS_INTERNAL_URL: http://goodfolder-lfs:4101
       PRESIGN: "1"
+      WEB_URL: ${WEB_URL:-https://trygoodfolder.com}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       LABEL_MODEL: ${LABEL_MODEL}
       WEB_ORIGINS: ${WEB_ORIGINS}
@@ -138,6 +160,8 @@ services:
         condition: service_healthy
       goodfolder-gitea:
         condition: service_healthy
+      goodfolder-migrate:
+        condition: service_completed_successfully
     mem_limit: 192m
     networks: [goodfolder-net]
 
@@ -171,6 +195,8 @@ services:
         condition: service_healthy
       goodfolder-minio:
         condition: service_started
+      goodfolder-migrate:
+        condition: service_completed_successfully
     mem_limit: 160m
     networks: [goodfolder-net]
 

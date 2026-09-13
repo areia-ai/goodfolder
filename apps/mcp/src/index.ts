@@ -16,6 +16,12 @@ import { cmdLog } from "../../cli/src/log.ts";
 import { cmdCreate } from "../../cli/src/create.ts";
 import { cmdClone } from "../../cli/src/clone.ts";
 import { cmdRename } from "../../cli/src/rename.ts";
+import pkg from "../package.json" with { type: "json" };
+
+if (process.argv.includes("--version") || process.argv.includes("-v") || process.argv[2] === "version") {
+  console.log(pkg.version);
+  process.exit(0);
+}
 
 /** Capture console output of a command so it can be returned as tool text. */
 async function run(fn: () => Promise<void> | void): Promise<{
@@ -50,7 +56,7 @@ async function run(fn: () => Promise<void> | void): Promise<{
 
 const server = new McpServer({
   name: "goodfolder",
-  version: "0.1.0",
+  version: pkg.version,
 });
 
 /**

@@ -12,6 +12,7 @@ import { cmdClone } from "./clone.ts";
 import { cmdDevices, cmdLogin } from "./auth.ts";
 import { cmdProtect, cmdSkipped } from "./protect.ts";
 import { cmdRename } from "./rename.ts";
+import pkg from "../package.json" with { type: "json" };
 
 const HELP = `goodfolder — keep your folder safe
 
@@ -29,6 +30,7 @@ const HELP = `goodfolder — keep your folder safe
   goodfolder login                Approve this computer (one-time setup)
   goodfolder devices              Show the computers approved on your account
   goodfolder devices forget <n>   Take an approval back
+  goodfolder --version            Show which release this is
 
 Set GF_API_URL to use a GoodFolder server you run yourself. Folders remember
 the server they were set up against, so this only affects new ones.
@@ -48,6 +50,11 @@ async function main() {
     else positional.push(argv[i]!);
   }
   const folder = process.cwd();
+
+  if (cmd === "--version" || cmd === "-v" || cmd === "version") {
+    console.log(pkg.version);
+    return;
+  }
 
   switch (cmd) {
     case "create":

@@ -38,6 +38,8 @@ infra/migration/
 
 # Self-host stack state (docker compose volumes). Never commit these.
 data/
+# Per-machine port and label overrides for docker compose.
+docker-compose.override.yml
 
 # Build output. Never commit these: they churn on every build.
 .next/
