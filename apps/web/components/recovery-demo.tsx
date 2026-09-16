@@ -65,7 +65,7 @@ export function RecoveryDemo() {
     const timer = window.setTimeout(() => {
       if (scene === SCENES.length - 1) setPlaying(false);
       else setScene(scene + 1);
-    }, 6500);
+    }, 4200);
     return () => window.clearTimeout(timer);
   }, [playing, visible, scene]);
 
