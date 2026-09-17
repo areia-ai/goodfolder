@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { magicLinkEmail } from "./magic-link-email.js";
 import { createReadStream } from "node:fs";
 import { mkdtemp, open as openFile, readFile as readTempFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -315,10 +316,7 @@ async function sendMagicLink(email: string, link: string): Promise<void> {
           from: MAIL_FROM,
           reply_to: MAIL_REPLY_TO,
           to: email,
-          subject: "Sign in to GoodFolder",
-          text:
-            `Tap this link to sign in to GoodFolder. It works once and expires ` +
-            `in ${MAGIC_TTL_MINUTES} minutes.\n\n${link}\n`,
+          ...magicLinkEmail(link, MAGIC_TTL_MINUTES),
         }),
         signal: AbortSignal.timeout(10_000),
       });
