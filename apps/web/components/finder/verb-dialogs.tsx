@@ -620,7 +620,7 @@ export function ServicesDialog(props: { folders: Folder[]; onCancel: () => void 
       .catch(() => {
         if (!live) return;
         setKeys([]);
-        setError("Could not read the list of services.");
+        setError("Could not read the list of API keys.");
       });
     return () => { live = false; };
   }, []);
@@ -697,13 +697,13 @@ export function ServicesDialog(props: { folders: Folder[]; onCancel: () => void 
       onClose={props.onCancel}
       busy={busy !== null}
       width="34rem"
-      title="Services and assistants"
-      description="Keys you have approved for other services. Each carries only the access you chose, and you can take any of them back at any time."
+      title="API keys"
+      description="Keys you have approved for services and assistants. Each carries only the access you chose, and you can take any of them back at any time."
       actions={
         <>
           <button type="button" className="gf-button-secondary" onClick={props.onCancel} disabled={busy !== null}>Done</button>
           {!adding && !fresh && (
-            <button type="button" className="gf-button-primary" onClick={() => setAdding(true)} disabled={busy !== null}>Add a service</button>
+            <button type="button" className="gf-button-primary" onClick={() => setAdding(true)} disabled={busy !== null}>Create a key</button>
           )}
         </>
       }
@@ -766,7 +766,7 @@ export function ServicesDialog(props: { folders: Folder[]; onCancel: () => void 
 
       {keys === null && <p className="gf-faint mt-4 text-[13px]">Reading…</p>}
       {keys !== null && keys.length === 0 && !adding && !fresh && (
-        <p className="gf-faint mt-4 text-[13px]">No services have access to this account. Add one when a service or a hosted assistant needs to work with your folders.</p>
+        <p className="gf-faint mt-4 text-[13px]">No API keys have access to this account yet. Create one when a service or a hosted assistant needs to work with your folders.</p>
       )}
       {keys && keys.length > 0 && (
         <ul className="mt-4 divide-y divide-[var(--gf-line)]">

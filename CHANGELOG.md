@@ -6,6 +6,9 @@ tag that the published packages and images are built from.
 
 ## [Unreleased]
 
+- The dashboard's key list is called **API keys** (it was "Services and
+  assistants"), and its create button says what it does.
+
 ## [0.2.0] - 2026-09-17
 
 - Scoped access keys for services and hosted assistants: five access kinds,

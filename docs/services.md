@@ -31,8 +31,7 @@ at any moment.
 
 ## Approve a service
 
-From the dashboard, open your account menu and choose **Services and
-assistants**. Name the service, tick the access it needs, choose one folder or
+From the dashboard, open your account menu and choose **API keys**. Name the service, tick the access it needs, choose one folder or
 all of them, and GoodFolder shows the key once. Copy it then — it is never
 shown again.
 

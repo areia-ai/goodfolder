@@ -171,7 +171,7 @@ export function Sidebar({
           items={[
             { id: "plan", label: "Plan and storage", onSelect: onManagePlan },
             { id: "devices", label: "Approved computers", onSelect: onManageDevices },
-            { id: "services", label: "Services and assistants", onSelect: onManageServices },
+            { id: "services", label: "API keys", onSelect: onManageServices },
             { id: "webhooks", label: "Event destinations", onSelect: onManageWebhooks },
             { id: "challenge", label: "Redeem challenge code", onSelect: onRedeemChallenge },
             { id: "out", label: "Sign out", onSelect: onSignOut, dividerBefore: true },

@@ -51,13 +51,13 @@ test("services dialog: create, approve, audit, revoke", async ({ page, context, 
   /* ------------------------------------------------ the dialog and a key */
 
   await accountMenu.click();
-  await page.getByRole("menuitem", { name: "Services and assistants" }).click();
+  await page.getByRole("menuitem", { name: "API keys" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "Services and assistants" })).toBeVisible();
-  await expect(dialog.getByText("No services have access to this account.")).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "API keys" })).toBeVisible();
+  await expect(dialog.getByText("No API keys have access to this account yet.")).toBeVisible();
   await shot("01-services-dialog-empty");
 
-  await dialog.getByRole("button", { name: "Add a service" }).click();
+  await dialog.getByRole("button", { name: "Create a key" }).click();
   await dialog.getByLabel("What is it called?").fill("Instinct");
   await dialog.getByLabel("See folders and their history").check();
   await dialog.getByLabel("Send changed files back to the folder").check();
@@ -117,7 +117,7 @@ test("services dialog: create, approve, audit, revoke", async ({ page, context, 
 
   await page.goto(`${WEB}/dashboard`);
   await page.getByRole("button", { name: `Account: ${EMAIL}` }).click();
-  await page.getByRole("menuitem", { name: "Services and assistants" }).click();
+  await page.getByRole("menuitem", { name: "API keys" }).click();
   const reopened = page.getByRole("dialog");
   const used = await listFolders(request, dashboardKey);
   expect(used.status).toBe(200);
