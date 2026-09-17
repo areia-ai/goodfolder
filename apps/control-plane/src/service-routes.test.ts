@@ -62,6 +62,30 @@ test("every path a service needs is published", () => {
   }
 });
 
+test("documented schemas carry the fields the routes actually return", () => {
+  const components = document.components as { schemas: Record<string, { properties?: Record<string, unknown> }> };
+  const projectFields = Object.keys(components.schemas.Project?.properties ?? {});
+  for (const field of ["contributorCount", "openProposalCount"]) {
+    assert.ok(projectFields.includes(field), `Project is missing ${field}`);
+  }
+  const saveFields = Object.keys(components.schemas.Save?.properties ?? {});
+  for (const field of ["labelSource", "collision", "changedPaths", "changedPathsTruncated"]) {
+    assert.ok(saveFields.includes(field), `Save is missing ${field}`);
+  }
+  const filesSchema = (paths["/api/projects/{id}/files"]!.get as { responses: Record<string, { content: Record<string, { schema: Record<string, unknown> }> }> })
+    .responses["200"]!.content["application/json"]!.schema as { properties: Record<string, { items?: { properties?: Record<string, unknown> } }> };
+  const fileFields = Object.keys(filesSchema.properties.files?.items?.properties ?? {});
+  for (const field of ["editable", "proposable"]) {
+    assert.ok(fileFields.includes(field), `files[] is missing ${field}`);
+  }
+});
+
+test("every route the Services page names is in the document", () => {
+  assert.ok(paths["/api/service-credentials/{credentialId}/usage"], "the activity route is missing");
+  const usage = paths["/api/service-credentials/{credentialId}/usage"]!.get as { responses: Record<string, unknown> };
+  assert.ok(usage.responses["200"]);
+});
+
 test("the security schemes name the five scopes and nothing invented", () => {
   const components = document.components as {
     securitySchemes: Record<string, { description?: string }>;

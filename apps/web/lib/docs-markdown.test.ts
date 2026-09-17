@@ -30,6 +30,24 @@ test("lists: unordered and ordered", () => {
   assert.match(html, /<ol><li>first<\/li><li>second<\/li><\/ol>/);
 });
 
+test("a wrapped list item keeps its continuation lines", () => {
+  const { html } = renderMarkdown(
+    "- **Tools.** A service connects over HTTP\n  at `/mcp`, using its key.\n- **Plain HTTP.** Everything else.\n  Wrapped too.",
+  );
+  assert.equal(
+    html,
+    "<ul><li><strong>Tools.</strong> A service connects over HTTP at <code>/mcp</code>, using its key.</li>" +
+      "<li><strong>Plain HTTP.</strong> Everything else. Wrapped too.</li></ul>",
+  );
+});
+
+test("a blank line or a new block ends a list item's continuation", () => {
+  const { html } = renderMarkdown("- one\n  still one\n\nparagraph\n\n- two");
+  assert.match(html, /<ul><li>one still one<\/li><\/ul>/);
+  assert.match(html, /<p>paragraph<\/p>/);
+  assert.match(html, /<ul><li>two<\/li><\/ul>/);
+});
+
 test("blockquotes and rules", () => {
   const { html } = renderMarkdown("> said this\n\n---");
   assert.match(html, /<blockquote><p>said this<\/p><\/blockquote>/);

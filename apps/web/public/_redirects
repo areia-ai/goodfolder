@@ -1,1 +1,8 @@
 /challenge /dashboard?demo=1 302
+
+# The service integration reference is not rendered on the site on purpose
+# (it names the engine for integrators; see AGENTS.md rule 10). The URL
+# people guess still lands somewhere useful.
+/docs/service-protocol https://github.com/areia-ai/goodfolder/blob/main/docs/service-protocol.md 302
+/docs/service-protocol/ https://github.com/areia-ai/goodfolder/blob/main/docs/service-protocol.md 302
+/docs/service-protocol.md https://github.com/areia-ai/goodfolder/blob/main/docs/service-protocol.md 302

@@ -31,6 +31,8 @@ const project = {
     lastSeq: { type: ["integer", "null"] },
     lastSaveAt: { type: ["string", "null"], format: "date-time" },
     role: { type: "string", enum: ["owner", "contributor"] },
+    contributorCount: { type: "integer" },
+    openProposalCount: { type: "integer" },
   },
 };
 
@@ -39,12 +41,16 @@ const save = {
   properties: {
     seq: { type: "integer" },
     label: { type: "string" },
+    labelSource: { type: "string", enum: ["user", "agent"] },
     createdAt: { type: "string", format: "date-time" },
     commitSha: { type: "string", description: "The id of the state this save recorded." },
+    collision: { type: ["string", "null"], description: "Set when two versions of the same file had to be reconciled." },
     addedCount: { type: "integer" },
     changedCount: { type: "integer" },
     removedCount: { type: "integer" },
     topPaths: { type: "array", items: { type: "string" } },
+    changedPaths: { type: "array", items: { type: "string" }, description: "Complete with ?paths=full, otherwise empty." },
+    changedPathsTruncated: { type: "boolean", description: "True when ?paths=full was cut off at 100 paths." },
     harness: { type: ["string", "null"], description: "The assistant that made it, when one did." },
     deviceName: { type: ["string", "null"] },
   },
@@ -238,7 +244,7 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
           tag: "Access keys",
           security: accountSecurity,
           responses: {
-            "200": jsonResponse("The keys.", {
+            "200": jsonResponse("The keys, and the scopes a new one may carry.", {
               type: "object",
               properties: {
                 credentials: {
@@ -250,9 +256,18 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
                       name: { type: "string" },
                       scopes: { type: "array", items: { type: "string" } },
                       projectId: { type: ["string", "null"], format: "uuid" },
+                      folderName: { type: ["string", "null"] },
+                      createdVia: { type: "string", enum: ["dashboard", "device"] },
                       createdAt: { type: "string", format: "date-time" },
                       lastUsedAt: { type: ["string", "null"], format: "date-time" },
                     },
+                  },
+                },
+                availableScopes: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: { scope: { type: "string" }, label: { type: "string" } },
                   },
                 },
               },
@@ -280,7 +295,14 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
           responses: {
             "200": jsonResponse("The key, shown once.", {
               type: "object",
-              properties: { id: { type: "string", format: "uuid" }, token: { type: "string" } },
+              properties: {
+                ok: { type: "boolean" },
+                id: { type: "string", format: "uuid" },
+                name: { type: "string" },
+                token: { type: "string" },
+                scopes: { type: "array", items: { type: "string" } },
+                projectId: { type: ["string", "null"], format: "uuid" },
+              },
             }),
             "400": jsonResponse("The name, scopes, or folder were refused.", error),
             "403": jsonResponse("An account approval is required.", error),
@@ -296,6 +318,46 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
           parameters: [{ name: "credentialId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
           responses: {
             "200": jsonResponse("Revoked.", { type: "object", properties: { ok: { type: "boolean" } } }),
+            "404": jsonResponse("No such key on this account.", error),
+          },
+        }),
+      },
+      "/api/service-credentials/{credentialId}/usage": {
+        get: operation({
+          summary: "Read a key's activity",
+          description:
+            "The audit trail of what one key did, newest first: the route, the scope it used, and the folder. " +
+            "This is the record the dashboard's \u201cWhat it did\u201d view reads.",
+          tag: "Access keys",
+          security: accountSecurity,
+          parameters: [{ name: "credentialId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+          responses: {
+            "200": jsonResponse("The key's name and its last 100 requests.", {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                events: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      at: { type: "string", format: "date-time" },
+                      detail: {
+                        type: "object",
+                        properties: {
+                          credentialId: { type: "string", format: "uuid" },
+                          accountId: { type: "string", format: "uuid" },
+                          scope: { type: "string" },
+                          projectId: { type: ["string", "null"], format: "uuid" },
+                          method: { type: "string" },
+                          path: { type: "string" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            }),
             "404": jsonResponse("No such key on this account.", error),
           },
         }),
@@ -463,6 +525,7 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
             "200": jsonResponse("The files.", {
               type: "object",
               properties: {
+                role: { type: "string", enum: ["owner", "contributor"] },
                 head: { type: ["string", "null"] },
                 files: {
                   type: "array",
@@ -472,6 +535,8 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
                       path: { type: "string" },
                       size: { type: "integer" },
                       sha: { type: "string" },
+                      editable: { type: "boolean", description: "May be typed into in the browser." },
+                      proposable: { type: "boolean", description: "May be the subject of a change proposal." },
                       previewable: { type: "boolean" },
                       previewKind: { type: ["string", "null"] },
                     },
@@ -500,9 +565,15 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
                 path: { type: "string" },
                 size: { type: "integer" },
                 sha: { type: "string" },
+                role: { type: "string", enum: ["owner", "contributor"] },
+                editable: { type: "boolean" },
+                proposable: { type: "boolean" },
+                previewable: { type: "boolean" },
+                previewKind: { type: ["string", "null"] },
+                mimeType: { type: "string" },
                 content: { type: "string" },
                 contentBase64: { type: "string" },
-                previewKind: { type: ["string", "null"] },
+                storedForDevice: { type: "boolean", description: "True when the bytes live on a connected computer." },
               },
             }),
             "404": jsonResponse("No such file.", error),
