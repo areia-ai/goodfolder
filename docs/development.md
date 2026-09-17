@@ -89,6 +89,15 @@ the regenerated `webmcp.schema.json` — a test fails when it drifts. After
 changing `.env.example`, `pnpm env:docs` fails until `docs/configuration.md`
 names the same variables.
 
+The dashboard's service surface has its own browser check, run by the
+`services-e2e` workflow and not by `pnpm test`:
+`E2E_POSTGRES_URL=postgres://user:pass@127.0.0.1:5432/postgres pnpm --filter @goodfolder/web e2e:services`
+(needs a Postgres that allows `CREATE DATABASE`, and Chromium via
+`pnpm --filter @goodfolder/web exec playwright install chromium`).
+`E2E_KEEP=1` keeps the scratch database and skips the drop,
+`E2E_DATABASE_URL` uses a database you already have instead of creating one,
+and `E2E_SKIP_WEB_BUILD=1` reuses an existing `apps/web/out`.
+
 Two rules to know before writing copy: user-facing text can never use
 version-control vocabulary (`pnpm vocab` enforces it), and migrations under
 `infra/migrations/` are applied to self-hosted installs in file-name order —

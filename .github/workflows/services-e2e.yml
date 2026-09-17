@@ -1,0 +1,93 @@
+# The dashboard's service-surface browser check, in its own workflow.
+#
+# Deliberately NOT part of `pnpm test` / ci.yml: it needs a Postgres, a
+# Chromium and a full dashboard build, and a flaky browser run must never
+# mask the unit results. It shows up as its own check on a PR.
+#
+# apps/web/e2e/run-services.mjs does the work: creates a scratch database on
+# the service below, applies infra/schema.sql, seeds an account and a folder,
+# starts the control plane, builds and serves the dashboard, drives the
+# dialog in Chromium, then drops the database. Screenshots of every state
+# land in apps/web/e2e/artifacts/ and are uploaded here when it fails.
+#
+# Run it locally with:
+#   E2E_POSTGRES_URL=postgres://goodfolder:goodfolder@127.0.0.1:5432/postgres \
+#     pnpm --filter @goodfolder/web e2e:services
+
+name: services-e2e
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "apps/control-plane/**"
+      - "packages/serverlib/**"
+      - "infra/migrations/**"
+      - ".github/workflows/services-e2e.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "apps/control-plane/**"
+      - "packages/serverlib/**"
+      - "infra/migrations/**"
+      - ".github/workflows/services-e2e.yml"
+  workflow_dispatch:
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: goodfolder
+          POSTGRES_PASSWORD: goodfolder
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U goodfolder"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Chromium
+        run: pnpm --filter @goodfolder/web exec playwright install --with-deps chromium
+
+      - name: Run the services browser check
+        env:
+          E2E_POSTGRES_URL: postgres://goodfolder:goodfolder@127.0.0.1:5432/postgres
+        run: pnpm --filter @goodfolder/web e2e:services
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: services-e2e-screenshots
+          path: apps/web/e2e/artifacts/
+          retention-days: 14
+          if-no-files-found: warn
