@@ -6,6 +6,8 @@ tag that the published packages and images are built from.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-17
+
 - Scoped access keys for services and hosted assistants: five access kinds,
   optional binding to one folder, revocable from the dashboard, with an
   activity record of every request a key made. Approvable through the
