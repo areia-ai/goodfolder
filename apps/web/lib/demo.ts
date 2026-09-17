@@ -1555,6 +1555,42 @@ const demoDevices = [
   { id: "demo-device-studio", name: "Studio desktop", approvedAt: "2026-09-01T15:40:00.000Z", lastUsedAt: "2026-09-06T18:02:00.000Z", thisOne: false },
 ];
 
+const demoServiceKeys: Array<{
+  id: string;
+  name: string;
+  scopes: string[];
+  projectId: string | null;
+  folderName: string | null;
+  createdVia: "dashboard" | "device";
+  createdAt: string;
+  lastUsedAt: string | null;
+}> = [
+  {
+    id: "demo-key-instinct",
+    name: "Instinct",
+    scopes: ["read:folders", "read:files"],
+    projectId: null,
+    folderName: null,
+    createdVia: "device",
+    createdAt: "2026-09-15T10:05:00.000Z",
+    lastUsedAt: "2026-09-17T08:40:00.000Z",
+  },
+];
+
+const demoWebhooks: Array<{
+  id: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  projectId: string | null;
+  folderName: string | null;
+  createdAt: string;
+  lastDeliveredAt: string | null;
+  lastFailedAt: string | null;
+  lastError: string | null;
+  pendingCount: number;
+}> = [];
+
 async function handle(pathname: string, search: URLSearchParams, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? "GET").toUpperCase();
   // An added file arrives as bytes, not as JSON. Everything else is JSON.
@@ -1576,6 +1612,81 @@ async function handle(pathname: string, search: URLSearchParams, init?: RequestI
     return json({ ok: true });
   }
   if (pathname === "/api/auth/logout-everywhere") return json({ ok: true });
+  if (pathname === "/api/service-credentials" && method === "GET") {
+    return json({
+      credentials: demoServiceKeys,
+      availableScopes: [
+        { scope: "read:folders", label: "See folders and their history" },
+        { scope: "read:files", label: "Read files" },
+        { scope: "write:proposals", label: "Prepare change proposals and comments" },
+        { scope: "git:read", label: "Copy a folder's contents to another computer" },
+        { scope: "git:write", label: "Send changed files back to the folder" },
+      ],
+    });
+  }
+  if (pathname === "/api/service-credentials" && method === "POST") {
+    const name = String(body.name ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (!name) return fail(422, "name", "Give the service a name.");
+    const id = `demo-key-${demoServiceKeys.length + 1}`;
+    demoServiceKeys.unshift({
+      id, name, scopes: Array.isArray(body.scopes) ? body.scopes.map(String) : [],
+      projectId: typeof body.projectId === "string" ? body.projectId : null,
+      folderName: null, createdVia: "dashboard", createdAt: new Date().toISOString(), lastUsedAt: null,
+    });
+    return json({ ok: true, id, name, token: `gfx_demo_${id}`, scopes: body.scopes, projectId: body.projectId ?? null });
+  }
+  if (pathname.startsWith("/api/service-credentials/") && method === "DELETE") {
+    const id = decodeURIComponent(pathname.split("/")[3] ?? "");
+    const index = demoServiceKeys.findIndex((key) => key.id === id);
+    if (index < 0) return fail(404, "not-found", "No such key on this account.");
+    demoServiceKeys.splice(index, 1);
+    return json({ ok: true });
+  }
+  if (pathname === "/api/webhooks" && method === "GET") {
+    return json({
+      webhooks: demoWebhooks,
+      events: [
+        { event: "save.created", label: "A save was recorded" },
+        { event: "save.requested", label: "A save was asked for (not sent yet)" },
+        { event: "proposal.created", label: "A change proposal was prepared" },
+        { event: "proposal.reviewed", label: "A change proposal was accepted or turned down" },
+      ],
+    });
+  }
+  if (pathname === "/api/webhooks" && method === "POST") {
+    const url = String(body.url ?? "").trim();
+    if (!url) return fail(422, "url", "Give the address to send events to.");
+    const id = `demo-webhook-${demoWebhooks.length + 1}`;
+    demoWebhooks.unshift({
+      id, url, events: Array.isArray(body.events) ? body.events.map(String) : [], active: true,
+      projectId: typeof body.projectId === "string" ? body.projectId : null, folderName: null,
+      createdAt: new Date().toISOString(), lastDeliveredAt: null, lastFailedAt: null, lastError: null, pendingCount: 0,
+    });
+    return json({ ok: true, id, secret: `gfwh_demo_${id}`, url, events: body.events, projectId: body.projectId ?? null });
+  }
+  if (pathname.startsWith("/api/webhooks/") && method === "PATCH") {
+    const id = decodeURIComponent(pathname.split("/")[3] ?? "");
+    const destination = demoWebhooks.find((item) => item.id === id);
+    if (!destination) return fail(404, "not-found", "No such destination on this account.");
+    if (typeof body.active === "boolean") destination.active = body.active;
+    if (typeof body.url === "string") destination.url = body.url;
+    if (Array.isArray(body.events)) destination.events = body.events.map(String);
+    return json({ ok: true, id });
+  }
+  if (pathname.startsWith("/api/webhooks/") && pathname.endsWith("/test") && method === "POST") {
+    const id = decodeURIComponent(pathname.split("/")[3] ?? "");
+    const destination = demoWebhooks.find((item) => item.id === id);
+    if (!destination) return fail(404, "not-found", "No such destination on this account.");
+    destination.pendingCount += 1;
+    return json({ ok: true, deliveryId: `demo-delivery-${Date.now()}` });
+  }
+  if (pathname.startsWith("/api/webhooks/") && method === "DELETE") {
+    const id = decodeURIComponent(pathname.split("/")[3] ?? "");
+    const index = demoWebhooks.findIndex((item) => item.id === id);
+    if (index < 0) return fail(404, "not-found", "No such destination on this account.");
+    demoWebhooks.splice(index, 1);
+    return json({ ok: true });
+  }
   if (pathname === "/api/projects" && method === "GET") {
     return json(folders().map((entry) => ({ ...entry.folder, openProposalCount: countOpen(entry) })));
   }

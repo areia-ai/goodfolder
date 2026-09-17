@@ -90,6 +90,42 @@ CREATE TABLE IF NOT EXISTS account_devices (
 );
 CREATE INDEX IF NOT EXISTS account_devices_account ON account_devices (account_id);
 
+-- ---------------------------------------------------------------------------
+-- Scoped service access (2026-09-17)
+--
+-- A third-party assistant (a hosted agent, a cloud runner, a service that
+-- keeps someone's folder up to date) gets its own revocable credential with
+-- a narrow scope list instead of an account device token. The credential is
+-- bound to one folder when the person approves it that way, otherwise it
+-- reaches every folder on the account but still only through the scopes it
+-- was granted. Saves it records are attributed to a device row created on
+-- first use, one per (credential, folder).
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS service_credentials (
+  id UUID PRIMARY KEY,
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  scopes TEXT[] NOT NULL DEFAULT '{}',
+  created_via TEXT NOT NULL DEFAULT 'dashboard'
+    CHECK (created_via IN ('dashboard', 'device')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_used_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS service_credentials_account ON service_credentials (account_id);
+CREATE INDEX IF NOT EXISTS service_credentials_project ON service_credentials (project_id);
+
+CREATE TABLE IF NOT EXISTS service_credential_devices (
+  credential_id UUID NOT NULL REFERENCES service_credentials(id) ON DELETE CASCADE,
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  device_id UUID NOT NULL REFERENCES devices(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (credential_id, project_id)
+);
+
 CREATE TABLE IF NOT EXISTS magic_links (
   token_hash TEXT PRIMARY KEY,     -- sha256 hex of the raw link token
   email TEXT NOT NULL,
@@ -113,6 +149,13 @@ CREATE TABLE IF NOT EXISTS pairing_requests (
   account_id UUID REFERENCES accounts(id),
   account_device_id UUID REFERENCES account_devices(id),
   delivery BYTEA,                  -- iv(12) || tag(16) || ciphertext
+  -- Set when a service asked to be approved instead of a computer: the scope
+  -- list it requested, the folder it asked to be bound to (NULL = every
+  -- folder on the account), and the credential minted on approval.
+  scopes TEXT[] NOT NULL DEFAULT '{}',
+  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+  credential_kind TEXT NOT NULL DEFAULT 'device',
+  created_credential_id UUID REFERENCES service_credentials(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL
 );
@@ -375,3 +418,46 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   name TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ---------------------------------------------------------------------------
+-- Outbound webhooks (2026-09-17)
+--
+-- An endpoint belongs to the account, and carries a folder when it should
+-- only hear about that one folder. project_id NULL means every folder on
+-- the account.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS webhook_endpoints (
+  id UUID PRIMARY KEY,
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  secret TEXT NOT NULL,
+  events TEXT[] NOT NULL DEFAULT '{}',
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_delivered_at TIMESTAMPTZ,
+  last_failed_at TIMESTAMPTZ,
+  last_error TEXT
+);
+CREATE INDEX IF NOT EXISTS webhook_endpoints_account ON webhook_endpoints (account_id);
+CREATE INDEX IF NOT EXISTS webhook_endpoints_project ON webhook_endpoints (project_id);
+
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+  id UUID PRIMARY KEY,
+  endpoint_id UUID NOT NULL REFERENCES webhook_endpoints(id) ON DELETE CASCADE,
+  event TEXT NOT NULL,
+  project_id UUID,
+  payload JSONB NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'delivered', 'failed')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  response_status INTEGER,
+  error TEXT,
+  next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  delivered_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS webhook_deliveries_due ON webhook_deliveries (status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS webhook_deliveries_endpoint ON webhook_deliveries (endpoint_id, created_at DESC);

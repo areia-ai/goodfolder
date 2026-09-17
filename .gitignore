@@ -46,3 +46,7 @@ docker-compose.override.yml
 out/
 *.tsbuildinfo
 apps/web/public/docs/
+
+# Browser-check artifacts (screenshots, logs, traces).
+apps/web/e2e/artifacts/
+apps/web/e2e/.tmp/
