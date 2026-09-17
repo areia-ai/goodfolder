@@ -42,6 +42,12 @@ const EXCLUDED = [
   // Deliberately not rendered on the site: it names the engine for
   // contributors, and AGENTS.md rule 10 reserves that for for-engineers.tsx.
   "docs/development.md",
+  // The raw protocol reference for third-party integrators: `site: false`,
+  // not rendered, and it exists precisely to spell out the transport paths
+  // and header names an integration must use. Same side of the wall as
+  // development.md; the rendered page that points at it (docs/services.md)
+  // stays in the gate.
+  "docs/service-protocol.md",
 ];
 
 // The wall between the engine and the person. Word-bounded, case-insensitive.
@@ -73,11 +79,34 @@ const BANNED = [
 // every other banned word in the same string, which is how "checkpoint" sat
 // in the CLI's own help text under an entry about `clone`. Omitting `terms`
 // still excuses the whole string, for the two entries that genuinely need it.
+//
+// API_TERMS below are the literals that appear on user-facing surfaces as
+// part of the published contract — the access-key scopes a service types
+// verbatim, shown in the dashboard, the approval page, /openapi.json and
+// docs/services.md. Only the two that contain a banned word need the
+// exception; the other three pass on their own.
+const API_TERMS = ["read:folders", "read:files", "write:proposals", "git:read", "git:write"];
+
+/** A string with every exempt literal blanked out. */
+function withoutApiTerms(text) {
+  return API_TERMS.reduce((rest, term) => rest.split(term).join(" "), text);
+}
+
 const ALLOWED = [
   {
     why: "`goodfolder clone` keeps its name — decided 2026-08-31, not a pending follow-up. The word reads to the people who use this as the one GitHub already taught them, and it names a real command that has to be typed exactly. It stays excused wherever the literal command is written, including in the dashboard.",
     terms: ["clone"],
     matches: (s) => s.includes("goodfolder clone"),
+  },
+  {
+    why:
+      "The access-key scopes (2026-09-17) are legitimate API terms, not prose: a third-party service types them " +
+      "verbatim, and the dashboard, the approval page, /openapi.json and docs/services.md all show them. The two " +
+      "that contain a banned word — `git:read` and `git:write` — are exempted here, and ONLY as those exact " +
+      "literals: the matcher blanks them out first, so a bare use of the word anywhere else in the same string " +
+      "is still a leak. Renaming them would make the published contract lie.",
+    terms: ["git"],
+    matches: (s) => !findBanned(withoutApiTerms(s)).length,
   },
   {
     why: "Control-plane pairing/sign-in pages embed working scripts (fetch, content-type); the visible COPY inside them is hand-audited.",

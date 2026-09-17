@@ -28,6 +28,10 @@ import {
   RepositoryAdapter,
   resolveAuthContext,
   resolveScope,
+  ensureServiceDevice,
+  parseServiceScopes,
+  SERVICE_SCOPES,
+  SERVICE_SCOPE_LABELS,
   GetObjectCommand,
   PutObjectCommand,
   loadBillingConfig,
@@ -36,6 +40,7 @@ import {
   isPlanCode,
   PLANS,
   type AuthContext,
+  type ServiceScope,
   type TokenScope,
 } from "@goodfolder/serverlib";
 import { HostedBilling } from "./hosted-billing.ts";
@@ -46,6 +51,28 @@ import { checkWrite, filesUnder } from "./write-gate.ts";
 import { transportRoute } from "./transport.ts";
 import { formulaRefusal } from "./formula.ts";
 import { acceptStagedFile, forgetStagedFile, hashFile, putStoredFileFromPath, stagingKey } from "./stored-file.ts";
+import { parseCookies, SESSION_COOKIE, makePrincipals } from "./principals.ts";
+import {
+  applyRevert,
+  loadSave,
+  loadTimeline,
+  previewRevert,
+  recordRemoteSave,
+  runnerRun,
+  type RemoteDeps,
+} from "./remote.ts";
+import {
+  WEBHOOK_EVENTS,
+  WEBHOOK_EVENT_LABELS,
+  deliverDueWebhooks,
+  emitWebhookEvent,
+  newWebhookSecret,
+  parseWebhookEvents,
+  queueTestDelivery,
+  webhookUrlAllowed,
+} from "./webhooks.ts";
+import { openApiDocument } from "./openapi.ts";
+import { handleMcpRequest, type McpServices } from "./mcp-server.ts";
 import {
   TABLE_EDIT_CAP,
 } from "./table.ts";
@@ -192,14 +219,16 @@ function clientIp(headers: Headers): string {
 //     now minted THROUGH an approved account instead of dev bootstrap. Git,
 //     LFS, and saves keep resolving them exactly as before.
 //
+// Third-party services (2026-09-17) get a third shape: a scoped credential
+// approved through the same ceremony or issued from the dashboard. It never
+// counts as an account, and it never resolves to a folder's own credential.
+//
 // Registration order matters: everything in this section is registered BEFORE
 // the bearer middleware below, so Hono never wraps these routes with it.
 // Browser-session routes use the gf_session cookie instead of a bearer.
 // ---------------------------------------------------------------------------
 
-function sha256(v: string): string {
-  return createHash("sha256").update(v).digest("hex");
-}
+const { sha256, sessionAccount, accountFrom, externalCaller } = makePrincipals(sql);
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -220,20 +249,9 @@ function rateLimit(name: string, key: string, max: number, windowMs: number): bo
   return true;
 }
 
-const SESSION_COOKIE = "gf_session";
 const SESSION_TTL_SECONDS = 30 * 86400;
 const MAGIC_TTL_MINUTES = 15;
 const PAIRING_TTL_MINUTES = 15;
-
-function parseCookies(header: string | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!header) return out;
-  for (const part of header.split(";")) {
-    const i = part.indexOf("=");
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
-  }
-  return out;
-}
 
 function sessionCookie(value: string): string {
   return `${SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`;
@@ -241,20 +259,6 @@ function sessionCookie(value: string): string {
 
 function clearedSessionCookie(): string {
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
-}
-
-async function sessionAccount(
-  c: { req: { header: (n: string) => string | undefined } },
-): Promise<{ accountId: string; email: string } | null> {
-  const v = parseCookies(c.req.header("cookie"))[SESSION_COOKIE];
-  if (!v || v.length < 20 || !/^[A-Za-z0-9_-]+$/.test(v)) return null;
-  const rows = await sql`
-    SELECT s.account_id AS "accountId", a.email
-    FROM sessions s JOIN accounts a ON a.id = s.account_id
-    WHERE s.token_hash = ${sha256(v)} AND s.expires_at > now()
-    LIMIT 1`;
-  const r = rows[0];
-  return r ? { accountId: String(r.accountId), email: String(r.email) } : null;
 }
 
 async function createSession(accountId: string): Promise<string> {
@@ -408,6 +412,8 @@ function page(title: string, bodyHtml: string): string {
   .ok, .err { margin-top:14px; border-left:3px solid; border-radius:8px; padding:9px 11px; text-align:left; }
   .ok { border-color:#000000; background:rgba(0,0,0,.04); color:#000000; }
   .err { border-color:#3B82F6; border-left-style:dashed; background:rgba(59,130,246,.08); color:#000000; font-weight:650; }
+  ul.scopes { text-align:left; margin:10px 0 0; padding-left:20px; color:rgba(0,0,0,.72); font-size:14px; line-height:1.55; }
+  ul.scopes strong { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; }
 </style>
 </head>
 <body><div class="card"><div class="brand" role="img" aria-label="GoodFolder">${INLINE_BRAND_MARK}${INLINE_BRAND_WORDMARK}</div>${bodyHtml}</div></body>
@@ -456,7 +462,8 @@ app.get("/pair/:code", async (c) => {
 <p>Start again from the app or terminal that asked to connect.</p>`));
   }
   const rows = await sql`
-    SELECT device_name AS "deviceName", status, expires_at
+    SELECT device_name AS "deviceName", status, expires_at, scopes,
+           project_id AS "projectId", credential_kind AS "credentialKind"
     FROM pairing_requests WHERE code = ${code} LIMIT 1`;
   const pr = rows[0];
   if (
@@ -475,16 +482,43 @@ Start again from the app that asked to connect.</p>`));
   // stranger has no terminal showing it, which is their cue to stop.
   const check = code.slice(0, 6).toUpperCase();
 
+  // A service asking for scoped access: the approval page says exactly what
+  // it is asking to reach, in the words of the scope list — never a bare
+  // "approve" a person has to take on faith.
+  const serviceRequest = String(pr.credentialKind) === "service";
+  const requestedScopes = parseServiceScopes(pr.scopes) ?? [];
+  let boundFolderName: string | null = null;
+  if (serviceRequest && pr.projectId) {
+    const folder = await sql`SELECT name FROM projects WHERE id = ${String(pr.projectId)} LIMIT 1`;
+    boundFolderName = folder[0]?.name ? String(folder[0].name) : null;
+  }
+  const scopeList = requestedScopes
+    .map((scope) => {
+      const label = SERVICE_SCOPE_LABELS.find((entry) => entry.scope === scope)?.label ?? scope;
+      return `<li><strong>${escapeHtml(scope)}</strong> — ${escapeHtml(label)}</li>`;
+    })
+    .join("");
+  const scopeBlock = serviceRequest
+    ? `<p>It is asking for <strong>${requestedScopes.length}</strong> kind${requestedScopes.length === 1 ? "" : "s"} of access${
+        boundFolderName
+          ? `, only to the folder “${escapeHtml(boundFolderName)}”`
+          : ", across every folder on your account"
+      }:</p><ul class="scopes">${scopeList}</ul>`
+    : "";
+  const computerSentence = serviceRequest
+    ? ""
+    : `<p>It will be able to save, sync, and open folders on your GoodFolder account
+<strong>${escapeHtml(session?.email ?? "")}</strong>.</p>`;
+
   if (session) {
     return c.html(
       page(
-        "Approve this computer",
+        serviceRequest ? "Approve this service" : "Approve this computer",
         `<h1>Approve “${device}”?</h1>
-<p>It will be able to save, sync, and open folders on your GoodFolder account
-<strong>${escapeHtml(session.email)}</strong>.</p>
+${computerSentence}${scopeBlock}
 <p class="ok">Your terminal shows the code <strong>${check}</strong>. If it doesn't — or you
-didn't just run GoodFolder on a computer — close this page instead of approving.</p>
-<button id="approve">Approve this computer</button>
+didn't just run GoodFolder anywhere — close this page instead of approving.</p>
+<button id="approve">${serviceRequest ? "Approve this service" : "Approve this computer"}</button>
 <p id="msg"></p>
 <script>
 (function () {
@@ -519,8 +553,9 @@ didn't just run GoodFolder on a computer — close this page instead of approvin
 
   return c.html(
     page(
-      "Connect a computer",
-      `<h1>Connect “${device}”?</h1>
+      serviceRequest ? "Approve a service" : "Connect a computer",
+      `<h1>${serviceRequest ? "Approve" : "Connect"} “${device}”?</h1>
+${scopeBlock}
 <p>First sign in with your email — we'll send you a one-time link.</p>
 <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
 <button id="sendlink">Email me a sign-in link</button>
@@ -647,11 +682,40 @@ app.post("/api/auth/magic-consume", async (c) => {
 });
 
 app.post("/api/pair/start", async (c) => {
-  const b = await c.req.json<{ deviceName?: string }>().catch(() => ({}) as { deviceName?: string });
+  const b = await c.req
+    .json<{ deviceName?: string; scopes?: unknown; projectId?: unknown }>()
+    .catch(() => ({}) as { deviceName?: string; scopes?: unknown; projectId?: unknown });
   const deviceName =
     typeof b.deviceName === "string" ? b.deviceName.replace(/\s+/g, " ").trim().slice(0, 60) : "";
   if (!deviceName) {
     return c.json({ error: { code: "name", message: "device name required" } }, 400);
+  }
+  // A request that names scopes is asking for a scoped service key through
+  // the same ceremony a computer uses; without them it asks for an account
+  // approval exactly as before.
+  const serviceRequest = b.scopes !== undefined;
+  let scopes: ServiceScope[] = [];
+  let projectId: string | null = null;
+  if (serviceRequest) {
+    const parsed = parseServiceScopes(b.scopes);
+    if (!parsed) {
+      return c.json(
+        {
+          error: {
+            code: "scopes",
+            message: `Choose one or more of: ${SERVICE_SCOPES.join(", ")}.`,
+          },
+        },
+        400,
+      );
+    }
+    scopes = parsed;
+    if (b.projectId !== undefined && b.projectId !== null) {
+      if (typeof b.projectId !== "string" || !/^[0-9a-f-]{36}$/i.test(b.projectId)) {
+        return c.json({ error: { code: "folder", message: "invalid folder" } }, 400);
+      }
+      projectId = b.projectId;
+    }
   }
   if (!rateLimit("pair-ip", clientIp(c.req.raw.headers), 10, 3_600_000)) {
     return c.json({ error: { code: "rate", message: "too many requests — try again later" } }, 429);
@@ -659,11 +723,16 @@ app.post("/api/pair/start", async (c) => {
 
   const code = randomBytes(16).toString("hex");
   await sql`
-    INSERT INTO pairing_requests (code, device_name, expires_at)
-    VALUES (${code}, ${deviceName}, now() + (${PAIRING_TTL_MINUTES} || ' minutes')::interval)`;
+    INSERT INTO pairing_requests (code, device_name, expires_at, scopes, project_id, credential_kind)
+    VALUES (${code}, ${deviceName}, now() + (${PAIRING_TTL_MINUTES} || ' minutes')::interval,
+            ${scopes}, ${projectId}, ${serviceRequest ? "service" : "device"})`;
   await sql`
     INSERT INTO audit_log (actor, action, detail)
-    VALUES (${deviceName}, 'pair.start', ${sql.json({})})`;
+    VALUES (${deviceName}, 'pair.start', ${sql.json({
+      kind: serviceRequest ? "service" : "device",
+      scopes,
+      projectId,
+    })})`;
 
   return c.json({ code, url: `${PUBLIC_BASE}/pair/${code}` });
 });
@@ -714,7 +783,8 @@ app.post("/api/pair/:code/approve", async (c) => {
     return c.json({ error: { code: "code", message: "invalid approval link" } }, 404);
   }
   const rows = await sql`
-    SELECT device_name AS "deviceName", status, expires_at
+    SELECT device_name AS "deviceName", status, expires_at, scopes,
+           project_id AS "projectId", credential_kind AS "credentialKind"
     FROM pairing_requests WHERE code = ${code} LIMIT 1`;
   const pr = rows[0];
   if (
@@ -726,6 +796,54 @@ app.post("/api/pair/:code/approve", async (c) => {
       { error: { code: "expired", message: "This approval request has expired." } },
       410,
     );
+  }
+
+  // A service approval mints a scoped key — never an account device. The
+  // folder it asked to be bound to (if any) must be one this account can
+  // actually reach, and a key that includes transport scopes must name a
+  // folder the account owns outright.
+  if (String(pr.credentialKind) === "service") {
+    const scopes = parseServiceScopes(pr.scopes) ?? [];
+    const projectId = pr.projectId ? String(pr.projectId) : null;
+    if (scopes.length === 0) {
+      return c.json({ error: { code: "scopes", message: "No access kinds were requested." } }, 400);
+    }
+    if (projectId) {
+      const role = await projectAccess(projectId, session.accountId);
+      if (!role) {
+        return c.json({ error: { code: "folder", message: "That folder is not on this account." } }, 403);
+      }
+      const wantsTransport = scopes.includes("git:read") || scopes.includes("git:write");
+      if (wantsTransport && role !== "owner") {
+        return c.json(
+          { error: { code: "owner-only", message: "Only the folder's owner can hand out access that copies its files." } },
+          403,
+        );
+      }
+    }
+    const tok = newUrlToken("gfx");
+    const credentialId = crypto.randomUUID();
+    const sealed = sealDelivery(code, tok.raw);
+    await sql.begin(async (tx) => {
+      await tx`
+        INSERT INTO service_credentials (id, account_id, project_id, name, token_hash, scopes, created_via)
+        VALUES (${credentialId}, ${session.accountId}, ${projectId}, ${String(pr.deviceName)},
+                ${tok.hash}, ${scopes}, 'device')`;
+      await tx`
+        UPDATE pairing_requests
+        SET status = 'approved', account_id = ${session.accountId},
+            created_credential_id = ${credentialId}, delivery = ${sealed}
+        WHERE code = ${code}`;
+    });
+    await sql`
+      INSERT INTO audit_log (actor, action, detail)
+      VALUES (${session.email}, 'service.approved', ${sql.json({
+        name: String(pr.deviceName),
+        credentialId,
+        scopes,
+        projectId,
+      })})`;
+    return c.json({ ok: true, kind: "service" });
   }
 
   const dev = newUrlToken("gfa");
@@ -792,24 +910,10 @@ app.get("/account", async (c) => {
 // account: an approved device's bearer token (CLI, agents) OR the browser
 // session cookie (dashboard, site tools). Registered above the bearer
 // middleware because the browser never sends a bearer.
+//
+// `accountFrom` refuses scoped service credentials on purpose: nothing below
+// can be reached by a key a third party holds.
 // ---------------------------------------------------------------------------
-
-async function accountFrom(c: {
-  req: { header: (n: string) => string | undefined };
-}): Promise<
-  | { kind: "account"; accountId: string; email: string; accountDeviceId: string }
-  | null
-> {
-  const raw = tokenFromAuthHeader(c.req.header("Authorization"));
-  if (raw) {
-    const ctx = await resolveAuthContext(sql, raw);
-    if (ctx && ctx.kind === "account") return ctx;
-    return null;
-  }
-  const session = await sessionAccount(c);
-  if (!session) return null;
-  return { kind: "account", accountId: session.accountId, email: session.email, accountDeviceId: "session" };
-}
 
 /**
  * How long a folder token lives. The folder renews it on its own before it
@@ -1022,10 +1126,13 @@ app.post("/api/billing/webhook", async (c) => {
 
 /** List the account's folders, newest first. */
 app.get("/api/projects", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "read:folders");
   if (!acct) {
     return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   }
+  // A key bound to one folder sees that folder and nothing else — the list
+  // route is not a way around the binding.
+  const bound = acct.kind === "service" ? acct.boundProjectId : null;
   const rows = await sql`
     SELECT p.id, p.name,
            p.created_at::text AS "createdAt",
@@ -1036,7 +1143,8 @@ app.get("/api/projects", async (c) => {
            (SELECT COUNT(*)::int FROM change_proposals cp WHERE cp.project_id = p.id AND cp.status IN ('open','needs-review')) AS "openProposalCount"
     FROM projects p
     LEFT JOIN project_members mine ON mine.project_id = p.id AND mine.account_id = ${acct.accountId}
-    WHERE p.account_id = ${acct.accountId} OR mine.account_id = ${acct.accountId}
+    WHERE (p.account_id = ${acct.accountId} OR mine.account_id = ${acct.accountId})
+      AND (${bound}::uuid IS NULL OR p.id = ${bound}::uuid)
     ORDER BY p.created_at DESC LIMIT 200`;
   return c.json(rows);
 });
@@ -1064,6 +1172,11 @@ app.post("/api/workspace-proposals", async (c) => {
   const id = crypto.randomUUID();
   await sql`INSERT INTO workspace_proposals (id, account_id, author_account_id, name, explanation)
             VALUES (${id}, ${acct.accountId}, ${acct.accountId}, ${name}, ${explanation})`;
+  void emitWebhookEvent(sql, {
+    accountId: acct.accountId,
+    event: "proposal.created",
+    data: { proposalId: id, scope: "workspace", name, author: acct.email },
+  }).catch(() => {});
   return c.json({ ok: true, proposalId: id });
 });
 
@@ -1093,6 +1206,11 @@ app.post("/api/workspace-proposals/:id/review", async (c) => {
     return { ...current, status: "accepted" as const };
   });
   if (!proposal) return c.json({ error: { code: "not-found", message: "Workspace proposal not found." } }, 404);
+  void emitWebhookEvent(sql, {
+    accountId: acct.accountId,
+    event: "proposal.reviewed",
+    data: { proposalId: proposal.id, scope: "workspace", action: body.action, reviewer: acct.email },
+  }).catch(() => {});
   if (proposal.status !== "accepted") return c.json({ ok: true, status: proposal.status });
   await repos.ensureRepo(projectId);
   await sql`INSERT INTO audit_log (actor, action, detail) VALUES (${acct.email}, 'workspace-proposal.accept', ${sql.json({ proposalId: proposal.id, projectId, name: proposal.name })})`;
@@ -1100,9 +1218,50 @@ app.post("/api/workspace-proposals/:id/review", async (c) => {
 });
 
 /**
- * Create a folder on an approved account: project + transport device +
- * folder token in one transaction. The replacement for dev bootstrap.
+ * Create a folder on an approved account. Shared by the dashboard route and
+ * the hosted tool surface so both produce the same rows.
  */
+async function createFolderFor(
+  acct: { accountId: string; email: string },
+  input: { name: string; deviceName: string },
+): Promise<{ projectId: string; deviceId: string; token: string; expiresAt: string }> {
+  const projectId = crypto.randomUUID();
+  const deviceId = crypto.randomUUID();
+  const tok = await sql.begin(async (tx) => {
+    await tx`
+      INSERT INTO projects (id, account_id, name)
+      VALUES (${projectId}, ${acct.accountId}, ${input.name})`;
+    await tx`
+      INSERT INTO devices (id, project_id, name, kind)
+      VALUES (${deviceId}, ${projectId}, ${input.deviceName}, 'user')`;
+    return mintFolderToken(tx as unknown as typeof sql, deviceId);
+  });
+  await repos.ensureRepo(projectId);
+  await sql`
+    INSERT INTO audit_log (actor, action, detail)
+    VALUES (${acct.email}, 'project.create', ${sql.json({ projectId, name: input.name, deviceName: input.deviceName })})`;
+  return { projectId, deviceId, token: tok.raw, expiresAt: tok.expiresAt };
+}
+
+/** Rename a folder only when its owner asks. Shared with the hosted tools. */
+async function renameFolderFor(
+  acct: { accountId: string; email: string },
+  projectId: string,
+  name: string,
+): Promise<{ ok: true } | { error: string }> {
+  if (await projectAccess(projectId, acct.accountId) !== "owner") {
+    return { error: "Only the folder owner can rename it." };
+  }
+  if (name.length === 0 || name.trim().length === 0 || name.length > 80) {
+    return { error: "Folder names must contain text and be 80 characters or fewer." };
+  }
+  await sql`UPDATE projects SET name = ${name} WHERE id = ${projectId}`;
+  await sql`
+    INSERT INTO audit_log (actor, action, detail)
+    VALUES (${acct.email}, 'project.rename', ${sql.json({ projectId, name })})`;
+  return { ok: true };
+}
+
 app.post("/api/projects", async (c) => {
   const acct = await accountFrom(c);
   if (!acct) {
@@ -1125,24 +1284,8 @@ app.post("/api/projects", async (c) => {
       ? b.deviceName.replace(/\s+/g, " ").trim().slice(0, 60) || "This device"
       : "This device";
 
-  const projectId = crypto.randomUUID();
-  const deviceId = crypto.randomUUID();
-  const tok = await sql.begin(async (tx) => {
-    await tx`
-      INSERT INTO projects (id, account_id, name)
-      VALUES (${projectId}, ${acct.accountId}, ${name})`;
-    await tx`
-      INSERT INTO devices (id, project_id, name, kind)
-      VALUES (${deviceId}, ${projectId}, ${deviceName}, 'user')`;
-    return mintFolderToken(tx as unknown as typeof sql, deviceId);
-  });
-
-  const repo = await repos.ensureRepo(projectId);
-  await sql`
-    INSERT INTO audit_log (actor, action, detail)
-    VALUES (${acct.email}, 'project.create', ${sql.json({ projectId, name, repo })})`;
-
-  return c.json({ projectId, deviceId, token: tok.raw, expiresAt: tok.expiresAt, repo });
+  const created = await createFolderFor(acct, { name, deviceName });
+  return c.json({ projectId: created.projectId, deviceId: created.deviceId, token: created.token, expiresAt: created.expiresAt });
 });
 
 /** Rename a folder only when its owner explicitly asks to. */
@@ -1152,18 +1295,13 @@ app.patch("/api/projects/:id", async (c) => {
     return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   }
   const projectId = c.req.param("id");
-  if (await projectAccess(projectId, acct.accountId) !== "owner") {
-    return c.json({ error: { code: "owner-only", message: "Only the folder owner can rename it." } }, 403);
-  }
   const body = await c.req.json<{ name?: unknown }>().catch(() => ({} as { name?: unknown }));
   const name = typeof body.name === "string" ? body.name : "";
-  if (name.length === 0 || name.trim().length === 0 || name.length > 80) {
-    return c.json({ error: { code: "name", message: "Folder names must contain text and be 80 characters or fewer." } }, 400);
+  const renamed = await renameFolderFor(acct, projectId, name);
+  if ("error" in renamed) {
+    const ownerOnly = renamed.error === "Only the folder owner can rename it.";
+    return c.json({ error: { code: ownerOnly ? "owner-only" : "name", message: renamed.error } }, ownerOnly ? 403 : 400);
   }
-  await sql`UPDATE projects SET name = ${name} WHERE id = ${projectId}`;
-  await sql`
-    INSERT INTO audit_log (actor, action, detail)
-    VALUES (${acct.email}, 'project.rename', ${sql.json({ projectId, name })})`;
   return c.json({ ok: true, projectId, name });
 });
 
@@ -1226,9 +1364,118 @@ app.post("/api/projects/:id/token", async (c) => {
   return c.json({ projectId, token: tok.raw, expiresAt: tok.expiresAt });
 });
 
+// ---------------------------------------------------------------------------
+// Scoped access keys for services (2026-09-17).
+//
+// Two ways to get one: the approval ceremony a computer already uses (send
+// scopes to /api/pair/start), or from a signed-in session right here. Both
+// produce the same row, which carries only the scopes a person saw and
+// approved and — when it names one — a single folder.
+// ---------------------------------------------------------------------------
+
+const SERVICE_KEY_NAME_MAX = 60;
+
+app.get("/api/service-credentials", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const rows = await sql`
+    SELECT sc.id, sc.name, sc.scopes, sc.project_id AS "projectId", sc.created_via AS "createdVia",
+           sc.created_at::text AS "createdAt", sc.last_used_at::text AS "lastUsedAt",
+           p.name AS "folderName"
+    FROM service_credentials sc
+    LEFT JOIN projects p ON p.id = sc.project_id
+    WHERE sc.account_id = ${acct.accountId} AND sc.revoked_at IS NULL
+    ORDER BY sc.created_at DESC LIMIT 200`;
+  return c.json({
+    credentials: rows,
+    availableScopes: SERVICE_SCOPE_LABELS.map(({ scope, label }) => ({ scope, label })),
+  });
+});
+
+app.post("/api/service-credentials", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const body = await c.req
+    .json<{ name?: unknown; scopes?: unknown; projectId?: unknown }>()
+    .catch(() => ({}) as { name?: unknown; scopes?: unknown; projectId?: unknown });
+  const name = typeof body.name === "string" ? body.name.replace(/\s+/g, " ").trim().slice(0, SERVICE_KEY_NAME_MAX) : "";
+  if (!name) return c.json({ error: { code: "name", message: "Give the service a name." } }, 400);
+  const scopes = parseServiceScopes(body.scopes);
+  if (!scopes) {
+    return c.json(
+      { error: { code: "scopes", message: `Choose one or more of: ${SERVICE_SCOPES.join(", ")}.` } },
+      400,
+    );
+  }
+  let projectId: string | null = null;
+  if (body.projectId !== undefined && body.projectId !== null) {
+    if (typeof body.projectId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.projectId)) {
+      return c.json({ error: { code: "folder", message: "invalid folder" } }, 400);
+    }
+    const role = await projectAccess(body.projectId, acct.accountId);
+    if (!role) return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
+    if ((scopes.includes("git:read") || scopes.includes("git:write")) && role !== "owner") {
+      return c.json(
+        { error: { code: "owner-only", message: "Only the folder's owner can hand out access that copies its files." } },
+        403,
+      );
+    }
+    projectId = body.projectId;
+  }
+  // A key that may change a folder needs an account that may change folders.
+  if (scopes.includes("git:write")) {
+    const denied = await writeAccessError(acct.accountId);
+    if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
+  }
+  if (!rateLimit("service-key", acct.accountId, 60, 3_600_000)) {
+    return c.json({ error: { code: "rate", message: "Too many keys created in a short time — try again later." } }, 429);
+  }
+  const tok = newUrlToken("gfx");
+  const credentialId = crypto.randomUUID();
+  await sql`
+    INSERT INTO service_credentials (id, account_id, project_id, name, token_hash, scopes, created_via)
+    VALUES (${credentialId}, ${acct.accountId}, ${projectId}, ${name}, ${tok.hash}, ${scopes}, 'dashboard')`;
+  await sql`
+    INSERT INTO audit_log (actor, action, detail)
+    VALUES (${acct.email}, 'service.key_issued', ${sql.json({ name, credentialId, scopes, projectId })})`;
+  return c.json({ ok: true, id: credentialId, name, token: tok.raw, scopes, projectId });
+});
+
+app.delete("/api/service-credentials/:credentialId", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const credentialId = c.req.param("credentialId");
+  const rows = await sql`
+    UPDATE service_credentials SET revoked_at = now()
+    WHERE id = ${credentialId} AND account_id = ${acct.accountId} AND revoked_at IS NULL
+    RETURNING name`;
+  if (!rows.length) return c.json({ error: { code: "not-found", message: "No such key on this account." } }, 404);
+  await sql`
+    INSERT INTO audit_log (actor, action, detail)
+    VALUES (${acct.email}, 'service.key_revoked', ${sql.json({ name: String(rows[0]!.name), credentialId })})`;
+  return c.json({ ok: true });
+});
+
+/** What one key actually did — the trail a person reads before revoking it. */
+app.get("/api/service-credentials/:credentialId/usage", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const credentialId = c.req.param("credentialId");
+  const own = await sql`
+    SELECT name FROM service_credentials
+    WHERE id = ${credentialId} AND account_id = ${acct.accountId} LIMIT 1`;
+  if (!own.length) return c.json({ error: { code: "not-found", message: "No such key on this account." } }, 404);
+  const rows = await sql`
+    SELECT created_at::text AS "at", detail
+    FROM audit_log
+    WHERE action = 'service.request' AND detail->>'credentialId' = ${credentialId}
+    ORDER BY created_at DESC LIMIT 100`;
+  return c.json({ name: String(own[0]!.name), events: rows });
+});
+
 /** Timeline read — powers the dashboard, site tools, and CLI log alike. */
 app.get("/api/projects/:id/saves", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "read:folders", c.req.param("id"));
   if (!acct) {
     return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   }
@@ -1274,6 +1521,13 @@ async function projectAccess(projectId: string, accountId: string): Promise<Proj
     LIMIT 1`;
   const role = rows[0]?.role;
   return role === "owner" || role === "contributor" ? role : null;
+}
+
+/** The account a folder belongs to — where its events and costs land. */
+async function projectOwnerId(projectId: string): Promise<string> {
+  const rows = await sql`
+    SELECT account_id AS "accountId" FROM projects WHERE id = ${projectId} LIMIT 1`;
+  return String(rows[0]?.accountId ?? "");
 }
 
 /**
@@ -1349,11 +1603,26 @@ async function recordWebSave(input: {
   void billing.refreshProject(input.projectId, "web-save").catch((error) => {
     console.error("usage refresh after browser save failed:", error);
   });
-  return Number(rows[0]!.seq);
+  const seq = Number(rows[0]!.seq);
+  void emitWebhookEvent(sql, {
+    accountId: await projectOwnerId(input.projectId),
+    projectId: input.projectId,
+    event: "save.created",
+    data: {
+      seq,
+      label: input.label,
+      runner: "GoodFolder web",
+      harness: null,
+      added,
+      changed,
+      removed,
+    },
+  }).catch(() => {});
+  return seq;
 }
 
 app.get("/api/projects/:id/files", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "read:files", c.req.param("id"));
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   const role = await projectAccess(projectId, acct.accountId);
@@ -1389,7 +1658,7 @@ app.get("/api/projects/:id/files", async (c) => {
 });
 
 app.get("/api/projects/:id/file", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "read:files", c.req.param("id"));
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   const role = await projectAccess(projectId, acct.accountId);
@@ -1433,7 +1702,7 @@ app.get("/api/projects/:id/file", async (c) => {
 // small JSON descriptor explaining why there is nothing to show. It runs
 // under the same account authorization as every other /api/projects route.
 app.get("/api/projects/:id/file/raw", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "read:files", c.req.param("id"));
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   const role = await projectAccess(projectId, acct.accountId);
@@ -1809,7 +2078,7 @@ app.post("/api/projects/:id/files/remove", async (c) => {
 });
 
 app.get("/api/projects/:id/proposals", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "read:folders", c.req.param("id"));
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   const role = await projectAccess(projectId, acct.accountId);
@@ -1881,7 +2150,7 @@ async function sweepStagedUploads(): Promise<void> {
 }
 
 app.post("/api/projects/:id/staged-files", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "write:proposals", c.req.param("id"));
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id") ?? "";
   if (!await projectAccess(projectId, acct.accountId)) {
@@ -2059,7 +2328,7 @@ app.post("/api/projects/:id/generated-files", async (c) => {
  * staging key or turns waiting bytes into a general file store.
  */
 app.get("/api/projects/:id/proposals/:proposalId/suggestions/:suggestionId/preview", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "read:files", c.req.param("id"));
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   if (!await projectAccess(projectId, acct.accountId)) {
@@ -2107,7 +2376,7 @@ app.get("/api/projects/:id/proposals/:proposalId/suggestions/:suggestionId/previ
 });
 
 app.post("/api/projects/:id/proposals", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "write:proposals", c.req.param("id"));
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   const role = await projectAccess(projectId, acct.accountId);
@@ -2250,6 +2519,12 @@ app.post("/api/projects/:id/proposals", async (c) => {
           explanation: textExplanation,
         })}, ${section}, ${before}, ${replacement}, ${textExplanation})`;
     });
+    void emitWebhookEvent(sql, {
+      accountId: await projectOwnerId(projectId),
+      projectId,
+      event: "proposal.created",
+      data: { proposalId: id, title, author: acct.email, suggestions: 2 },
+    }).catch(() => {});
     return c.json({ ok: true, proposalId: id, title, suggestionCount: 2, url: dashboardLink(`?folder=${projectId}&proposal=${id}`) });
   }
 
@@ -2331,6 +2606,12 @@ app.post("/api/projects/:id/proposals", async (c) => {
         INSERT INTO proposal_suggestions (id, proposal_id, document_path, kind, base_file_sha, operation, section_hint, before_text, replacement_text, explanation)
         VALUES (${crypto.randomUUID()}, ${id}, ${path}, ${stored}, ${here?.sha ?? null}, ${sql.json(operation)}, ${null}, ${""}, ${""}, ${explanation})`;
     });
+    void emitWebhookEvent(sql, {
+      accountId: await projectOwnerId(projectId),
+      projectId,
+      event: "proposal.created",
+      data: { proposalId: id, title, author: acct.email, suggestions: 1 },
+    }).catch(() => {});
     return c.json({ ok: true, proposalId: id, title, suggestionCount: 1, url: dashboardLink(`?folder=${projectId}&proposal=${id}`) });
   }
 
@@ -2452,11 +2733,17 @@ app.post("/api/projects/:id/proposals", async (c) => {
         VALUES (${crypto.randomUUID()}, ${id}, ${item.path!}, ${item.kind === "table_update" ? "table" : "text"}, ${currentFile.sha}, ${sql.json(item.operation)}, ${item.section}, ${item.before}, ${item.replacement}, ${item.explanation})`;
     }
   });
+  void emitWebhookEvent(sql, {
+    accountId: await projectOwnerId(projectId),
+    projectId,
+    event: "proposal.created",
+    data: { proposalId: id, title, author: acct.email, suggestions: clean.length },
+  }).catch(() => {});
   return c.json({ ok: true, proposalId: id, title, suggestionCount: clean.length, url: dashboardLink(`?folder=${projectId}&proposal=${id}`) });
 });
 
 app.post("/api/projects/:id/proposals/:proposalId/comments", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "write:proposals", c.req.param("id"));
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   if (!await projectAccess(projectId, acct.accountId)) return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
@@ -2475,7 +2762,7 @@ app.post("/api/projects/:id/proposals/:proposalId/comments", async (c) => {
 });
 
 app.get("/api/projects/:id/document/comments", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "read:folders", c.req.param("id"));
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   if (!await projectAccess(projectId, acct.accountId)) return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
@@ -2491,7 +2778,7 @@ app.get("/api/projects/:id/document/comments", async (c) => {
 });
 
 app.post("/api/projects/:id/document/comments", async (c) => {
-  const acct = await accountFrom(c);
+  const acct = await externalCaller(c, "write:proposals", c.req.param("id"));
   if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
   const projectId = c.req.param("id");
   if (!await projectAccess(projectId, acct.accountId)) return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
@@ -2516,6 +2803,7 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
   const denied = await projectWriteAccessError(projectId);
   if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const reviewerAccountId = acct.accountId;
+  const reviewerEmail = acct.email;
   const proposalId = c.req.param("proposalId");
   const body = await c.req.json<{ action?: "accept" | "reject"; suggestionId?: string }>().catch(() => ({} as { action?: "accept" | "reject"; suggestionId?: string }));
   if (body.action !== "accept" && body.action !== "reject") return c.json({ error: { code: "action", message: "Choose accept or reject." } }, 400);
@@ -2545,6 +2833,9 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
     : allSuggestions;
   if (!suggestions.length) return c.json({ error: { code: "not-found", message: "Suggestion not found." } }, 404);
 
+  // Every terminal path of a review lands here, exactly once per request, so
+  // this is where the "reviewed" event belongs.
+  let reviewReported = false;
   async function refreshProposalStatus(): Promise<string> {
     const counts = await sql`
       SELECT
@@ -2557,6 +2848,21 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
     const accepted = Number(counts[0]?.accepted ?? 0);
     const status = needs > 0 ? "needs-review" : open > 0 ? "open" : accepted > 0 ? "accepted" : "rejected";
     await sql`UPDATE change_proposals SET status = ${status}, reviewed_at = now(), reviewed_by = ${reviewerAccountId} WHERE id = ${proposalId}`;
+    if (!reviewReported) {
+      reviewReported = true;
+      void emitWebhookEvent(sql, {
+        accountId: await projectOwnerId(projectId),
+        projectId,
+        event: "proposal.reviewed",
+        data: {
+          proposalId,
+          action: body.action,
+          status,
+          reviewer: reviewerEmail,
+          suggestionId: body.suggestionId ?? null,
+        },
+      }).catch(() => {});
+    }
     return status;
   }
 
@@ -2915,6 +3221,378 @@ app.post("/api/invitations/accept", async (c) => {
   return c.json({ ok: true, projectId: invite.projectId });
 });
 
+// ---------------------------------------------------------------------------
+// Third-party surfaces (2026-09-17): returning a folder to an earlier save,
+// outbound webhooks, and the public description of the API. All of it is
+// registered above the bearer middleware because each route decides for
+// itself whether an account approval or a scoped service key may pass.
+// ---------------------------------------------------------------------------
+
+const remoteDeps: RemoteDeps = {
+  sql,
+  repos,
+  writeAccessError,
+  refreshUsage: (projectId) => {
+    void billing.refreshProject(projectId, "remote-save").catch((error) => {
+      console.error("usage refresh after remote save failed:", error);
+    });
+  },
+  labelFor: generateLabel,
+};
+
+async function deviceForCaller(
+  acct: { kind: "account" | "service"; credentialId?: string; serviceName?: string },
+  projectId: string,
+): Promise<string> {
+  if (acct.kind === "service" && acct.credentialId) {
+    return ensureServiceDevice(sql, {
+      credentialId: acct.credentialId,
+      projectId,
+      name: acct.serviceName ?? "Service",
+    });
+  }
+  return ensureWebDevice(projectId);
+}
+
+function harnessOf(acct: { kind: "account" | "service"; serviceName?: string }, raw: unknown): string | null {
+  if (acct.kind === "service") return acct.serviceName ?? null;
+  return typeof raw === "string" && /^[A-Za-z0-9 ._-]{1,40}$/.test(raw.trim()) ? raw.trim() : null;
+}
+
+function revertRefusal(c: Context, outcome: { code: string; message: string; httpStatus: number }) {
+  return c.json({ error: { code: outcome.code, message: outcome.message } }, outcome.httpStatus as 400);
+}
+
+/**
+ * Bring a folder back to an earlier save, as a NEW save. Send confirm=false
+ * (or nothing) first: the answer says exactly which files would change and
+ * nothing is touched. A service key needs git:write to act, git:read to look.
+ */
+app.post("/api/projects/:id/restore", async (c) => {
+  const projectId = c.req.param("id");
+  const body = await c.req
+    .json<{ seq?: unknown; confirm?: unknown; harness?: unknown }>()
+    .catch(() => ({}) as { seq?: unknown; confirm?: unknown; harness?: unknown });
+  const apply = body.confirm === true;
+  const acct = await externalCaller(c, apply ? "git:write" : "git:read", projectId);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  if (await projectAccess(projectId, acct.accountId) !== "owner") {
+    return c.json({ error: { code: "owner-only", message: "Only the folder owner can return it to an earlier save." } }, 403);
+  }
+  const seq = Number(body.seq);
+  if (!Number.isInteger(seq)) {
+    return c.json({ error: { code: "save", message: "Give a save number from the folder's timeline." } }, 400);
+  }
+  const target = await loadSave(remoteDeps, projectId, seq);
+  if (!target) return c.json({ error: { code: "not-found", message: `There is no save #${seq} in this folder.` } }, 404);
+
+  const preview = await previewRevert(remoteDeps, projectId, target);
+  if (preview.status === "unchanged") {
+    return c.json({ ok: true, unchanged: true, target: { seq: target.seq, label: target.label } });
+  }
+  if (!apply) {
+    return c.json({
+      ok: true,
+      preview: true,
+      target: { seq: target.seq, label: target.label },
+      counts: preview.counts,
+      paths: preview.changes.map((change) => change.path).slice(0, 100),
+      collisions: preview.collisions,
+    });
+  }
+  const deviceId = await deviceForCaller(acct, projectId);
+  const outcome = await applyRevert(remoteDeps, {
+    projectId,
+    accountId: acct.accountId,
+    actorDeviceId: deviceId,
+    actorName: acct.kind === "service" ? acct.serviceName ?? "a service" : "GoodFolder web",
+    target,
+    label: `Restored save #${target.seq}: ${target.label}`.slice(0, 110),
+    harness: harnessOf(acct, body.harness),
+    changes: preview.changes,
+  });
+  if (outcome.status === "refused") return revertRefusal(c, outcome);
+  if (outcome.status === "unchanged") return c.json({ ok: true, unchanged: true, target: { seq: target.seq, label: target.label } });
+  return c.json({
+    ok: true,
+    preview: false,
+    seq: outcome.seq,
+    label: outcome.label,
+    head: outcome.head,
+    counts: outcome.counts,
+    paths: outcome.changes.map((change) => change.path).slice(0, 100),
+  });
+});
+
+/**
+ * Reverse the most recent save — or a whole run by the same assistant — as a
+ * NEW save. Preview-first exactly like the command line: confirm=false
+ * answers with what would change; only confirm=true acts.
+ */
+app.post("/api/projects/:id/undo", async (c) => {
+  const projectId = c.req.param("id");
+  const body = await c.req
+    .json<{ confirm?: unknown; session?: unknown; harness?: unknown }>()
+    .catch(() => ({} ) as { confirm?: unknown; session?: unknown; harness?: unknown });
+  const apply = body.confirm === true;
+  const acct = await externalCaller(c, apply ? "git:write" : "git:read", projectId);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  if (await projectAccess(projectId, acct.accountId) !== "owner") {
+    return c.json({ error: { code: "owner-only", message: "Only the folder owner can undo a save." } }, 403);
+  }
+  const rows = await loadTimeline(remoteDeps, projectId, 50);
+  if (rows.length === 0) {
+    return c.json({ error: { code: "nothing", message: "Nothing has been saved in this folder yet, so there is nothing to undo." } }, 400);
+  }
+  const len = body.session === true ? runnerRun(rows) : 1;
+  const top = rows[0]!;
+  if (apply && len > 1 && acct.kind === "service" && top.harness !== null && top.harness !== acct.serviceName) {
+    return c.json(
+      { error: { code: "not-yours", message: `The most recent saves were made by ${top.harness}, not by this key.` } },
+      403,
+    );
+  }
+  const targetRow = rows[len];
+  if (!targetRow) {
+    return c.json({ error: { code: "nothing", message: "That would undo every save this folder has; there would be nothing left to return to." } }, 400);
+  }
+  const target = { seq: targetRow.seq, label: targetRow.label, commitSha: targetRow.commitSha };
+  const preview = await previewRevert(remoteDeps, projectId, target);
+  if (preview.status === "unchanged") {
+    return c.json({ ok: true, unchanged: true, target: { seq: target.seq, label: target.label } });
+  }
+  const harness = harnessOf(acct, body.harness);
+  const label =
+    len === 1
+      ? `Undid save #${top.seq} — ${top.label}`.slice(0, 110)
+      : `Undid ${len} saves${acct.kind === "service" ? ` from ${acct.serviceName}` : ""} (#${rows[len - 1]!.seq}–#${top.seq})`;
+  if (!apply) {
+    return c.json({
+      ok: true,
+      preview: true,
+      undoes: rows.slice(0, len).map((row) => ({ seq: row.seq, label: row.label })),
+      target: { seq: target.seq, label: target.label },
+      counts: preview.counts,
+      paths: preview.changes.map((change) => change.path).slice(0, 100),
+    });
+  }
+  const deviceId = await deviceForCaller(acct, projectId);
+  const outcome = await applyRevert(remoteDeps, {
+    projectId,
+    accountId: acct.accountId,
+    actorDeviceId: deviceId,
+    actorName: acct.kind === "service" ? acct.serviceName ?? "a service" : "GoodFolder web",
+    target,
+    label,
+    harness,
+    changes: preview.changes,
+  });
+  if (outcome.status === "refused") return revertRefusal(c, outcome);
+  if (outcome.status === "unchanged") return c.json({ ok: true, unchanged: true, target: { seq: target.seq, label: target.label } });
+  return c.json({
+    ok: true,
+    preview: false,
+    seq: outcome.seq,
+    label: outcome.label,
+    head: outcome.head,
+    counts: outcome.counts,
+    paths: outcome.changes.map((change) => change.path).slice(0, 100),
+  });
+});
+
+// --- Outbound webhooks ------------------------------------------------------
+
+function webhookRow(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: String(row.id),
+    url: String(row.url),
+    events: Array.isArray(row.events) ? row.events : [],
+    active: row.active !== false,
+    projectId: row.projectId ? String(row.projectId) : null,
+    folderName: row.folderName ? String(row.folderName) : null,
+    createdAt: String(row.createdAt),
+    lastDeliveredAt: row.lastDeliveredAt ? String(row.lastDeliveredAt) : null,
+    lastFailedAt: row.lastFailedAt ? String(row.lastFailedAt) : null,
+    lastError: row.lastError ? String(row.lastError) : null,
+    pendingCount: Number(row.pendingCount ?? 0),
+  };
+}
+
+app.get("/api/webhooks", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const rows = await sql`
+    SELECT e.id, e.url, e.events, e.active, e.project_id AS "projectId", p.name AS "folderName",
+           e.created_at::text AS "createdAt", e.last_delivered_at::text AS "lastDeliveredAt",
+           e.last_failed_at::text AS "lastFailedAt", e.last_error AS "lastError",
+           (SELECT COUNT(*)::int FROM webhook_deliveries d WHERE d.endpoint_id = e.id AND d.status = 'pending') AS "pendingCount"
+    FROM webhook_endpoints e LEFT JOIN projects p ON p.id = e.project_id
+    WHERE e.account_id = ${acct.accountId}
+    ORDER BY e.created_at DESC LIMIT 100`;
+  return c.json({
+    webhooks: (rows as Array<Record<string, unknown>>).map(webhookRow),
+    events: WEBHOOK_EVENT_LABELS.map(({ event, label }) => ({ event, label })),
+  });
+});
+
+app.post("/api/webhooks", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const body = await c.req
+    .json<{ url?: unknown; events?: unknown; projectId?: unknown }>()
+    .catch(() => ({}) as { url?: unknown; events?: unknown; projectId?: unknown });
+  const checked = webhookUrlAllowed(body.url);
+  if (!checked.ok) return c.json({ error: { code: "url", message: checked.message } }, 400);
+  const events = parseWebhookEvents(body.events);
+  if (!events) {
+    return c.json(
+      { error: { code: "events", message: `Choose one or more of: ${WEBHOOK_EVENTS.join(", ")}.` } },
+      400,
+    );
+  }
+  let projectId: string | null = null;
+  if (body.projectId !== undefined && body.projectId !== null) {
+    if (typeof body.projectId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.projectId)) {
+      return c.json({ error: { code: "folder", message: "invalid folder" } }, 400);
+    }
+    if (await projectAccess(body.projectId, acct.accountId) !== "owner") {
+      return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
+    }
+    projectId = body.projectId;
+  }
+  if (!rateLimit("webhook-create", acct.accountId, 30, 3_600_000)) {
+    return c.json({ error: { code: "rate", message: "Too many destinations added in a short time — try again later." } }, 429);
+  }
+  const id = crypto.randomUUID();
+  const secret = newWebhookSecret();
+  await sql`
+    INSERT INTO webhook_endpoints (id, account_id, project_id, url, secret, events, created_by)
+    VALUES (${id}, ${acct.accountId}, ${projectId}, ${checked.url}, ${secret}, ${events}, ${acct.email})`;
+  await sql`
+    INSERT INTO audit_log (actor, action, detail)
+    VALUES (${acct.email}, 'webhook.created', ${sql.json({ id, url: checked.url, events, projectId })})`;
+  return c.json({ ok: true, id, secret, url: checked.url, events, projectId });
+});
+
+app.patch("/api/webhooks/:id", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const id = c.req.param("id");
+  const current = await sql`
+    SELECT id, url, events, active FROM webhook_endpoints
+    WHERE id = ${id} AND account_id = ${acct.accountId} LIMIT 1`;
+  const row = current[0];
+  if (!row) return c.json({ error: { code: "not-found", message: "No such destination on this account." } }, 404);
+  const body = await c.req
+    .json<{ url?: unknown; events?: unknown; active?: unknown }>()
+    .catch(() => ({}) as { url?: unknown; events?: unknown; active?: unknown });
+  let url = String(row.url);
+  if (body.url !== undefined) {
+    const checked = webhookUrlAllowed(body.url);
+    if (!checked.ok) return c.json({ error: { code: "url", message: checked.message } }, 400);
+    url = checked.url;
+  }
+  let events = Array.isArray(row.events) ? (row.events as string[]) : [];
+  if (body.events !== undefined) {
+    const parsed = parseWebhookEvents(body.events);
+    if (!parsed) return c.json({ error: { code: "events", message: `Choose one or more of: ${WEBHOOK_EVENTS.join(", ")}.` } }, 400);
+    events = parsed;
+  }
+  const active = body.active === undefined ? row.active !== false : body.active === true;
+  await sql`
+    UPDATE webhook_endpoints SET url = ${url}, events = ${events}, active = ${active}
+    WHERE id = ${id}`;
+  await sql`
+    INSERT INTO audit_log (actor, action, detail)
+    VALUES (${acct.email}, 'webhook.updated', ${sql.json({ id, url, events, active })})`;
+  return c.json({ ok: true, id, url, events, active });
+});
+
+app.delete("/api/webhooks/:id", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const id = c.req.param("id");
+  const removed = await sql`
+    DELETE FROM webhook_endpoints WHERE id = ${id} AND account_id = ${acct.accountId} RETURNING url`;
+  if (!removed.length) return c.json({ error: { code: "not-found", message: "No such destination on this account." } }, 404);
+  await sql`
+    INSERT INTO audit_log (actor, action, detail)
+    VALUES (${acct.email}, 'webhook.removed', ${sql.json({ id, url: String(removed[0]!.url) })})`;
+  return c.json({ ok: true });
+});
+
+app.get("/api/webhooks/:id/deliveries", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const id = c.req.param("id");
+  const own = await sql`
+    SELECT id FROM webhook_endpoints WHERE id = ${id} AND account_id = ${acct.accountId} LIMIT 1`;
+  if (!own.length) return c.json({ error: { code: "not-found", message: "No such destination on this account." } }, 404);
+  const rows = await sql`
+    SELECT id, event, status, attempts, response_status AS "responseStatus", error,
+           created_at::text AS "createdAt", delivered_at::text AS "deliveredAt",
+           next_attempt_at::text AS "nextAttemptAt"
+    FROM webhook_deliveries WHERE endpoint_id = ${id}
+    ORDER BY created_at DESC LIMIT 50`;
+  return c.json({ deliveries: rows });
+});
+
+app.post("/api/webhooks/:id/test", async (c) => {
+  const acct = await accountFrom(c);
+  if (!acct) return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  const id = c.req.param("id");
+  const own = await sql`
+    SELECT id FROM webhook_endpoints WHERE id = ${id} AND account_id = ${acct.accountId} LIMIT 1`;
+  if (!own.length) return c.json({ error: { code: "not-found", message: "No such destination on this account." } }, 404);
+  const deliveryId = await queueTestDelivery(sql, id);
+  return c.json({ ok: true, deliveryId });
+});
+
+// ---------------------------------------------------------------------------
+// The public description of the API. No credential: a client reads the
+// contract before it has one. Self-hosted installs serve it too.
+// ---------------------------------------------------------------------------
+
+app.get("/openapi.json", (c) => c.json(openApiDocument(PUBLIC_BASE)));
+
+// ---------------------------------------------------------------------------
+// The hosted tool surface, handed to the raw server so it can speak
+// Streamable HTTP on /mcp. Built on the same remote functions as the routes
+// above, under the same scopes.
+// ---------------------------------------------------------------------------
+
+const mcpServices: McpServices = {
+  deps: remoteDeps,
+  publicBase: PUBLIC_BASE,
+  createFolder: async (caller, name) => {
+    const clean = name.replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!clean) return { error: "Give the new folder a name." };
+    const denied = await writeAccessError(caller.accountId);
+    if (denied) return { error: denied.message };
+    if (!rateLimit("project-create", caller.accountId, 30, 3_600_000)) {
+      return { error: "Too many folders created in a short time — try again later." };
+    }
+    const created = await createFolderFor(
+      { accountId: caller.accountId, email: caller.email },
+      { name: clean, deviceName: caller.serviceName ?? "GoodFolder tools" },
+    );
+    return { projectId: created.projectId, name: clean };
+  },
+  renameFolder: async (caller, projectId, name) => {
+    const clean = name.replace(/\s+/g, " ").trim().slice(0, 80);
+    return renameFolderFor({ accountId: caller.accountId, email: caller.email }, projectId, clean);
+  },
+  deviceFor: async (caller, projectId) => {
+    if (caller.kind === "service" && caller.credentialId) {
+      return ensureServiceDevice(sql, {
+        credentialId: caller.credentialId,
+        projectId,
+        name: caller.serviceName ?? "Service",
+      });
+    }
+    return ensureWebDevice(projectId);
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Bearer auth middleware for /api/* — resolves EITHER a folder transport
@@ -3041,16 +3719,10 @@ app.get("/api/save/preflight", async (c) => {
 });
 
 app.post("/api/saves", async (c) => {
+  const auth = c.get("auth");
   const scope = c.get("scope");
-  if (!scope) {
-    return c.json(
-      { error: { code: "project-scope", message: "folder token required" } },
-      403,
-    );
-  }
-  const denied = await writeAccessError(scope.ownerAccountId);
-  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const b = await c.req.json<{
+    projectId?: string;
     label?: string;
     labelSource?: "user" | "agent";
     changedPaths?: string[];
@@ -3060,7 +3732,59 @@ app.post("/api/saves", async (c) => {
     counts?: { added?: number; changed?: number; removed?: number };
     topPaths?: string[];
     harness?: string;
-  }>();
+  }>().catch(() => ({} as {
+    projectId?: string; label?: string; labelSource?: "user" | "agent"; changedPaths?: string[];
+    commitSha?: string; collision?: string; ai?: { summary: string; excerpt: string; truncated: boolean };
+    counts?: { added?: number; changed?: number; removed?: number }; topPaths?: string[]; harness?: string;
+  }));
+
+  // A service credential records a save for a folder it may change. The
+  // receipt is computed from the folder's own tree — the caller does not get
+  // to describe history it cannot see.
+  if (!scope && auth?.kind === "service") {
+    if (!auth.scopes.includes("git:write")) {
+      return c.json({ error: { code: "scope", message: "This access key may not record saves." } }, 403);
+    }
+    const projectId = typeof b.projectId === "string" ? b.projectId : auth.projectId;
+    if (!projectId) {
+      return c.json({ error: { code: "folder", message: "Name the folder this save belongs to." } }, 400);
+    }
+    if (auth.projectId && auth.projectId !== projectId) {
+      return c.json({ error: { code: "project-scope", message: "This access key belongs to a different folder." } }, 403);
+    }
+    const deviceId = await ensureServiceDevice(sql, {
+      credentialId: auth.credentialId,
+      projectId,
+      name: auth.name,
+    });
+    const harness =
+      typeof b.harness === "string" && /^[A-Za-z0-9 ._-]{1,40}$/.test(b.harness.trim())
+        ? b.harness.trim()
+        : auth.name;
+    const outcome = await recordRemoteSave(remoteDeps, {
+      projectId,
+      accountId: auth.accountId,
+      actorDeviceId: deviceId,
+      actorName: auth.name,
+      ...(b.label ? { label: b.label } : {}),
+      harness,
+      ...(b.commitSha ? { expectedHead: b.commitSha } : {}),
+    });
+    if (outcome.status === "refused") return revertRefusal(c, outcome);
+    if (outcome.status === "unchanged") {
+      return c.json({ ok: true, unchanged: true, seq: outcome.seq, label: outcome.label });
+    }
+    return c.json({ ok: true, id: null, seq: outcome.seq, label: outcome.label, counts: outcome.counts });
+  }
+
+  if (!scope) {
+    return c.json(
+      { error: { code: "project-scope", message: "folder token required" } },
+      403,
+    );
+  }
+  const denied = await writeAccessError(scope.ownerAccountId);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   if (!b.commitSha) return c.json({ error: "commitSha required" }, 400);
 
   // Receipt facts are optional and defensively clamped — a bad client can
@@ -3105,6 +3829,24 @@ app.post("/api/saves", async (c) => {
   void billing.refreshProject(scope.projectId, "save").catch((error) => {
     console.error("usage refresh after save failed:", error);
   });
+  // A save recorded from a computer is an event too — the webhooks must not
+  // only hear about the ones recorded from the browser or by a service.
+  const actor = await sql`
+    SELECT name FROM devices WHERE id = ${scope.deviceId} LIMIT 1`;
+  void emitWebhookEvent(sql, {
+    accountId: scope.ownerAccountId,
+    projectId: scope.projectId,
+    event: "save.created",
+    data: {
+      seq: save.seq,
+      label,
+      runner: actor[0]?.name ? String(actor[0].name) : null,
+      harness,
+      added: counts?.added ?? 0,
+      changed: counts?.changed ?? 0,
+      removed: counts?.removed ?? 0,
+    },
+  }).catch(() => {});
   return c.json({ id: save.id, seq: save.seq, label });
 });
 
@@ -3153,11 +3895,19 @@ async function gitProxy(req: import("node:http").IncomingMessage, res: import("n
   if (!route) return deny(404, "malformed git path");
 
   const raw = tokenFromAuthHeader(req.headers.authorization);
-  const scope = raw ? await resolveScope(sql, raw) : null;
+  const scope = raw ? await resolveScope(sql, raw, route.projectId) : null;
   if (!scope) return deny(401, "unauthorized");
   if (route.projectId !== scope.projectId) return deny(403, "token not valid for this project");
 
   const isWrite = route.isWrite;
+  // A scoped service credential reaches the transport only through the
+  // scope it was approved for; a folder's own credential is unchanged.
+  if (scope.service) {
+    const needed = isWrite ? "git:write" : "git:read";
+    if (!scope.service.scopes.includes(needed)) {
+      return deny(403, "This access key was not approved for that action.", "scope");
+    }
+  }
   let remainingBytes = Number.POSITIVE_INFINITY;
   if (isWrite) {
     const denied = await writeAccessError(scope.ownerAccountId);
@@ -3313,6 +4063,17 @@ const server = createServer((req, res) => {
   const p = req.url ?? "";
   if (p.startsWith("/git/")) return void gitProxy(req, res);
   if (p.startsWith("/lfs/")) return void lfsProxy(req, res);
+  // The hosted tool surface speaks Streamable HTTP straight on the raw
+  // server: its responses stream, and its stateless mode wants one Node
+  // request/response pair per call.
+  if (p === "/mcp" || p.startsWith("/mcp?")) {
+    void handleMcpRequest(mcpServices, sql, req, res).catch((error) => {
+      console.error("mcp request failed:", error);
+      if (!res.headersSent) res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: { code: "server", message: "That request could not be completed." } }));
+    });
+    return;
+  }
   return listener(req, res);
 });
 
@@ -3326,6 +4087,9 @@ async function sweepExpiredCredentials(): Promise<void> {
   await sql`DELETE FROM magic_links WHERE expires_at <= now() - interval '1 day'`;
   await sql`DELETE FROM pairing_requests WHERE expires_at <= now() - interval '1 day'`;
   await sql`DELETE FROM transfer_tokens WHERE expires_at <= now() - interval '7 days'`;
+  // Delivery records are the webhook's audit; a month is plenty to debug
+  // with, and failed ones have long since exhausted their retries.
+  await sql`DELETE FROM webhook_deliveries WHERE created_at <= now() - interval '30 days'`;
 }
 
 const stagingSweep = setInterval(() => {
@@ -3333,6 +4097,17 @@ const stagingSweep = setInterval(() => {
   void sweepExpiredCredentials().catch((error) => console.error("sweep of expired credentials failed:", error));
 }, 6 * 60 * 60_000);
 stagingSweep.unref();
+
+// Webhook delivery: due rows, retried on their own backoff schedule. The
+// first pass waits a moment so a restart storm does not stampede endpoints.
+const webhookKickoff = setTimeout(() => {
+  void deliverDueWebhooks(sql).catch((error) => console.error("webhook delivery failed:", error));
+}, 15_000);
+webhookKickoff.unref();
+const webhookSweep = setInterval(() => {
+  void deliverDueWebhooks(sql).catch((error) => console.error("webhook delivery failed:", error));
+}, 30_000);
+webhookSweep.unref();
 
 if (billingConfig.mode === "stripe") {
   const reconcileTimer = setTimeout(() => {

@@ -8,6 +8,7 @@
     "build": "node ../../tools/build-docs-public.mjs && next build",
     "start": "next start",
     "test": "node --experimental-transform-types --test lib/*.test.ts",
+    "e2e:services": "node e2e/run-services.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -22,11 +23,13 @@
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.10.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "postcss": "^8.5.28",
+    "postgres": "^3.4.9",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.9.2"
   }

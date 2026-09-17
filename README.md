@@ -77,6 +77,32 @@ Save, Sync, Timeline, Restore. There is no expert mode underneath.
 - **Restore** brings back an earlier version, and records the return as another
   Save, so you can change your mind again.
 
+## For services and hosted assistants
+
+An assistant that does not live on your computer can still work with your
+folders, the way it works with a repository on GitHub. It gets its own
+revocable key, approved by you, carrying only the access you ticked — see the
+folders it was given, read files, prepare change proposals, or fetch and send
+the folder's contents. It can never reach billing, invitations, or another
+account, and every request it makes is written to the account's activity
+record.
+
+Two surfaces, one history:
+
+- A hosted tool endpoint at `/mcp` — the same nine tools the local agent
+  server offers, over HTTP.
+- Plain HTTP described in one document at `/openapi.json` (OpenAPI 3.1).
+
+Outbound webhooks send a signed message to an address you choose when a save
+or a change proposal happens, with retries and a visible delivery history.
+Restores from a service are always recorded as new saves; nothing rewrites
+history.
+
+[docs/services.md](docs/services.md) is the guide for a person, and
+[docs/service-protocol.md](docs/service-protocol.md) is the reference for
+whoever builds the integration, with a runnable example at
+[examples/service-assistant.mjs](examples/service-assistant.mjs).
+
 ## Working on it
 
 The website's `/docs` pages are rendered at build time from the Markdown in
@@ -84,11 +110,11 @@ The website's `/docs` pages are rendered at build time from the Markdown in
 has a raw twin at `/docs/<name>.md`, and `/llms.txt` lists them all. To add a
 page, add a `.md` file with `title`, `description` and `order` front matter —
 `pnpm docs:check` verifies the front matter and links, and `pnpm vocab` scans
-the prose. `docs/development.md` is deliberately not rendered. `/sitemap.xml`
-lists public pages, and `/robots.txt` excludes the dashboard and demo entry.
-Static hosting must preserve `apps/web/public/_headers` for Markdown content
-types and dashboard indexing rules. These files describe local stdio MCP and
-browser WebMCP; they do not advertise a hosted HTTP MCP service.
+the prose. `docs/development.md` and `docs/service-protocol.md` are
+deliberately not rendered. `/sitemap.xml` lists public pages, and `/robots.txt`
+excludes the dashboard and demo entry. Static hosting must preserve
+`apps/web/public/_headers` for Markdown content types and dashboard indexing
+rules.
 
 Requires Node 22+ and pnpm 11.
 
@@ -111,6 +137,8 @@ Expect this gate to reject wording a normal person would not say.
 - [docs/self-hosting.md](docs/self-hosting.md) — run the whole stack with Docker (also on the site at /docs)
 - [docs/configuration.md](docs/configuration.md) — every environment variable
 - [docs/reverse-proxy.md](docs/reverse-proxy.md) — putting it behind a domain
+- [docs/services.md](docs/services.md) — connect a service or cloud assistant
+- [docs/service-protocol.md](docs/service-protocol.md) — the integration reference (not rendered on the site)
 - [docs/development.md](docs/development.md) — the contributor loop
 - [AGENTS.md](AGENTS.md) — the working rules, for people and agents
 - [CHANGELOG.md](CHANGELOG.md) — what changed between releases

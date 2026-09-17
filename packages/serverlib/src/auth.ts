@@ -1,5 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Sql } from "./config.ts";
+import {
+  resolveServiceCredential,
+  resolveServiceScope,
+  type ServiceCredential,
+  type ServiceScope,
+} from "./service-access.ts";
 
 /**
  * v0 auth — bearer tokens bound to exactly one device + one project.
@@ -12,6 +18,12 @@ export interface TokenScope {
   projectId: string;
   ownerAccountId: string;
   deviceKind: "user" | "agent";
+  /**
+   * Set when a third-party service credential produced this scope. Routes
+   * that must never be reachable by a service (folder-token renewal, for
+   * one) check for its absence.
+   */
+  service?: { credentialId: string; name: string; scopes: ServiceScope[] };
 }
 
 export function hashToken(raw: string): string {
@@ -54,10 +66,19 @@ export function tokenFromAuthHeader(
   return null;
 }
 
-/** Resolve a bearer token to its scope. Null means unauthorized. */
+/**
+ * Resolve a bearer token to its scope. Null means unauthorized.
+ *
+ * When `projectId` is given, a scoped service credential bound to that
+ * folder (or to the whole account) resolves too — into the same shape, so
+ * git transport, the large-file path and save recording treat it like any
+ * other caller. Without a folder in hand a service credential cannot
+ * resolve: its reach is decided per folder, not globally.
+ */
 export async function resolveScope(
   sql: Sql,
   rawToken: string,
+  projectId?: string,
 ): Promise<TokenScope | null> {
   const rows = await sql`
     SELECT d.id AS device_id, d.project_id, p.account_id, d.kind AS device_kind
@@ -68,13 +89,16 @@ export async function resolveScope(
       AND t.expires_at > now()
     LIMIT 1`;
   const r = rows[0];
-  if (!r) return null;
-  return {
-    deviceId: String(r.device_id),
-    projectId: String(r.project_id),
-    ownerAccountId: String(r.account_id),
-    deviceKind: r.device_kind === "agent" ? "agent" : "user",
-  };
+  if (r) {
+    return {
+      deviceId: String(r.device_id),
+      projectId: String(r.project_id),
+      ownerAccountId: String(r.account_id),
+      deviceKind: r.device_kind === "agent" ? "agent" : "user",
+    };
+  }
+  if (projectId) return resolveServiceScope(sql, rawToken, projectId);
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,12 +115,16 @@ export interface AccountContext {
   accountDeviceId: string;
 }
 
-export type AuthContext = TokenScope & { kind: "project" } | AccountContext;
+export type ServiceContext = ServiceCredential & { kind: "service" };
+
+export type AuthContext = TokenScope & { kind: "project" } | AccountContext | ServiceContext;
 
 /**
  * Resolve any GoodFolder bearer token to its authorization context.
  * Project tokens win first so existing folders keep working unchanged;
- * account device tokens are the fallback.
+ * a scoped service credential resolves next when it is not one — every
+ * route that requires an account (billing, folder management, invitations)
+ * checks `kind` and refuses it. Account device tokens are the fallback.
  */
 export async function resolveAuthContext(
   sql: Sql,
@@ -112,7 +140,7 @@ export async function resolveAuthContext(
       AND d.revoked_at IS NULL
     LIMIT 1`;
   const r = rows[0];
-  if (!r) return null;
+  if (!r) return resolveServiceCredential(sql, rawToken).then((s) => s ? { ...s, kind: "service" as const } : null);
   void sql`UPDATE account_devices SET last_used_at = now()
     WHERE id = ${String(r.account_device_id)}`.catch(() => {});
   return {

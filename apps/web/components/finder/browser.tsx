@@ -47,6 +47,7 @@ import { useSelection, type ClickModifiers } from "@/components/finder/use-selec
 import { droppedFiles, useFileVerbs } from "@/components/finder/use-file-verbs";
 import {
   BillingDialog, ChallengeCodeDialog, DeleteFolderDialog, DevicesDialog, NameFolderDialog, RemoveDialog, RenameDialog,
+  ServicesDialog, WebhooksDialog,
 } from "@/components/finder/verb-dialogs";
 
 /**
@@ -91,6 +92,8 @@ export function FinderBrowser({ accountId, email, onSignOut }: { accountId: stri
   const [dropTarget, setDropTarget] = useState(false);
   const [challengeCodeOpen, setChallengeCodeOpen] = useState(false);
   const [devicesOpen, setDevicesOpen] = useState(false);
+  const [servicesOpen, setServicesOpen] = useState(false);
+  const [webhooksOpen, setWebhooksOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
   const [billingSelection, setBillingSelection] = useState<{ plan: PlanCode; interval: BillingInterval } | null>(null);
   const [challengeCode, setChallengeCode] = useState("");
@@ -871,6 +874,8 @@ export function FinderBrowser({ accountId, email, onSignOut }: { accountId: stri
           onManagePlan={() => openBilling()}
           onRedeemChallenge={() => setChallengeCodeOpen(true)}
           onManageDevices={() => setDevicesOpen(true)}
+          onManageServices={() => setServicesOpen(true)}
+          onManageWebhooks={() => setWebhooksOpen(true)}
         />
       </div>
 
@@ -907,6 +912,8 @@ export function FinderBrowser({ accountId, email, onSignOut }: { accountId: stri
               onManagePlan={() => openBilling()}
               onRedeemChallenge={() => setChallengeCodeOpen(true)}
               onManageDevices={() => setDevicesOpen(true)}
+          onManageServices={() => setServicesOpen(true)}
+          onManageWebhooks={() => setWebhooksOpen(true)}
             />
           </div>
         </>
@@ -1155,6 +1162,12 @@ export function FinderBrowser({ accountId, email, onSignOut }: { accountId: stri
             onCancel={() => setDevicesOpen(false)}
             onSignedOutEverywhere={() => { setDevicesOpen(false); onSignOut(); }}
           />
+        )}
+        {servicesOpen && (
+          <ServicesDialog folders={folders ?? []} onCancel={() => setServicesOpen(false)} />
+        )}
+        {webhooksOpen && (
+          <WebhooksDialog folders={folders ?? []} onCancel={() => setWebhooksOpen(false)} />
         )}
         {billingOpen && (
           <BillingDialog

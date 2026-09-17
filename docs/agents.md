@@ -21,8 +21,12 @@ preview.
 ## Set up the local MCP server
 
 The GoodFolder MCP server runs over stdio on a computer that can access your
-folder. It does not provide a public HTTP MCP endpoint. A remote agent needs a
-connection to the computer holding the folder.
+folder. That is the right setup for an agent working beside your files.
+
+An assistant that runs somewhere else — a hosted service, a cloud runner —
+can reach the same tools over HTTP with a scoped key of its own, so it never
+sees more of your account than you approved. See
+[Connect a service or cloud assistant](services.md).
 
 Install it from npm (Node.js 22 or newer):
 

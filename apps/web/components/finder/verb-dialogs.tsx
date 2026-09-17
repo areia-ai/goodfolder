@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@/components/dialog";
 import {
-  forgetDevice, getAccountPlan, getPlans, listDevices, openBillingPortal, setOverageCap,
-  signOutEverywhere, startHostedTrial, whenLabel,
-  type AccountPlan, type ApprovedDevice, type BillingInterval, type PlanCode, type PlanDefinition,
+  createServiceKey, createWebhook, forgetDevice, getAccountPlan, getPlans, listDevices, listServiceKeyUsage,
+  listServiceKeys, listWebhooks, openBillingPortal, removeWebhook, revokeServiceKey, setOverageCap,
+  signOutEverywhere, startHostedTrial, testWebhook, updateWebhook, whenLabel,
+  type AccountPlan, type ApprovedDevice, type BillingInterval, type Folder, type PlanCode, type PlanDefinition,
+  type ServiceKey, type ServiceKeyEvent, type ServiceScopeInfo, type WebhookDestination, type WebhookEventInfo,
 } from "@/lib/gf-api";
 import { formatBytes } from "@/lib/preview";
 import { captureProductEvent } from "@/lib/analytics";
@@ -579,6 +581,474 @@ export function BillingDialog(props: {
       )}
 
       {error && !(hasHostedBilling && current && canStart) && <p className="mt-3 text-[13px] font-semibold" role="alert">{error}</p>}
+    </Dialog>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Services and event destinations (2026-09-17)
+
+   Two account-level surfaces a person configures here rather than in a
+   terminal: the keys other services use to reach their folders, and the
+   addresses GoodFolder sends signed messages to when something changes.
+   Both are created through the API this page already talks to; the key and
+   the signing secret are shown once, in the answer, and never again.
+--------------------------------------------------------------------------- */
+
+export function ServicesDialog(props: { folders: Folder[]; onCancel: () => void }) {
+  const [keys, setKeys] = useState<ServiceKey[] | null>(null);
+  const [scopeInfo, setScopeInfo] = useState<ServiceScopeInfo[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [scopes, setScopes] = useState<string[]>([]);
+  const [folderId, setFolderId] = useState("");
+  const [fresh, setFresh] = useState<{ name: string; token: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [usageFor, setUsageFor] = useState<string | null>(null);
+  const [usage, setUsage] = useState<ServiceKeyEvent[] | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    listServiceKeys()
+      .then((result) => {
+        if (!live) return;
+        setKeys(result.credentials);
+        setScopeInfo(result.availableScopes);
+      })
+      .catch(() => {
+        if (!live) return;
+        setKeys([]);
+        setError("Could not read the list of services.");
+      });
+    return () => { live = false; };
+  }, []);
+
+  async function create() {
+    setBusy("create");
+    setError(null);
+    try {
+      const created = await createServiceKey({
+        name: name.trim(),
+        scopes,
+        ...(folderId ? { projectId: folderId } : {}),
+      });
+      setFresh({ name: created.name, token: created.token });
+      setKeys((current) => [
+        {
+          id: created.id, name: created.name, scopes: created.scopes, projectId: created.projectId,
+          folderName: props.folders.find((folder) => folder.id === created.projectId)?.name ?? null,
+          createdVia: "dashboard", createdAt: new Date().toISOString(), lastUsedAt: null,
+        },
+        ...(current ?? []),
+      ]);
+      setName(""); setScopes([]); setFolderId(""); setAdding(false);
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function revoke(key: ServiceKey) {
+    setBusy(key.id);
+    setError(null);
+    try {
+      await revokeServiceKey(key.id);
+      setKeys((current) => (current ?? []).filter((item) => item.id !== key.id));
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function showUsage(key: ServiceKey) {
+    if (usageFor === key.id) {
+      setUsageFor(null);
+      setUsage(null);
+      return;
+    }
+    setUsageFor(key.id);
+    setUsage(null);
+    try {
+      const result = await listServiceKeyUsage(key.id);
+      setUsage(result.events);
+    } catch (failure) {
+      setUsage([]);
+      setError((failure as Error).message);
+    }
+  }
+
+  async function copy() {
+    if (!fresh) return;
+    try {
+      await navigator.clipboard.writeText(fresh.token);
+      setCopied(true);
+    } catch {
+      setError("Could not copy — select the key and copy it by hand.");
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={props.onCancel}
+      busy={busy !== null}
+      width="34rem"
+      title="Services and assistants"
+      description="Keys you have approved for other services. Each carries only the access you chose, and you can take any of them back at any time."
+      actions={
+        <>
+          <button type="button" className="gf-button-secondary" onClick={props.onCancel} disabled={busy !== null}>Done</button>
+          {!adding && !fresh && (
+            <button type="button" className="gf-button-primary" onClick={() => setAdding(true)} disabled={busy !== null}>Add a service</button>
+          )}
+        </>
+      }
+    >
+      {fresh && (
+        <div className="mt-4 rounded-[var(--gf-radius)] border border-[var(--gf-line)] p-3">
+          <p className="text-[13px] font-semibold">The key for {fresh.name}</p>
+          <p className="gf-faint mt-1 text-[12px]">Copy it now — this is the only time it is shown.</p>
+          <div className="mt-2 flex items-center gap-2">
+            <code className="gf-input min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[12px]">{fresh.token}</code>
+            <button type="button" className="gf-button-secondary" onClick={() => void copy()}>{copied ? "Copied" : "Copy"}</button>
+          </div>
+          <button type="button" className="gf-button-ghost mt-2" onClick={() => { setFresh(null); setCopied(false); }}>I have saved it</button>
+        </div>
+      )}
+
+      {adding && (
+        <div className="mt-4 rounded-[var(--gf-radius)] border border-[var(--gf-line)] p-3">
+          <label className="gf-label" htmlFor="gf-service-name">What is it called?</label>
+          <input
+            id="gf-service-name"
+            className="gf-input"
+            value={name}
+            maxLength={60}
+            placeholder="Instinct"
+            onChange={(event) => setName(event.target.value)}
+          />
+          <p className="gf-eyebrow mt-3">What may it do?</p>
+          <div className="mt-1 space-y-1">
+            {scopeInfo.map((item) => (
+              <label key={item.scope} className="flex items-center gap-2 text-[13px]">
+                <input
+                  type="checkbox"
+                  checked={scopes.includes(item.scope)}
+                  onChange={(event) =>
+                    setScopes((current) =>
+                      event.target.checked ? [...current, item.scope] : current.filter((scope) => scope !== item.scope),
+                    )
+                  }
+                />
+                {item.label}
+              </label>
+            ))}
+          </div>
+          <label className="gf-label mt-3" htmlFor="gf-service-folder">Which folders?</label>
+          <select id="gf-service-folder" className="gf-input" value={folderId} onChange={(event) => setFolderId(event.target.value)}>
+            <option value="">Every folder on this account</option>
+            {props.folders.map((folder) => (
+              <option key={folder.id} value={folder.id}>{folder.name}</option>
+            ))}
+          </select>
+          <div className="mt-3 flex justify-end gap-2">
+            <button type="button" className="gf-button-secondary" onClick={() => setAdding(false)} disabled={busy !== null}>Cancel</button>
+            <button type="button" className="gf-button-primary" onClick={() => void create()} disabled={busy !== null || !name.trim() || scopes.length === 0}>
+              {busy === "create" ? "Creating…" : "Create the key"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {keys === null && <p className="gf-faint mt-4 text-[13px]">Reading…</p>}
+      {keys !== null && keys.length === 0 && !adding && !fresh && (
+        <p className="gf-faint mt-4 text-[13px]">No services have access to this account. Add one when a service or a hosted assistant needs to work with your folders.</p>
+      )}
+      {keys && keys.length > 0 && (
+        <ul className="mt-4 divide-y divide-[var(--gf-line)]">
+          {keys.map((key) => (
+            <li key={key.id} className="py-2.5">
+              <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-semibold">{key.name}</p>
+                <p className="gf-faint text-[12px]">
+                  {key.scopes.map((scope) => scopeInfo.find((item) => item.scope === scope)?.label ?? scope).join(" · ")}
+                </p>
+                <p className="gf-faint text-[12px]">
+                  {key.folderName ? `Only “${key.folderName}”` : "Every folder"}
+                  {` · added ${whenLabel(key.createdAt)}`}
+                  {key.lastUsedAt ? ` · last used ${whenLabel(key.lastUsedAt)}` : " · not used yet"}
+                </p>
+              </div>
+              <div className="flex flex-none flex-col items-end gap-1">
+                <button
+                  type="button"
+                  className="gf-button-ghost"
+                  onClick={() => void showUsage(key)}
+                  disabled={busy !== null}
+                >
+                  What it did
+                </button>
+                <button
+                  type="button"
+                  className="gf-button-ghost"
+                  onClick={() => void revoke(key)}
+                  disabled={busy !== null}
+                  aria-label={`Take back the key for ${key.name}`}
+                >
+                  {busy === key.id ? "Taking back…" : "Take back"}
+                </button>
+              </div>
+              </div>
+              {usageFor === key.id && (
+                <div className="mt-2 w-full rounded-[var(--gf-radius)] border border-[var(--gf-line)] p-2">
+                  {usage === null && <p className="gf-faint text-[12px]">Reading…</p>}
+                  {usage !== null && usage.length === 0 && <p className="gf-faint text-[12px]">This key has not been used yet.</p>}
+                  {usage !== null && usage.length > 0 && (
+                    <ul className="space-y-1">
+                      {usage.slice(0, 8).map((event, index) => (
+                        <li key={`${event.at}-${index}`} className="gf-faint text-[12px]">
+                          {whenLabel(event.at)} — {event.detail.path ?? "a request"}
+                          {event.detail.scope ? ` · ${event.detail.scope}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="mt-2 text-[13px] font-semibold" role="alert">{error}</p>}
+    </Dialog>
+  );
+}
+
+export function WebhooksDialog(props: { folders: Folder[]; onCancel: () => void }) {
+  const [destinations, setDestinations] = useState<WebhookDestination[] | null>(null);
+  const [eventInfo, setEventInfo] = useState<WebhookEventInfo[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [url, setUrl] = useState("");
+  const [events, setEvents] = useState<string[]>([]);
+  const [folderId, setFolderId] = useState("");
+  const [fresh, setFresh] = useState<{ id: string; url: string; secret: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    listWebhooks()
+      .then((result) => {
+        if (!live) return;
+        setDestinations(result.webhooks);
+        setEventInfo(result.events);
+      })
+      .catch(() => {
+        if (!live) return;
+        setDestinations([]);
+        setError("Could not read the list of destinations.");
+      });
+    return () => { live = false; };
+  }, []);
+
+  async function add() {
+    setBusy("add");
+    setError(null);
+    try {
+      const created = await createWebhook({
+        url: url.trim(),
+        events,
+        ...(folderId ? { projectId: folderId } : {}),
+      });
+      setFresh({ id: created.id, url: created.url, secret: created.secret });
+      setDestinations((current) => [
+        {
+          id: created.id, url: created.url, events: created.events, active: true,
+          projectId: created.projectId,
+          folderName: props.folders.find((folder) => folder.id === created.projectId)?.name ?? null,
+          createdAt: new Date().toISOString(), lastDeliveredAt: null, lastFailedAt: null,
+          lastError: null, pendingCount: 0,
+        },
+        ...(current ?? []),
+      ]);
+      setUrl(""); setEvents([]); setFolderId(""); setAdding(false);
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function toggle(destination: WebhookDestination) {
+    setBusy(destination.id);
+    setError(null);
+    try {
+      await updateWebhook(destination.id, { active: !destination.active });
+      setDestinations((current) =>
+        (current ?? []).map((item) => (item.id === destination.id ? { ...item, active: !item.active } : item)),
+      );
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function remove(destination: WebhookDestination) {
+    setBusy(destination.id);
+    setError(null);
+    try {
+      await removeWebhook(destination.id);
+      setDestinations((current) => (current ?? []).filter((item) => item.id !== destination.id));
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function sendTest(destination: WebhookDestination) {
+    setBusy(`test:${destination.id}`);
+    setError(null);
+    try {
+      await testWebhook(destination.id);
+      setDestinations((current) =>
+        (current ?? []).map((item) => (item.id === destination.id ? { ...item, pendingCount: item.pendingCount + 1 } : item)),
+      );
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function copy() {
+    if (!fresh) return;
+    try {
+      await navigator.clipboard.writeText(fresh.secret);
+      setCopied(true);
+    } catch {
+      setError("Could not copy — select the secret and copy it by hand.");
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={props.onCancel}
+      busy={busy !== null}
+      width="34rem"
+      title="Event destinations"
+      description="GoodFolder sends a signed message to these addresses when something happens in your folders. The receiving service can check the signature to prove the message came from here."
+      actions={
+        <>
+          <button type="button" className="gf-button-secondary" onClick={props.onCancel} disabled={busy !== null}>Done</button>
+          {!adding && !fresh && (
+            <button type="button" className="gf-button-primary" onClick={() => setAdding(true)} disabled={busy !== null}>Add a destination</button>
+          )}
+        </>
+      }
+    >
+      {fresh && (
+        <div className="mt-4 rounded-[var(--gf-radius)] border border-[var(--gf-line)] p-3">
+          <p className="text-[13px] font-semibold">The signing secret for {fresh.url}</p>
+          <p className="gf-faint mt-1 text-[12px]">Copy it now — this is the only time it is shown.</p>
+          <div className="mt-2 flex items-center gap-2">
+            <code className="gf-input min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[12px]">{fresh.secret}</code>
+            <button type="button" className="gf-button-secondary" onClick={() => void copy()}>{copied ? "Copied" : "Copy"}</button>
+          </div>
+          <button type="button" className="gf-button-ghost mt-2" onClick={() => { setFresh(null); setCopied(false); }}>I have saved it</button>
+        </div>
+      )}
+
+      {adding && (
+        <div className="mt-4 rounded-[var(--gf-radius)] border border-[var(--gf-line)] p-3">
+          <label className="gf-label" htmlFor="gf-webhook-url">Where should events go?</label>
+          <input
+            id="gf-webhook-url"
+            className="gf-input"
+            value={url}
+            placeholder="https://example.com/goodfolder-events"
+            onChange={(event) => setUrl(event.target.value)}
+          />
+          <p className="gf-eyebrow mt-3">Which events?</p>
+          <div className="mt-1 space-y-1">
+            {eventInfo.map((item) => (
+              <label key={item.event} className="flex items-center gap-2 text-[13px]">
+                <input
+                  type="checkbox"
+                  checked={events.includes(item.event)}
+                  onChange={(event) =>
+                    setEvents((current) =>
+                      event.target.checked ? [...current, item.event] : current.filter((value) => value !== item.event),
+                    )
+                  }
+                />
+                {item.label}
+              </label>
+            ))}
+          </div>
+          <label className="gf-label mt-3" htmlFor="gf-webhook-folder">Which folders?</label>
+          <select id="gf-webhook-folder" className="gf-input" value={folderId} onChange={(event) => setFolderId(event.target.value)}>
+            <option value="">Every folder on this account</option>
+            {props.folders.map((folder) => (
+              <option key={folder.id} value={folder.id}>{folder.name}</option>
+            ))}
+          </select>
+          <div className="mt-3 flex justify-end gap-2">
+            <button type="button" className="gf-button-secondary" onClick={() => setAdding(false)} disabled={busy !== null}>Cancel</button>
+            <button type="button" className="gf-button-primary" onClick={() => void add()} disabled={busy !== null || !url.trim() || events.length === 0}>
+              {busy === "add" ? "Adding…" : "Add the destination"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {destinations === null && <p className="gf-faint mt-4 text-[13px]">Reading…</p>}
+      {destinations !== null && destinations.length === 0 && !adding && !fresh && (
+        <p className="gf-faint mt-4 text-[13px]">Nothing is listening for events yet. Add an address when a service should hear about saves and proposals.</p>
+      )}
+      {destinations && destinations.length > 0 && (
+        <ul className="mt-4 divide-y divide-[var(--gf-line)]">
+          {destinations.map((destination) => (
+            <li key={destination.id} className="py-2.5">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-semibold">{destination.url}</p>
+                  <p className="gf-faint text-[12px]">
+                    {destination.events.map((event) => eventInfo.find((item) => item.event === event)?.label ?? event).join(" · ")}
+                  </p>
+                  <p className="gf-faint text-[12px]">
+                    {destination.folderName ? `Only “${destination.folderName}”` : "Every folder"}
+                    {destination.lastDeliveredAt ? ` · last delivery ${whenLabel(destination.lastDeliveredAt)}` : ""}
+                    {destination.pendingCount ? ` · ${destination.pendingCount} waiting` : ""}
+                    {destination.active ? "" : " · paused"}
+                  </p>
+                  {destination.lastError && <p className="mt-1 text-[12px] font-semibold" role="alert">{destination.lastError}</p>}
+                </div>
+                <div className="flex flex-none flex-col items-end gap-1">
+                  <button type="button" className="gf-button-ghost" onClick={() => void toggle(destination)} disabled={busy !== null}>
+                    {destination.active ? "Pause" : "Resume"}
+                  </button>
+                  <button type="button" className="gf-button-ghost" onClick={() => void sendTest(destination)} disabled={busy !== null}>
+                    {busy === `test:${destination.id}` ? "Sending…" : "Send a test"}
+                  </button>
+                  <button type="button" className="gf-button-ghost" onClick={() => void remove(destination)} disabled={busy !== null}>
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="mt-2 text-[13px] font-semibold" role="alert">{error}</p>}
     </Dialog>
   );
 }

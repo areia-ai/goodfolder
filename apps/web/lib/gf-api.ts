@@ -181,6 +181,18 @@ async function put<T>(path: string, body: unknown): Promise<T> {
   return json;
 }
 
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as T & { error?: { message?: string } };
+  if (!res.ok) throw Object.assign(new Error(json.error?.message ?? `GoodFolder request failed (${res.status})`), { status: res.status, payload: json });
+  return json;
+}
+
 async function destroy<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     method: "DELETE",
@@ -249,6 +261,112 @@ export interface ApprovedDevice {
 export const listDevices = () => get<{ devices: ApprovedDevice[] }>("/api/account/devices");
 export const forgetDevice = (deviceId: string) => destroy<{ ok: true }>(`/api/account/devices/${encodeURIComponent(deviceId)}`, {});
 export const signOutEverywhere = () => send<{ ok: true }>("/api/auth/logout-everywhere", {});
+
+/* ------------------------------------------- services and their access keys */
+
+export interface ServiceScopeInfo {
+  scope: string;
+  label: string;
+}
+
+export interface ServiceKey {
+  id: string;
+  name: string;
+  scopes: string[];
+  projectId: string | null;
+  folderName: string | null;
+  createdVia: "dashboard" | "device";
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export const listServiceKeys = () =>
+  get<{ credentials: ServiceKey[]; availableScopes: ServiceScopeInfo[] }>("/api/service-credentials");
+
+/**
+ * The key comes back exactly once, in the answer to this call. Nothing reads
+ * it again — the dashboard shows it for as long as the dialog stays open and
+ * never asks for it a second time.
+ */
+export const createServiceKey = (input: { name: string; scopes: string[]; projectId?: string }) =>
+  send<{ ok: true; id: string; name: string; token: string; scopes: string[]; projectId: string | null }>(
+    "/api/service-credentials",
+    input,
+  );
+
+export const revokeServiceKey = (credentialId: string) =>
+  destroy<{ ok: true }>(`/api/service-credentials/${encodeURIComponent(credentialId)}`, {});
+
+export interface ServiceKeyEvent {
+  at: string;
+  detail: {
+    credentialId?: string;
+    accountId?: string;
+    scope?: string;
+    projectId?: string | null;
+    method?: string;
+    path?: string;
+  };
+}
+
+/** What one key actually did, newest first. */
+export const listServiceKeyUsage = (credentialId: string) =>
+  get<{ name: string; events: ServiceKeyEvent[] }>(`/api/service-credentials/${encodeURIComponent(credentialId)}/usage`);
+
+/* --------------------------------------------------------------- webhooks */
+
+export interface WebhookEventInfo {
+  event: string;
+  label: string;
+}
+
+export interface WebhookDestination {
+  id: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  projectId: string | null;
+  folderName: string | null;
+  createdAt: string;
+  lastDeliveredAt: string | null;
+  lastFailedAt: string | null;
+  lastError: string | null;
+  pendingCount: number;
+}
+
+export const listWebhooks = () =>
+  get<{ webhooks: WebhookDestination[]; events: WebhookEventInfo[] }>("/api/webhooks");
+
+/** The signing secret comes back once, like a service key. */
+export const createWebhook = (input: { url: string; events: string[]; projectId?: string }) =>
+  send<{ ok: true; id: string; secret: string; url: string; events: string[]; projectId: string | null }>(
+    "/api/webhooks",
+    input,
+  );
+
+export const updateWebhook = (webhookId: string, input: { url?: string; events?: string[]; active?: boolean }) =>
+  patch<{ ok: true }>(`/api/webhooks/${encodeURIComponent(webhookId)}`, input);
+
+export const removeWebhook = (webhookId: string) =>
+  destroy<{ ok: true }>(`/api/webhooks/${encodeURIComponent(webhookId)}`, {});
+
+export const testWebhook = (webhookId: string) =>
+  send<{ ok: true; deliveryId: string | null }>(`/api/webhooks/${encodeURIComponent(webhookId)}/test`, {});
+
+export interface WebhookDelivery {
+  id: string;
+  event: string;
+  status: "pending" | "delivered" | "failed";
+  attempts: number;
+  responseStatus: number | null;
+  error: string | null;
+  createdAt: string;
+  deliveredAt: string | null;
+  nextAttemptAt: string;
+}
+
+export const listWebhookDeliveries = (webhookId: string) =>
+  get<{ deliveries: WebhookDelivery[] }>(`/api/webhooks/${encodeURIComponent(webhookId)}/deliveries`);
 
 export const listFolders = () => get<Folder[]>("/api/projects");
 

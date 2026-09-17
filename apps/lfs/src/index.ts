@@ -157,7 +157,14 @@ app.use("/lfs/*", async (c, next) => {
 app.use("*", async (c, next) => {
   if (c.req.path === "/healthz") return next();
   const raw = tokenFromAuthHeader(c.req.header("Authorization"));
-  const scope = raw ? await resolveScope(sql, raw) : null;
+  // A scoped service credential reaches the large-file path with the folder
+  // in the address (batch) or in a query parameter this app put there when
+  // it wrote the action href. Without one it cannot resolve: a service key's
+  // reach is decided per folder, and download URLs carry no project id of
+  // their own in presigned mode.
+  const scope = raw
+    ? await resolveScope(sql, raw, projectHint(c.req.path, c.req.query("projectId")))
+    : null;
   if (!scope) {
     // RFC-required challenge so stock git-lfs clients offer credentials.
     c.header("WWW-Authenticate", 'Basic realm="GoodFolder"');
@@ -169,6 +176,23 @@ app.use("*", async (c, next) => {
   c.set("scope", scope);
   await next();
 });
+
+/** The folder a large-file request is about: in the path or, for service
+ *  keys, in a parameter this app adds to the addresses it hands out. */
+function projectHint(path: string, query: string | undefined): string | undefined {
+  if (query) return query;
+  const m = /^\/lfs\/([0-9a-f-]{36})\//.exec(path);
+  return m?.[1];
+}
+
+/**
+ * Which scopes a service credential needs per large-file action. A folder's
+ * own credential has no service marker and passes unchanged.
+ */
+function lfsScopeDenied(scope: TokenScope, needed: "git:read" | "git:write"): boolean {
+  if (!scope.service) return false;
+  return !scope.service.scopes.includes(needed);
+}
 
 // LFS Batch API (https://github.com/git-lfs/git-lfs/blob/main/docs/api/batch.md)
 app.post("/lfs/:projectId/objects/batch", async (c) => {
@@ -184,6 +208,12 @@ app.post("/lfs/:projectId/objects/batch", async (c) => {
     objects?: { oid?: string; size?: number }[];
   }>();
   const op = body.operation === "download" ? "download" : "upload";
+  if (lfsScopeDenied(scope, op === "upload" ? "git:write" : "git:read")) {
+    return c.json(
+      { error: { code: "scope", message: "This access key was not approved for that action." } },
+      403,
+    );
+  }
   const objects = [];
   for (const o of body.objects ?? []) {
     if (!o.oid || !OID_RE.test(o.oid)) continue;
@@ -211,7 +241,9 @@ app.post("/lfs/:projectId/objects/batch", async (c) => {
         ? {
             upload: { href },
             verify: {
-              href: `${publicOrigin()}/lfs/verify`,
+              // The folder travels with the verify call so a scoped service
+              // key can be resolved against the folder it belongs to.
+              href: `${publicOrigin()}/lfs/verify?projectId=${scope.projectId}`,
               header: { Authorization: c.req.header("Authorization") ?? "" },
             },
           }
@@ -225,12 +257,13 @@ app.post("/lfs/:projectId/objects/batch", async (c) => {
       c.req.header("x-forwarded-host") ?? c.req.header("host") ?? "127.0.0.1:4100";
     const proto = host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https";
     const origin = `${proto}://x:${tok}@${host}`;
-    const href = `${origin}/lfs/storage/${o.oid}`;
+    const folder = `projectId=${scope.projectId}`;
+    const href = `${origin}/lfs/storage/${o.oid}?${folder}`;
     objects.push({
       ...base,
       actions:
         op === "upload"
-          ? { upload: { href }, verify: { href: `${origin}/lfs/verify` } }
+          ? { upload: { href }, verify: { href: `${origin}/lfs/verify?${folder}` } }
           : { download: { href } },
     });
   }
@@ -240,6 +273,9 @@ app.post("/lfs/:projectId/objects/batch", async (c) => {
 // LFS verify: confirm the uploaded object really landed.
 app.post("/lfs/verify", async (c) => {
   const scope = c.get("scope") as TokenScope;
+  if (lfsScopeDenied(scope, "git:write")) {
+    return c.json({ error: { code: "scope", message: "This access key was not approved for that action." } }, 403);
+  }
   const b = await c.req.json<{ oid?: string; size?: number }>();
   if (!b.oid || !OID_RE.test(b.oid)) return c.text("bad oid", 400);
   try {
@@ -262,6 +298,9 @@ app.post("/lfs/verify", async (c) => {
 // Stream-through storage — authorized, then proxied to S3.
 app.put("/lfs/storage/:oid", async (c) => {
   const scope = c.get("scope") as TokenScope;
+  if (lfsScopeDenied(scope, "git:write")) {
+    return c.json({ error: { code: "scope", message: "This access key was not approved for that action." } }, 403);
+  }
   const oid = c.req.param("oid");
   if (!OID_RE.test(oid)) return c.text("bad oid", 400);
   const stream = c.req.raw.body;
@@ -305,6 +344,9 @@ app.put("/lfs/storage/:oid", async (c) => {
 
 app.get("/lfs/storage/:oid", async (c) => {
   const scope = c.get("scope") as TokenScope;
+  if (lfsScopeDenied(scope, "git:read")) {
+    return c.json({ error: { code: "scope", message: "This access key was not approved for that action." } }, 403);
+  }
   const oid = c.req.param("oid");
   if (!OID_RE.test(oid)) return c.text("bad oid", 400);
   try {
