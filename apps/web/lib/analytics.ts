@@ -60,6 +60,11 @@ export function initializePostHog(): void {
   posthog.init(key, {
     api_host: host,
     ui_host: "https://eu.posthog.com",
+    // Product analytics does not need a durable browser identity. Keeping the
+    // anonymous id in memory avoids analytics cookies and local-storage state;
+    // a new page load is deliberately a new anonymous visit.
+    persistence: "memory",
+    person_profiles: "never",
     capture_pageview: "history_change",
     capture_pageleave: true,
     autocapture: false,
@@ -67,6 +72,14 @@ export function initializePostHog(): void {
     capture_exceptions: false,
     capture_heatmaps: false,
     capture_dead_clicks: false,
+    disable_surveys: true,
+    disable_conversations: true,
+    disable_product_tours: true,
+    advanced_disable_feature_flags: true,
+    advanced_disable_decide: true,
+    save_campaign_params: false,
+    save_referrer: false,
+    respect_dnt: true,
   });
 }
 

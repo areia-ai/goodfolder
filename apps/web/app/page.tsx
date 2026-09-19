@@ -520,6 +520,8 @@ export default function Landing() {
           <nav aria-label="Resources" className="flex flex-wrap gap-4 text-[13px]">
             <Link href="/docs" className="underline underline-offset-2">Docs</Link>
             <Link href="/docs/agents" className="underline underline-offset-2">Agent setup</Link>
+            <Link href="/privacy" className="underline underline-offset-2">Privacy</Link>
+            <Link href="/terms" className="underline underline-offset-2">Terms</Link>
             <a href="/llms.txt" className="underline underline-offset-2">Agent index</a>
           </nav>
           <p className="gf-faint text-[13px]">
