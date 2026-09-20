@@ -12,10 +12,10 @@
   "dependencies": {
     "@goodfolder/serverlib": "workspace:*",
     "@hono/node-server": "^1.13.7",
-    "hono": "^4.13.7"
+    "hono": "^4.13.8"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^22.20.3",
     "typescript": "^5.9.2"
   }
 }
