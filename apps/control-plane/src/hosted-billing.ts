@@ -140,7 +140,13 @@ export class HostedBilling {
 
   verifyWebhook(rawBody: string, signatureHeader: string | undefined): Stripe.Event {
     if (!this.stripe || !this.config.stripe) throw new Error("billing-unavailable");
-    return verifyStripeWebhook(this.stripe, rawBody, signatureHeader, this.config.stripe.webhookSecret);
+    try {
+      return verifyStripeWebhook(this.stripe, rawBody, signatureHeader, this.config.stripe.webhookSecret);
+    } catch (liveError) {
+      const testSecret = this.config.stripe.testWebhookSecret;
+      if (!testSecret) throw liveError;
+      return verifyStripeWebhook(this.stripe, rawBody, signatureHeader, testSecret);
+    }
   }
 
   async applyWebhook(event: Stripe.Event): Promise<"processed" | "duplicate" | "ignored"> {

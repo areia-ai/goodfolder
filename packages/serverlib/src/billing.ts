@@ -67,6 +67,8 @@ export interface BillingConfig {
   stripe?: {
     apiKey: string;
     webhookSecret: string;
+    /** Optional secret for Stripe's separate test-mode endpoint. */
+    testWebhookSecret?: string;
     /** event_name configured on the Stripe Billing Meter for overage. */
     meterEventName: string;
     checkoutSuccessUrl: string;
@@ -104,6 +106,9 @@ export function loadBillingConfig(env: NodeJS.ProcessEnv = process.env, requireP
     stripe: {
       apiKey: required("STRIPE_API_KEY"),
       webhookSecret: required("STRIPE_WEBHOOK_SECRET"),
+      ...(env.STRIPE_TEST_WEBHOOK_SECRET?.trim()
+        ? { testWebhookSecret: env.STRIPE_TEST_WEBHOOK_SECRET.trim() }
+        : {}),
       meterEventName: required("STRIPE_METER_EVENT_NAME"),
       checkoutSuccessUrl: required("STRIPE_CHECKOUT_SUCCESS_URL"),
       portalReturnUrl: required("STRIPE_PORTAL_RETURN_URL"),
