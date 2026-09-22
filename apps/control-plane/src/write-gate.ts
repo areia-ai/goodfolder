@@ -18,6 +18,7 @@ import {
   ROUTING_CEILING_BYTES,
   SKIP_CATEGORY_LABEL,
   findCaseCollisions,
+  ignoreRuleFor,
   routeFile,
   skipRuleFor,
   type StorageTarget,
@@ -65,6 +66,8 @@ export interface WriteRequest {
   writes?: ReadonlyArray<{ path: string; sizeBytes: number }>;
   /** Paths this change takes out. A rename is a write and a remove together. */
   removes?: readonly string[];
+  /** The folder's own leave-out list, already parsed from .goodfolderignore. */
+  ignorePatterns?: readonly string[];
 }
 
 /**
@@ -109,6 +112,16 @@ export function checkWrite(request: WriteRequest): GateResult {
         "left-out",
         400,
         `GoodFolder leaves out ${SKIP_CATEGORY_LABEL[skipped.category]}, and “${baseName(write.path)}” is one of them.`,
+      );
+    }
+    const ignored = request.ignorePatterns?.length
+      ? ignoreRuleFor(write.path, request.ignorePatterns)
+      : null;
+    if (ignored) {
+      return refuse(
+        "left-out",
+        400,
+        `“${baseName(write.path)}” is on this folder's ignore list (${ignored}), so GoodFolder leaves it out.`,
       );
     }
   }

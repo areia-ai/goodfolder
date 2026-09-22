@@ -47,7 +47,7 @@ import {
 import { HostedBilling } from "./hosted-billing.ts";
 import { safeDocumentPath } from "./collaboration.ts";
 import { dashboardLink } from "./links.ts";
-import { ROUTING_CEILING_BYTES } from "@goodfolder/shared";
+import { IGNORE_FILE, ROUTING_CEILING_BYTES, parseIgnoreFile } from "@goodfolder/shared";
 import { checkWrite, filesUnder } from "./write-gate.ts";
 import { transportRoute } from "./transport.ts";
 import { formulaRefusal } from "./formula.ts";
@@ -60,6 +60,10 @@ import {
   previewRevert,
   recordRemoteSave,
   runnerRun,
+  screenLandedPush,
+  screenSavedAdds,
+  treeChanges,
+  type FlaggedPath,
   type RemoteDeps,
 } from "./remote.ts";
 import {
@@ -1492,7 +1496,7 @@ app.get("/api/projects/:id/saves", async (c) => {
            s.removed_count AS "removedCount",
            s.top_paths AS "topPaths",
            ${wantFull ? sql`s.changed_paths AS "changedPaths"` : sql`'[]'::jsonb AS "changedPaths"`},
-           s.harness, d.name AS "deviceName"
+           s.warnings, s.harness, d.name AS "deviceName"
     FROM saves s LEFT JOIN devices d ON d.id = s.actor_device_id
     WHERE s.project_id = ${projectId}
     ORDER BY s.seq DESC LIMIT 100`;
@@ -1795,8 +1799,10 @@ app.post("/api/projects/:id/document/save", async (c) => {
   const path = safeDocumentPath(body.path);
   if (!path || !EDITABLE_DOCUMENT.test(path)) return c.json({ error: { code: "path", message: "Choose a supported document." } }, 400);
   if (typeof body.content !== "string" || Buffer.byteLength(body.content) > 1_000_000) return c.json({ error: { code: "content", message: "Document is missing or too large." } }, 400);
+  const gateTree = await repos.tree(projectId);
   const gate = checkWrite({
-    tree: await repos.tree(projectId),
+    tree: gateTree,
+    ignorePatterns: await ignorePatternsIn(projectId, gateTree),
     writes: [{ path, sizeBytes: Buffer.byteLength(body.content) }],
   });
   if (!gate.ok) return c.json({ error: { code: gate.refusal.code, message: gate.refusal.message } }, gate.refusal.status);
@@ -1871,6 +1877,27 @@ function fileName(path: string): string {
   return path.split("/").pop() || path;
 }
 
+/**
+ * The folder's own leave-out list, for the write gate. The file lives in the
+ * folder itself, so it is read from the same tree the gate judges against;
+ * a folder without one costs a tree scan and nothing more. Unreadable or
+ * missing answers an empty list — a write is never refused because we could
+ * not read the list.
+ */
+async function ignorePatternsIn(
+  projectId: string,
+  tree: ReadonlyArray<{ path: string; type: string }>,
+): Promise<string[]> {
+  if (!tree.some((e) => e.type === "blob" && e.path === IGNORE_FILE)) return [];
+  try {
+    const file = await repos.readFile(projectId, IGNORE_FILE);
+    if (!file) return [];
+    return parseIgnoreFile(file.content.toString("utf8")).patterns;
+  } catch {
+    return [];
+  }
+}
+
 function directoryOf(path: string): string {
   const cut = path.lastIndexOf("/");
   return cut < 0 ? "" : path.slice(0, cut);
@@ -1932,7 +1959,7 @@ app.post("/api/projects/:id/files/upload", async (c) => {
     const { size } = await stat(spooled);
 
     const tree = await repos.tree(projectId);
-    const gate = checkWrite({ tree, writes: [{ path, sizeBytes: size }] });
+    const gate = checkWrite({ tree, ignorePatterns: await ignorePatternsIn(projectId, tree), writes: [{ path, sizeBytes: size }] });
     if (!gate.ok) return c.json({ error: { code: gate.refusal.code, message: gate.refusal.message } }, gate.refusal.status);
     const planned = gate.plan.writes[0]!;
 
@@ -1998,6 +2025,7 @@ app.post("/api/projects/:id/files/rename", async (c) => {
   const renamed = moving.map((file) => ({ ...file, to: `${to}${file.path.slice(from.length)}` }));
   const gate = checkWrite({
     tree,
+    ignorePatterns: await ignorePatternsIn(projectId, tree),
     writes: renamed.map((file) => ({ path: file.to, sizeBytes: file.size })),
     removes: renamed.map((file) => file.path),
   });
@@ -2478,6 +2506,7 @@ app.post("/api/projects/:id/proposals", async (c) => {
     const sizeBytes = Number(row.sizeBytes);
     const gate = checkWrite({
       tree,
+      ignorePatterns: await ignorePatternsIn(projectId, tree),
       writes: [
         { path: assetPath, sizeBytes },
         { path: documentPath, sizeBytes: Buffer.byteLength(applied.content) },
@@ -2573,7 +2602,7 @@ app.post("/api/projects/:id/proposals", async (c) => {
         mimeType: row.mimeType == null ? null : String(row.mimeType),
         explanation,
       };
-      gate = checkWrite({ tree, writes: [{ path, sizeBytes: Number(row.sizeBytes) }] });
+      gate = checkWrite({ tree, ignorePatterns: await ignorePatternsIn(projectId, tree), writes: [{ path, sizeBytes: Number(row.sizeBytes) }] });
     } else if (loneKind === "path_rename") {
       const to = safeDocumentPath((lone as { to?: string }).to);
       if (!to) return c.json({ error: { code: "suggestion", message: "Choose a name." } }, 400);
@@ -2581,7 +2610,7 @@ app.post("/api/projects/:id/proposals", async (c) => {
       if (!here) return c.json({ error: { code: "not-found", message: "That file no longer exists in the folder." } }, 404);
       stored = "rename";
       operation = { kind: "path_rename", to, explanation };
-      gate = checkWrite({ tree, writes: [{ path: to, sizeBytes: here.size }], removes: [path] });
+      gate = checkWrite({ tree, ignorePatterns: await ignorePatternsIn(projectId, tree), writes: [{ path: to, sizeBytes: here.size }], removes: [path] });
     } else {
       if (!here) return c.json({ error: { code: "not-found", message: "That file no longer exists in the folder." } }, 404);
       stored = "remove";
@@ -2943,6 +2972,7 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
     if (tree.some((entry) => entry.type === "blob" && entry.path === asset.path)) return stale();
     const gate = checkWrite({
       tree,
+      ignorePatterns: await ignorePatternsIn(projectId, tree),
       writes: [
         { path: asset.path, sizeBytes: size },
         { path: text.path, sizeBytes: Buffer.byteLength(applied.content) },
@@ -3043,7 +3073,7 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
         SELECT id FROM staged_uploads
         WHERE project_id = ${projectId} AND oid = ${oid} AND expires_at > now() LIMIT 1`;
       if (!stillWaiting.length) return stale();
-      const gate = checkWrite({ tree, writes: [{ path, sizeBytes: size }] });
+      const gate = checkWrite({ tree, ignorePatterns: await ignorePatternsIn(projectId, tree), writes: [{ path, sizeBytes: size }] });
       if (!gate.ok) return stale();
 
       let content: Buffer;
@@ -3069,7 +3099,7 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
     } else if (suggestion.kind === "rename") {
       const to = typeof operation.to === "string" ? safeDocumentPath(operation.to) : null;
       if (!to || !here) return stale();
-      const gate = checkWrite({ tree, writes: [{ path: to, sizeBytes: here.size }], removes: [path] });
+      const gate = checkWrite({ tree, ignorePatterns: await ignorePatternsIn(projectId, tree), writes: [{ path: to, sizeBytes: here.size }], removes: [path] });
       if (!gate.ok) return stale();
       const current = await repos.readFile(projectId, path);
       if (!current) return stale();
@@ -3122,8 +3152,10 @@ app.post("/api/projects/:id/proposals/:proposalId/review", async (c) => {
   // The same gate a direct save goes through. Someone else's suggestion is
   // not a reason to relax it, and a change this would spoil goes to review
   // rather than being refused outright — the owner still gets to look.
+  const gateTree = await repos.tree(projectId);
   const gate = checkWrite({
-    tree: await repos.tree(projectId),
+    tree: gateTree,
+    ignorePatterns: await ignorePatternsIn(projectId, gateTree),
     writes: [{ path, sizeBytes: Buffer.byteLength(nextContent) }],
   });
   if (!gate.ok) {
@@ -3730,10 +3762,12 @@ app.post("/api/saves", async (c) => {
     counts?: { added?: number; changed?: number; removed?: number };
     topPaths?: string[];
     harness?: string;
+    includedOnPurpose?: string[];
   }>().catch(() => ({} as {
     projectId?: string; label?: string; labelSource?: "user" | "agent"; changedPaths?: string[];
     commitSha?: string; collision?: string; ai?: { summary: string; excerpt: string; truncated: boolean };
     counts?: { added?: number; changed?: number; removed?: number }; topPaths?: string[]; harness?: string;
+    includedOnPurpose?: string[];
   }));
 
   // A service credential records a save for a folder it may change. The
@@ -3767,12 +3801,15 @@ app.post("/api/saves", async (c) => {
       ...(b.label ? { label: b.label } : {}),
       harness,
       ...(b.commitSha ? { expectedHead: b.commitSha } : {}),
+      includedOnPurpose: Array.isArray(b.includedOnPurpose)
+        ? b.includedOnPurpose.filter((p): p is string => typeof p === "string").slice(0, 500)
+        : [],
     });
     if (outcome.status === "refused") return revertRefusal(c, outcome);
     if (outcome.status === "unchanged") {
       return c.json({ ok: true, unchanged: true, seq: outcome.seq, label: outcome.label });
     }
-    return c.json({ ok: true, id: null, seq: outcome.seq, label: outcome.label, counts: outcome.counts });
+    return c.json({ ok: true, id: null, seq: outcome.seq, label: outcome.label, counts: outcome.counts, warnings: outcome.warnings, flagged: outcome.flagged });
   }
 
   if (!scope) {
@@ -3809,16 +3846,46 @@ app.post("/api/saves", async (c) => {
 
   const { label, source } = await generateLabel(b.ai, b.label ? b.label : undefined);
 
+  // Screen what this save ADDED, from the trees themselves — the client's
+  // own path list is not trusted to describe what landed. A tree that will
+  // not read records the save anyway, with no warnings.
+  const includedOnPurpose = Array.isArray(b.includedOnPurpose)
+    ? b.includedOnPurpose.filter((p): p is string => typeof p === "string").slice(0, 500)
+    : [];
+  let warnings: Array<{ path: string; pattern: string }> = [];
+  let flagged: FlaggedPath[] = [];
+  try {
+    const prior = await sql`
+      SELECT commit_sha AS "commitSha" FROM saves
+      WHERE project_id = ${scope.projectId} ORDER BY seq DESC LIMIT 1`;
+    const newTree = await repos.tree(scope.projectId, b.commitSha);
+    const baseTree = prior[0] ? await repos.tree(scope.projectId, String(prior[0].commitSha)) : [];
+    const present = new Set(newTree.filter((e) => e.type === "blob").map((e) => e.path));
+    let ignorePatterns: string[] = [];
+    if (present.has(IGNORE_FILE)) {
+      const list = await repos.readFile(scope.projectId, IGNORE_FILE, b.commitSha);
+      if (list) ignorePatterns = parseIgnoreFile(list.content.toString("utf8")).patterns;
+    }
+    const screening = screenSavedAdds(
+      treeChanges(baseTree, newTree).filter((ch) => ch.kind === "added").map((ch) => ch.path),
+      { presentInTree: present, ignorePatterns, includedOnPurpose },
+    );
+    warnings = screening.warnings;
+    flagged = screening.flagged;
+  } catch (error) {
+    console.error("save screening failed; recording without it:", error);
+  }
+
   const rows = await sql`
     INSERT INTO saves (id, project_id, seq, label, label_source, actor_device_id, collision, changed_paths, commit_sha,
-                       added_count, changed_count, removed_count, top_paths, harness)
+                       added_count, changed_count, removed_count, top_paths, harness, warnings)
     SELECT ${crypto.randomUUID()}, ${scope.projectId},
            COALESCE(MAX(s.seq), 0) + 1,
            ${label}, ${source},
            ${scope.deviceId}, ${b.collision ?? null},
            ${sql.json(b.changedPaths ?? [])}, ${b.commitSha},
            ${counts?.added ?? 0}, ${counts?.changed ?? 0}, ${counts?.removed ?? 0},
-           ${sql.json(topPaths)}, ${harness}
+           ${sql.json(topPaths)}, ${harness}, ${sql.json(warnings)}
     FROM saves s WHERE s.project_id = ${scope.projectId}
     RETURNING id, seq`;
   const save = rows[0]!;
@@ -3845,7 +3912,9 @@ app.post("/api/saves", async (c) => {
       removed: counts?.removed ?? 0,
     },
   }).catch(() => {});
-  return c.json({ id: save.id, seq: save.seq, label });
+  // The save.flagged alarm fires where the push lands (screenLandedPush in
+  // the transport proxy), so a push that is never recorded still raises it.
+  return c.json({ id: save.id, seq: save.seq, label, warnings, flagged });
 });
 
 app.get("/api/saves", async (c) => {
@@ -3861,7 +3930,7 @@ app.get("/api/saves", async (c) => {
            s.commit_sha AS "commitSha", s.created_at::text AS "createdAt",
            s.added_count AS "addedCount", s.changed_count AS "changedCount",
            s.removed_count AS "removedCount", s.top_paths AS "topPaths",
-           s.harness, d.name AS "deviceName"
+           s.warnings, s.harness, d.name AS "deviceName"
     FROM saves s LEFT JOIN devices d ON d.id = s.actor_device_id
     WHERE s.project_id = ${scope.projectId}
     ORDER BY s.seq DESC LIMIT 100`;
@@ -3929,6 +3998,16 @@ async function gitProxy(req: import("node:http").IncomingMessage, res: import("n
     }
   }
 
+  // For the write that actually lands objects, remember where the folder
+  // stood first. After the answer has been relayed we look again — a push
+  // that is never recorded as a save still raises save.flagged. A failed
+  // read here just means the screen diffs from empty; it must never fail
+  // the push itself.
+  const headBefore =
+    isWrite && route.subpath === "/git-receive-pack"
+      ? await repos.head(route.projectId).catch(() => null)
+      : undefined;
+
   const upstream = `${cfg.giteaInternalUrl}/${cfg.giteaAdminUser}/${route.projectId}.git${route.subpath}${url.search}`;
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
@@ -3981,6 +4060,16 @@ async function gitProxy(req: import("node:http").IncomingMessage, res: import("n
     if (!["transfer-encoding", "content-encoding", "content-length"].includes(k)) outHeaders[k] = v;
   });
   res.writeHead(upstreamRes.status, outHeaders);
+  if (headBefore !== undefined && upstreamRes.status >= 200 && upstreamRes.status < 300) {
+    res.once("finish", () => {
+      void screenLandedPush(remoteDeps, {
+        projectId: route.projectId,
+        accountId: scope.ownerAccountId,
+        before: headBefore,
+        actor: scope.service?.name ?? "folder",
+      });
+    });
+  }
   relay(upstreamRes, res);
 }
 

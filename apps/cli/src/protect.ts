@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { saveConfig } from "./config.ts";
 import { CliError } from "./cli-error.ts";
 import { requireConnection } from "./connect.ts";
-import { skippedGroups } from "./skip.ts";
+import { groupSkippedEntries, skippedEntries } from "./skip.ts";
 
 /**
  * Two small commands around what a save leaves out.
@@ -17,7 +17,8 @@ import { skippedGroups } from "./skip.ts";
 export async function cmdSkipped(folder: string): Promise<void> {
   const { cfg } = await requireConnection(folder);
   const alsoProtect = cfg.alsoProtect ?? [];
-  const groups = skippedGroups(folder, alsoProtect);
+  const entries = skippedEntries(folder, alsoProtect);
+  const groups = groupSkippedEntries(entries);
 
   if (groups.length === 0 && alsoProtect.length === 0) {
     console.log("Everything in this folder is protected.");
@@ -25,11 +26,13 @@ export async function cmdSkipped(folder: string): Promise<void> {
   }
 
   if (groups.length > 0) {
+    const reasonOf = new Map(entries.map((e) => [e.path, e.reason]));
     console.log("Not protected, and why:\n");
     for (const group of groups) {
       console.log(`  ${group.label}`);
       for (const path of group.paths.slice(0, 12)) {
-        console.log(`    • ${path}`);
+        const reason = reasonOf.get(path);
+        console.log(`    • ${path}${reason ? ` — ${reason}` : ""}`);
       }
       const rest = group.paths.length - 12;
       if (rest > 0) console.log(`    …and ${rest.toLocaleString("en-US")} more`);
@@ -37,6 +40,8 @@ export async function cmdSkipped(folder: string): Promise<void> {
     }
     console.log("To protect one of them anyway:");
     console.log("   goodfolder protect <name>");
+    console.log("To leave a whole kind of file out on every device:");
+    console.log("   goodfolder ignore add <pattern>");
   }
 
   if (alsoProtect.length > 0) {

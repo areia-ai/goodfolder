@@ -53,6 +53,14 @@ const save = {
     changedPathsTruncated: { type: "boolean", description: "True when ?paths=full was cut off at 100 paths." },
     harness: { type: ["string", "null"], description: "The assistant that made it, when one did." },
     deviceName: { type: ["string", "null"] },
+    warnings: {
+      type: "array",
+      description: "Files this save added whose names suggest secrets — saved, but worth knowing about.",
+      items: {
+        type: "object",
+        properties: { path: { type: "string" }, pattern: { type: "string" } },
+      },
+    },
   },
 };
 
@@ -500,7 +508,28 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
           responses: {
             "200": jsonResponse("The recorded save.", {
               type: "object",
-              properties: { seq: { type: "integer" }, label: { type: "string" } },
+              properties: {
+                seq: { type: "integer" },
+                label: { type: "string" },
+                warnings: {
+                  type: "array",
+                  description: "Added files whose names suggest secrets.",
+                  items: { type: "object", properties: { path: { type: "string" }, pattern: { type: "string" } } },
+                },
+                flagged: {
+                  type: "array",
+                  description: "Added files the leave-out rules would have kept out. Also sent as the save.flagged webhook.",
+                  items: {
+                    type: "object",
+                    properties: {
+                      path: { type: "string" },
+                      pattern: { type: "string" },
+                      kind: { type: "string", enum: ["credentials", "ignored"] },
+                      deliberate: { type: "boolean" },
+                    },
+                  },
+                },
+              },
             }),
             "402": jsonResponse("Hosted access is required.", error),
             "403": jsonResponse("A folder or service credential with git:write is required.", error),
@@ -652,7 +681,7 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
               url: { type: "string", format: "uri", description: "A public https address." },
               events: {
                 type: "array",
-                items: { type: "string", enum: ["save.created", "save.requested", "proposal.created", "proposal.reviewed"] },
+                items: { type: "string", enum: ["save.created", "save.requested", "save.flagged", "proposal.created", "proposal.reviewed"] },
               },
               projectId: { type: "string", format: "uuid", description: "Only this folder's events. Leave out for the whole account." },
             },

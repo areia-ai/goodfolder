@@ -51,7 +51,7 @@ test("event lists refuse unknown names instead of dropping them", () => {
   assert.equal(parseWebhookEvents(["save.created", "folder.deleted"]), null);
   assert.equal(parseWebhookEvents([]), null);
   assert.equal(parseWebhookEvents("save.created"), null);
-  assert.deepEqual([...WEBHOOK_EVENTS], ["save.created", "save.requested", "proposal.created", "proposal.reviewed"]);
+  assert.deepEqual([...WEBHOOK_EVENTS], ["save.created", "save.requested", "save.flagged", "proposal.created", "proposal.reviewed"]);
 });
 
 test("the signature covers the timestamp and the body", () => {

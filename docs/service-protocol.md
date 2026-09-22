@@ -140,8 +140,17 @@ local server returns, adapted for a caller with no local folder.
 
 ## 5. Webhooks
 
-Events: `save.created`, `proposal.created`, `proposal.reviewed`, and
-`save.requested` (reserved; no emitter yet).
+Events: `save.created`, `save.flagged`, `proposal.created`,
+`proposal.reviewed`, and `save.requested` (reserved; no emitter yet).
+
+`save.flagged` fires when a push lands files the leave-out rules would
+normally keep out — a name shaped like a credential, or a path on the
+folder's `.goodfolderignore` list. It fires on the push itself, so it also
+covers work that is never recorded as a save; when it is, `data.seq` is
+`null` and `data.head` names the state the push produced. The rest of
+`data` is `flagged`, a list of `{ path, pattern, kind, deliberate }`
+entries where `kind` is `credentials` or `ignored` and `deliberate` says
+the saver asked for the file on purpose.
 
 ```
 POST <your address>

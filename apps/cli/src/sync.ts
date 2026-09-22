@@ -3,12 +3,13 @@ import { requireConnection } from "./connect.ts";
 import { git, gitOk } from "./git.ts";
 import { recordSave } from "./api.ts";
 import { fetchHistory, GF_REMOTE, pushCurrentHistory } from "./repo-setup.ts";
+import { applySkipRules } from "./skip.ts";
 
 export async function cmdSync(
   folder: string,
   opts: { harness?: string | undefined } = {},
 ): Promise<void> {
-  const { cfg } = await requireConnection(folder);
+  const { gitDir, cfg } = await requireConnection(folder);
 
   const fetchRes = fetchHistory(folder, cfg);
   if (fetchRes.code !== 0) {
@@ -59,6 +60,8 @@ export async function cmdSync(
       throw new CliError("✗ Combined locally but could not upload. Try again.", 1);
 
     }
+    // A .goodfolderignore that arrived from the other device takes effect now.
+    applySkipRules(folder, gitDir);
     try {
       await recordSave(cfg, {
         label: `Synced changes from another device`,
@@ -82,6 +85,8 @@ export async function cmdSync(
       throw new CliError("✗ Update failed mid-way — your work is untouched.", 1);
 
     }
+    // Same for the fast-forward case: a changed ignore list lands here too.
+    applySkipRules(folder, gitDir);
     console.log(`✓ Brought in ${behind} change${behind === 1 ? "" : "s"} from your other device${behind === 1 ? "" : "s"}.`);
     return;
   }

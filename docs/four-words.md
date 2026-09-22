@@ -63,3 +63,40 @@ If something is being left out that you want protected:
 ```bash
 goodfolder protect <name>
 ```
+
+## Files shaped like credentials
+
+Names like `.env`, `id_rsa`, `*.pem`, `*.p12`, `*.pfx`, `*.keystore`,
+`*.jks`, or a file literally named `credentials` are left out of every save.
+GoodFolder assumes they hold passwords or keys, and a password that was
+never saved can never leak from history. To save one of them on purpose,
+`goodfolder protect <name>` for that one file, or
+`goodfolder save --include-secrets` to include everything left out on those
+grounds — it asks you to type `include` first, because once those files are
+saved they keep being saved and stay in earlier saves.
+
+Other names — `Passwords.xlsx`, `Secret plan.txt`, `server.key.bak` — are
+saved normally, but the save reports them as suspicious so they do not
+slip past you. If one of them really is a secret, `goodfolder ignore add
+<name> --remove` stops saving it and takes it off your other devices;
+earlier saves still hold it.
+
+## Your own ignore list
+
+A folder can carry its own leave-out list in a file named
+`.goodfolderignore` — one name or pattern per line, `#` starts a comment.
+It is ordinary folder content, so it syncs to your other computers and the
+same rules apply everywhere:
+
+```bash
+goodfolder ignore add "*.mov"     # start or grow the list
+goodfolder ignore list           # what it leaves out right now
+goodfolder ignore remove "*.mov" # take a line off again
+```
+
+Adding a pattern changes what the next save protects; it never rewrites
+history — a file that was already saved is still in earlier saves. To stop
+saving a file that already has history, `goodfolder ignore add <name>
+--remove` takes it out of future saves and, after your next save, off your
+other computers — while leaving the file on this computer and in every
+earlier save.

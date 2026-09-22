@@ -133,7 +133,7 @@ server.tool(
 
 server.tool(
   "goodfolder_save",
-  "Save the folder's work — safe to run anytime, nothing already protected is ever lost. Downloaded packages, rebuilt output and files that look like they hold passwords or keys are left out by default; the reply names what stayed out. If the caller has seen what changed, pass a short plain-language label describing it (max ~10 words); otherwise one is generated automatically.",
+  "Save the folder's work — safe to run anytime, nothing already protected is ever lost. Downloaded packages, rebuilt output and files that look like they hold passwords or keys are left out by default; the reply names what stayed out. Warnings list saved files whose names suggest secrets (a warning never blocks the save). If the caller has seen what changed, pass a short plain-language label describing it (max ~10 words); otherwise one is generated automatically.",
   {
     folder: z.string().describe("Absolute path to the connected folder"),
     label: z
@@ -145,10 +145,23 @@ server.tool(
   },
   async ({ folder, label }) => {
     const { cfg } = await requireConnection(folder);
-    const r = await run(() =>
-      cmdSave(folder, cfg, { message: label, harness: clientHarness() }),
-    );
-    return { content: [{ type: "text", text: r.text }], isError: !!r.error };
+    let outcome: Awaited<ReturnType<typeof cmdSave>> | undefined;
+    const r = await run(async () => {
+      outcome = await cmdSave(folder, cfg, { message: label, harness: clientHarness() });
+    });
+    return {
+      content: [{ type: "text", text: r.text }],
+      structuredContent: {
+        warnings: (outcome?.warnings ?? []).map((w) => ({ path: w.path, pattern: w.pattern })),
+        skipped: (outcome?.skipped ?? []).map((e) => ({
+          path: e.path,
+          source: e.source,
+          pattern: e.pattern,
+          reason: e.reason,
+        })),
+      },
+      isError: !!r.error,
+    };
   },
 );
 

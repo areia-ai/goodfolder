@@ -1,4 +1,4 @@
-import type { AiLabelContext, SaveRecord } from "@goodfolder/shared";
+import type { AiLabelContext, SaveRecord, WarnMatch } from "@goodfolder/shared";
 import type { FolderConfig } from "./config.ts";
 import { CliError } from "./cli-error.ts";
 import { authHint } from "./auth.ts";
@@ -151,6 +151,10 @@ export function recordSave(
     counts?: { added: number; changed: number; removed: number };
     topPaths?: string[];
     harness?: string | null;
+    /** Added files whose names suggest secrets (informational). */
+    warnings?: WarnMatch[];
+    /** Left-out paths the person deliberately protected anyway. */
+    includedOnPurpose?: string[];
   },
 ): Promise<{ id: string; seq: number; label: string }> {
   return call(cfg, "POST", "/api/saves", {
@@ -163,6 +167,8 @@ export function recordSave(
     counts: input.counts,
     topPaths: input.topPaths,
     harness: input.harness ?? undefined,
+    warnings: input.warnings,
+    includedOnPurpose: input.includedOnPurpose,
   }).then((r) => {
     if (!r.ok) throw new Error(r.json?.error?.message ?? `save failed (${r.status})`);
     return r.json;

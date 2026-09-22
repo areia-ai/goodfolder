@@ -11,6 +11,7 @@ import { cmdCreate } from "./create.ts";
 import { cmdClone } from "./clone.ts";
 import { cmdDevices, cmdLogin } from "./auth.ts";
 import { cmdProtect, cmdSkipped } from "./protect.ts";
+import { cmdIgnore } from "./ignore.ts";
 import { cmdRename } from "./rename.ts";
 import pkg from "../package.json" with { type: "json" };
 
@@ -21,12 +22,14 @@ const HELP = `goodfolder — keep your folder safe
   goodfolder connect [folder]     Connect an existing folder (first time)
   goodfolder rename <name>        Change the folder name shown in GoodFolder
   goodfolder save [-m note]       Save a point you can come back to
+                                (--include-secrets protects files that look like credentials)
   goodfolder sync                 Bring in changes from your other devices
   goodfolder log                  Show the timeline
   goodfolder undo                 Undo the last save (shows what changes first)
   goodfolder restore <number>     Go back to an earlier save
   goodfolder skipped              Show what isn't being protected, and why
   goodfolder protect <name>       Protect something that is being left out
+  goodfolder ignore add|list|remove   Manage this folder's own leave-out list
   goodfolder login                Approve this computer (one-time setup)
   goodfolder devices              Show the computers approved on your account
   goodfolder devices forget <n>   Take an approval back
@@ -47,6 +50,8 @@ async function main() {
     else if (argv[i] === "--dest") flags.dest = argv[++i] ?? "";
     else if (argv[i] === "-y" || argv[i] === "--yes") bools.add("yes");
     else if (argv[i] === "--session") bools.add("session");
+    else if (argv[i] === "--include-secrets") bools.add("include-secrets");
+    else if (argv[i] === "--remove") bools.add("remove");
     else positional.push(argv[i]!);
   }
   const folder = process.cwd();
@@ -89,9 +94,18 @@ async function main() {
     case "devices":
       await cmdDevices(positional[0], positional[1]);
       break;
-    case "save":
-      await cmdSave(folder, (await requireConnection(folder)).cfg, flags);
+    case "ignore":
+      await cmdIgnore(folder, positional, { remove: bools.has("remove"), yes: bools.has("yes") });
       break;
+    case "save": {
+      const conn = await requireConnection(folder);
+      await cmdSave(folder, conn.cfg, {
+        message: flags.message,
+        includeSecrets: bools.has("include-secrets"),
+        gitDir: conn.gitDir,
+      });
+      break;
+    }
     case "sync":
       await cmdSync(folder);
       break;

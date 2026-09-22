@@ -17,6 +17,7 @@ const asJson = (value: unknown): JsonParameter => value as JsonParameter;
 export const WEBHOOK_EVENTS = [
   "save.created",
   "save.requested",
+  "save.flagged",
   "proposal.created",
   "proposal.reviewed",
 ] as const;
@@ -27,6 +28,7 @@ export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 export const WEBHOOK_EVENT_LABELS: ReadonlyArray<{ event: WebhookEvent; label: string }> = [
   { event: "save.created", label: "A save was recorded" },
   { event: "save.requested", label: "A save was asked for (not sent yet)" },
+  { event: "save.flagged", label: "A save added files the leave-out rules would have kept out" },
   { event: "proposal.created", label: "A change proposal was prepared" },
   { event: "proposal.reviewed", label: "A change proposal was accepted or turned down" },
 ];

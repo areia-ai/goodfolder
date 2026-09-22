@@ -161,6 +161,11 @@ export const SKIP_RULES: readonly SkipRule[] = [
   { pattern: ".env", category: "credentials" },
   { pattern: ".env.*", category: "credentials" },
   { pattern: "*.pem", category: "credentials" },
+  { pattern: "*.p12", category: "credentials" },
+  { pattern: "*.pfx", category: "credentials" },
+  { pattern: "*.keystore", category: "credentials" },
+  { pattern: "*.jks", category: "credentials" },
+  { pattern: "credentials", category: "credentials" },
   { pattern: "id_rsa", category: "credentials" },
   { pattern: "id_dsa", category: "credentials" },
   { pattern: "id_ecdsa", category: "credentials" },
@@ -270,15 +275,16 @@ const GLOB_CACHE = new Map<string, RegExp>();
  * `*` is the only wildcard the rules use, and it never crosses a `/`.
  * Anything else in a pattern is a literal.
  */
-function globToRegExp(glob: string): RegExp {
-  const cached = GLOB_CACHE.get(glob);
+function globToRegExp(glob: string, caseInsensitive = false): RegExp {
+  const key = caseInsensitive ? `i${glob}` : glob;
+  const cached = GLOB_CACHE.get(key);
   if (cached) return cached;
   const source = glob
     .split("*")
     .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
     .join("[^/]*");
-  const re = new RegExp(`^${source}$`);
-  GLOB_CACHE.set(glob, re);
+  const re = new RegExp(`^${source}$`, caseInsensitive ? "i" : "");
+  GLOB_CACHE.set(key, re);
   return re;
 }
 
@@ -293,6 +299,128 @@ for (const pattern of [...SKIP_RULES.map((r) => r.pattern), ...KEEP_PATTERNS]) {
   if (!body || /[?\[\]{}!\\]/.test(body) || body.includes("**")) {
     throw new Error(`skip rule "${pattern}" is not a shape skipRuleFor can match`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// The warn tier — saved, but named like a secret
+// ---------------------------------------------------------------------------
+
+/**
+ * A saved file whose name suggests it might hold a secret.
+ * `pattern` is the warn pattern that caught it.
+ */
+export interface WarnMatch {
+  path: string;
+  pattern: string;
+}
+
+/**
+ * Names worth a raised eyebrow, not a refusal. These are deliberately looser
+ * than the credential rules above — "Secret Santa.xlsx" warns where `.env`
+ * refuses — because a warning costs a line of output and a wrong skip loses
+ * someone's work.
+ */
+export const WARN_PATTERNS: readonly string[] = [
+  "*secret*",
+  "*password*",
+  "*credential*",
+  "*.key.*",
+];
+
+/**
+ * Ask whether a saved path has a name that suggests secrets. Only the last
+ * segment is read, case-insensitively, so `Passwords.xlsx` and
+ * `Secret Santa.xlsx` warn while `Deck.key` does not. Anything a save would
+ * leave out anyway returns null — the skip already said so, louder.
+ */
+export function warnRuleFor(path: string): WarnMatch | null {
+  const last = path.split("/").filter(Boolean).pop();
+  if (!last) return null;
+  if (skipRuleFor(path, () => false)) return null;
+  for (const pattern of WARN_PATTERNS) {
+    if (globToRegExp(pattern, true).test(last)) return { path, pattern };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// A folder's own ignore list
+// ---------------------------------------------------------------------------
+
+/**
+ * The file a person (or `goodfolder ignore`) writes to leave more things
+ * out. It lives in the folder itself, so it syncs to every device — the one
+ * list that is deliberately not managed per-machine.
+ */
+export const IGNORE_FILE = ".goodfolderignore";
+
+/**
+ * Check one line of the ignore file. Answers a plain-language reason it
+ * cannot be used, or null when it can. The limits are the same ones
+ * SKIP_RULES keep: `*` is the only wildcard, so the engine and this reader
+ * can never disagree about what a line means.
+ */
+export function validateIgnorePattern(pattern: string): string | null {
+  const p = pattern.trim();
+  if (!p) return "is empty";
+  if (p.startsWith("#")) return "is a comment, not a pattern";
+  if (p.startsWith("!")) return "starts with ! — this list can't carry exceptions";
+  if (p.startsWith("/")) return "starts with / — write it relative to the top of the folder";
+  const body = p.endsWith("/") ? p.slice(0, -1) : p;
+  if (!body) return "is only a slash";
+  if (body.includes("**")) return "uses ** — the only wildcard here is *";
+  const bad = /[?[\]{}\\]/.exec(body);
+  if (bad) return `uses "${bad[0]}" — the only wildcard here is *`;
+  if (body.split("/").some((part) => !part)) return "has an empty part — write it with single slashes";
+  // The list must never switch itself off: a pattern that matched this file
+  // would hide the very list that produced it.
+  if (matchesPattern([IGNORE_FILE], p)) return `would leave out ${IGNORE_FILE} itself`;
+  return null;
+}
+
+/**
+ * Read an ignore file's text into the lines that count. Blank lines and
+ * `#` comments are skipped, repeats collapse to one, and each unusable line
+ * is reported with where it was so both the command line and the server can
+ * say so — and ignore it identically.
+ */
+export function parseIgnoreFile(text: string): {
+  patterns: string[];
+  invalid: Array<{ line: number; text: string; reason: string }>;
+} {
+  const patterns: string[] = [];
+  const invalid: Array<{ line: number; text: string; reason: string }> = [];
+  const seen = new Set<string>();
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trim();
+    if (!line || line.startsWith("#")) continue;
+    const reason = validateIgnorePattern(line);
+    if (reason !== null) {
+      invalid.push({ line: i + 1, text: line, reason });
+      continue;
+    }
+    if (seen.has(line)) continue;
+    seen.add(line);
+    patterns.push(line);
+  }
+  return { patterns, invalid };
+}
+
+/**
+ * Which line of a folder's ignore list caught a path — the last one that
+ * matches, same as the engine's own order. Answers the pattern text, or
+ * null. Matching is exactly the one `matchesPattern` the skip rules use, so
+ * the two readers can never drift.
+ */
+export function ignoreRuleFor(path: string, patterns: readonly string[]): string | null {
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length === 0) return null;
+  let winner: string | null = null;
+  for (const pattern of patterns) {
+    if (matchesPattern(segments, pattern)) winner = pattern;
+  }
+  return winner;
 }
 
 // ---------------------------------------------------------------------------

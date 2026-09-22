@@ -11,8 +11,10 @@ their formats: documents, spreadsheets, decks, PDFs, photos, video, audio.
 Source files too, if the folder happens to hold an app. It saves, syncs and
 restores like any other folder, and the packages a project downloads, the
 output its tools rebuild, and anything shaped like a credential stay out of a
-save by default. It is not a replacement for the tools an engineering team
-already uses, and it deploys nothing.
+save by default — a folder's own `.goodfolderignore` list adds to that, and
+suspicious names that do get saved are reported, not hidden. It is not a
+replacement for the tools an engineering team already uses, and it deploys
+nothing.
 
 It exists because AI agents now edit real files on real computers, and an
 ordinary folder cannot tell you what one of them did. GoodFolder gives you a

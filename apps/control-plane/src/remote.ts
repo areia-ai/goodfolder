@@ -1,6 +1,18 @@
-import { findCaseCollisions } from "@goodfolder/shared";
+import {
+  findCaseCollisions,
+  IGNORE_FILE,
+  ignoreRuleFor,
+  parseIgnoreFile,
+  skipRuleFor,
+  warnRuleFor,
+  type WarnMatch,
+} from "@goodfolder/shared";
 import type { FileChange, RepositoryAdapter, Sql } from "@goodfolder/serverlib";
 import { emitWebhookEvent } from "./webhooks.ts";
+
+/** The shape postgres.js accepts for a jsonb parameter, borrowed from it. */
+type JsonParameter = Parameters<Sql["json"]>[0];
+const asJson = (value: unknown): JsonParameter => value as JsonParameter;
 
 /**
  * What a service on the other side of the internet can do to a folder.
@@ -171,6 +183,7 @@ export interface TimelineRow {
   changedCount: number;
   removedCount: number;
   topPaths: string[];
+  warnings: WarnMatch[];
 }
 
 export async function loadTimeline(deps: RemoteDeps, projectId: string, limit = 50): Promise<TimelineRow[]> {
@@ -178,7 +191,7 @@ export async function loadTimeline(deps: RemoteDeps, projectId: string, limit = 
     SELECT s.seq, s.label, s.created_at::text AS "createdAt", s.harness,
            s.commit_sha AS "commitSha", s.added_count AS "addedCount",
            s.changed_count AS "changedCount", s.removed_count AS "removedCount",
-           s.top_paths AS "topPaths", d.name AS "deviceName"
+           s.top_paths AS "topPaths", s.warnings, d.name AS "deviceName"
     FROM saves s LEFT JOIN devices d ON d.id = s.actor_device_id
     WHERE s.project_id = ${projectId}
     ORDER BY s.seq DESC LIMIT ${limit}`;
@@ -193,6 +206,7 @@ export async function loadTimeline(deps: RemoteDeps, projectId: string, limit = 
     changedCount: Number(row.changedCount ?? 0),
     removedCount: Number(row.removedCount ?? 0),
     topPaths: Array.isArray(row.topPaths) ? (row.topPaths as string[]) : [],
+    warnings: Array.isArray(row.warnings) ? (row.warnings as WarnMatch[]) : [],
   }));
 }
 
@@ -390,9 +404,165 @@ export async function applyRevert(
 }
 
 export type RecordOutcome =
-  | { status: "recorded"; seq: number; label: string; changes: TreeChange[]; counts: SaveCounts }
+  | { status: "recorded"; seq: number; label: string; changes: TreeChange[]; counts: SaveCounts; warnings: WarnMatch[]; flagged: FlaggedPath[] }
   | { status: "unchanged"; seq: number; label: string }
   | { status: "refused"; code: string; message: string; httpStatus: number };
+
+/**
+ * An added path a save should never have carried: shaped like a credential,
+ * or on the folder's own ignore list. `deliberate` means the device said it
+ * was included on purpose (a `protect`), which is informational — the flag
+ * is raised either way, because the device is not the only writer.
+ */
+export interface FlaggedPath {
+  path: string;
+  pattern: string;
+  kind: "credentials" | "ignored";
+  deliberate: boolean;
+}
+
+export interface SaveScreening {
+  warnings: WarnMatch[];
+  flagged: FlaggedPath[];
+}
+
+/**
+ * Screen the paths a save ADDED — never the changed ones, which were let in
+ * by an earlier decision and are not news. Pure: the caller supplies the
+ * new tree's path set and the parsed ignore list, so this is the same check
+ * a folder-token save and a service save both run.
+ */
+export function screenSavedAdds(
+  addedPaths: readonly string[],
+  input: {
+    /** Every blob path in the new tree (for evidence-gated rules). */
+    presentInTree: ReadonlySet<string>;
+    ignorePatterns: readonly string[];
+    includedOnPurpose: readonly string[];
+  },
+): SaveScreening {
+  const deliberate = new Set(input.includedOnPurpose);
+  const warnings: WarnMatch[] = [];
+  const flagged: FlaggedPath[] = [];
+  for (const path of addedPaths) {
+    const warn = warnRuleFor(path);
+    if (warn) warnings.push(warn);
+    const skipped = skipRuleFor(path, (candidate) => input.presentInTree.has(candidate));
+    if (skipped && skipped.category === "credentials") {
+      flagged.push({ path, pattern: skipped.pattern, kind: "credentials", deliberate: deliberate.has(path) });
+      continue;
+    }
+    const ignored = ignoreRuleFor(path, input.ignorePatterns);
+    if (ignored) {
+      flagged.push({ path, pattern: ignored, kind: "ignored", deliberate: deliberate.has(path) });
+    }
+  }
+  return { warnings, flagged };
+}
+
+/**
+ * Raise the alarm for a save that carried paths it should have left out.
+ * Never fails the save — it is an audit row, a loud server log, and a
+ * webhook, in that order of importance.
+ */
+export async function reportFlaggedSave(
+  deps: RemoteDeps,
+  input: {
+    projectId: string;
+    accountId: string;
+    /** Null when the alarm follows a push that was never recorded as a save. */
+    seq: number | null;
+    /** The head the push landed, when known. */
+    head?: string;
+    actor: string;
+    flagged: FlaggedPath[];
+  },
+): Promise<void> {
+  if (input.flagged.length === 0) return;
+  try {
+    await deps.sql`
+      INSERT INTO audit_log (actor, action, detail)
+      VALUES (${input.actor}, 'save.flagged', ${deps.sql.json(asJson({
+        projectId: input.projectId,
+        seq: input.seq,
+        head: input.head ?? null,
+        flagged: input.flagged,
+      }))})`;
+  } catch (error) {
+    console.error("save.flagged audit row failed:", error);
+  }
+  const what = input.seq !== null ? `save #${input.seq}` : "a push";
+  console.error(
+    `⚠ ${what} in folder ${input.projectId} added files GoodFolder leaves out by default: ` +
+      input.flagged.map((f) => `${f.path} (${f.kind}: ${f.pattern})`).join(", "),
+  );
+  void emitWebhookEvent(deps.sql, {
+    accountId: input.accountId,
+    projectId: input.projectId,
+    event: "save.flagged",
+    data: { seq: input.seq, head: input.head ?? null, flagged: input.flagged },
+  }).catch(() => {});
+}
+
+/**
+ * Screen what a push actually landed. Runs after the transport answer has
+ * been relayed, so it never delays or changes what the client sees — and
+ * it catches the bypass that matters: a push that is never recorded as a
+ * save. Anything failing inside is logged, never thrown.
+ */
+export async function screenLandedPush(
+  deps: RemoteDeps,
+  input: {
+    projectId: string;
+    accountId: string;
+    /** The head before the push; null when there was none or it was unreadable. */
+    before: string | null;
+    actor: string;
+  },
+): Promise<void> {
+  try {
+    const after = await deps.repos.head(input.projectId);
+    if (!after || after === input.before) return;
+    const newTree = await deps.repos.tree(input.projectId, after);
+    const baseTree = input.before ? await deps.repos.tree(input.projectId, input.before) : [];
+    const added = treeChanges(baseTree, newTree)
+      .filter((c) => c.kind === "added")
+      .map((c) => c.path);
+    if (added.length === 0) return;
+    const ignorePatterns = await ignorePatternsAt(deps, input.projectId, newTree, after);
+    const screening = screenSavedAdds(added, {
+      presentInTree: new Set(newTree.filter((e) => e.type === "blob").map((e) => e.path)),
+      ignorePatterns,
+      includedOnPurpose: [],
+    });
+    await reportFlaggedSave(deps, {
+      projectId: input.projectId,
+      accountId: input.accountId,
+      seq: null,
+      head: after,
+      actor: input.actor,
+      flagged: screening.flagged,
+    });
+  } catch (error) {
+    console.error("post-push screen failed:", error);
+  }
+}
+
+/**
+ * Read the ignore list the new tree carries. Missing file, unreadable tree —
+ * anything — answers an empty list rather than failing the save.
+ */
+export async function ignorePatternsAt(
+  deps: RemoteDeps,
+  projectId: string,
+  tree: readonly TreeEntry[],
+  ref: string,
+): Promise<string[]> {
+  if (!tree.some((e) => e.type === "blob" && e.path === IGNORE_FILE)) return [];
+  const file = await deps.repos.readFile(projectId, IGNORE_FILE, ref);
+  if (!file) return [];
+  return parseIgnoreFile(file.content.toString("utf8")).patterns;
+}
 
 /**
  * Record a save for whatever state the folder stands in now. This is what a
@@ -417,6 +587,8 @@ export async function recordRemoteSave(
      * looking at a stale picture.
      */
     expectedHead?: string | null;
+    /** Paths the device deliberately protected despite the defaults. */
+    includedOnPurpose?: string[];
   },
 ): Promise<RecordOutcome> {
   const denied = await deps.writeAccessError(input.accountId);
@@ -444,6 +616,19 @@ export async function recordRemoteSave(
   if (changes.length === 0) {
     return { status: "unchanged", seq: latest?.seq ?? 0, label: latest?.label ?? "Nothing has been saved yet." };
   }
+  // What the save added is read from the trees themselves — the caller's
+  // own list is not trusted to describe what landed.
+  let screening: SaveScreening = { warnings: [], flagged: [] };
+  try {
+    const present = new Set(headTree.filter((e) => e.type === "blob").map((e) => e.path));
+    const ignorePatterns = await ignorePatternsAt(deps, input.projectId, headTree, head);
+    screening = screenSavedAdds(
+      changes.filter((c) => c.kind === "added").map((c) => c.path),
+      { presentInTree: present, ignorePatterns, includedOnPurpose: input.includedOnPurpose ?? [] },
+    );
+  } catch (error) {
+    console.error("save screening failed; recording without it:", error);
+  }
   const label =
     input.labelOverride ??
     (await deps.labelFor(
@@ -469,8 +654,11 @@ export async function recordRemoteSave(
     changes,
     counts,
     harness: input.harness,
+    warnings: screening.warnings,
   });
-  return { status: "recorded", seq, label: label.label, changes, counts };
+  // The alarm itself is raised where the push lands (screenLandedPush), so
+  // a push that is never recorded still fires it.
+  return { status: "recorded", seq, label: label.label, changes, counts, warnings: screening.warnings, flagged: screening.flagged };
 }
 
 async function recordSaveRow(
@@ -486,6 +674,7 @@ async function recordSaveRow(
     changes: TreeChange[];
     counts: SaveCounts;
     harness: string | null;
+    warnings?: WarnMatch[];
   },
 ): Promise<number> {
   const paths = input.changes.map((change) => change.path).slice(0, RECEIPT_PATH_CAP);
@@ -493,11 +682,11 @@ async function recordSaveRow(
   const rows = await deps.sql`
     INSERT INTO saves (id, project_id, seq, label, label_source, actor_device_id,
                        changed_paths, commit_sha, added_count, changed_count, removed_count,
-                       top_paths, harness)
+                       top_paths, harness, warnings)
     SELECT ${crypto.randomUUID()}, ${input.projectId}, COALESCE(MAX(s.seq), 0) + 1,
            ${input.label.slice(0, 120)}, ${input.labelSource}, ${input.actorDeviceId},
            ${deps.sql.json(paths)}, ${input.commitSha}, ${input.counts.added}, ${input.counts.changed}, ${input.counts.removed},
-           ${deps.sql.json(topPaths)}, ${input.harness}
+           ${deps.sql.json(topPaths)}, ${input.harness}, ${deps.sql.json(asJson(input.warnings ?? []))}
     FROM saves s WHERE s.project_id = ${input.projectId}
     RETURNING seq`;
   const seq = Number(rows[0]!.seq);

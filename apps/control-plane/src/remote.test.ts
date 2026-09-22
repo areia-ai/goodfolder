@@ -8,6 +8,8 @@ import {
   previewRevert,
   recordRemoteSave,
   runnerRun,
+  screenLandedPush,
+  screenSavedAdds,
   treeChanges,
   type RemoteDeps,
   type TreeEntry,
@@ -248,6 +250,122 @@ test("recordRemoteSave says nothing new when the folder matches its latest save"
   });
   assert.equal(outcome.status, "unchanged");
   assert.equal(calls.changeFiles.length, 0);
+});
+
+test("screenSavedAdds flags credentials and ignored paths, and warns on secret names", () => {
+  const present = new Set([".env", "clip.mov", "notes.md", "Secret plan.txt", "package.json"]);
+  const result = screenSavedAdds(
+    [".env", "clip.mov", "notes.md", "Secret plan.txt", "deliberate.pem"],
+    {
+      presentInTree: new Set([...present, "deliberate.pem"]),
+      ignorePatterns: ["*.mov"],
+      includedOnPurpose: ["deliberate.pem"],
+    },
+  );
+  assert.deepEqual(result.flagged, [
+    { path: ".env", pattern: ".env", kind: "credentials", deliberate: false },
+    { path: "clip.mov", pattern: "*.mov", kind: "ignored", deliberate: false },
+    { path: "deliberate.pem", pattern: "*.pem", kind: "credentials", deliberate: true },
+  ]);
+  assert.deepEqual(result.warnings, [{ path: "Secret plan.txt", pattern: "*secret*" }]);
+});
+
+test("screenSavedAdds only ever sees added paths — changed ones are not flagged", () => {
+  // The caller filters to kind === "added" before calling, so a .env that was
+  // merely edited is not news. Feeding an added path is what flags.
+  const present = new Set([".env", "notes.md"]);
+  const result = screenSavedAdds(["notes.md"], { presentInTree: present, ignorePatterns: [], includedOnPurpose: [] });
+  assert.deepEqual(result.flagged, []);
+  assert.deepEqual(result.warnings, []);
+});
+
+test("recordRemoteSave screens what the trees show, not what the caller claims", async () => {
+  const { deps, sql } = fixture({
+    head: "head-2",
+    nextSeq: 12,
+    latest: { seq: 3, label: "Before", commitSha: "head-1" },
+    trees: {
+      main: [blob("kept.md", "a"), blob(".env", "s"), blob("clip.mov", "m"), blob(".goodfolderignore", "i")],
+      "head-1": [blob("kept.md", "a"), blob(".goodfolderignore", "i")],
+    },
+    files: { "head-2:.goodfolderignore": { content: Buffer.from("*.mov\n"), sha: "i", size: 6 } },
+  });
+  const outcome = await recordRemoteSave(deps, {
+    projectId: "folder-1",
+    accountId: "account-1",
+    actorDeviceId: "device-1",
+    actorName: "Instinct",
+    harness: "Instinct",
+  });
+  assert.equal(outcome.status, "recorded");
+  if (outcome.status !== "recorded") return;
+  assert.deepEqual(outcome.flagged, [
+    { path: ".env", pattern: ".env", kind: "credentials", deliberate: false },
+    { path: "clip.mov", pattern: "*.mov", kind: "ignored", deliberate: false },
+  ]);
+  // The alarm fires where the push lands, not here — recording only reports.
+  assert.equal(sql.queries.some((query) => query.includes("'save.flagged'")), false);
+});
+
+test("recordRemoteSave records anyway when the tree cannot be read", async () => {
+  const { deps, repos } = fixture({
+    head: "head-2",
+    nextSeq: 12,
+    latest: { seq: 3, label: "Before", commitSha: "head-1" },
+    trees: {
+      main: [blob("kept.md", "a"), blob("added.md", "d")],
+      "head-1": [blob("kept.md", "a")],
+    },
+  });
+  const original = repos.readFile;
+  (repos as { readFile: unknown }).readFile = async () => { throw new Error("store down"); };
+  const outcome = await recordRemoteSave(deps, {
+    projectId: "folder-1",
+    accountId: "account-1",
+    actorDeviceId: "device-1",
+    actorName: "Instinct",
+    harness: null,
+  });
+  assert.equal(outcome.status, "recorded");
+  if (outcome.status !== "recorded") return;
+  assert.deepEqual(outcome.warnings, []);
+  assert.deepEqual(outcome.flagged, []);
+  void original;
+});
+
+test("screenLandedPush raises the alarm when a push lands left-out files", async () => {
+  const { deps, sql } = fixture({
+    head: "head-2",
+    trees: {
+      "head-2": [blob("kept.md", "a"), blob(".env", "s"), blob("clip.mov", "m"), blob(".goodfolderignore", "i")],
+      "head-1": [blob("kept.md", "a"), blob(".goodfolderignore", "i")],
+    },
+    files: { "head-2:.goodfolderignore": { content: Buffer.from("*.mov\n"), sha: "i", size: 6 } },
+  });
+  await screenLandedPush(deps, {
+    projectId: "folder-1",
+    accountId: "account-1",
+    before: "head-1",
+    actor: "Instinct",
+  });
+  const audit = sql.queries.find((q) => q.includes("'save.flagged'"));
+  assert.ok(audit, "one audit insert");
+  assert.ok(
+    sql.queries.some((q) => q.includes("FROM webhook_endpoints")),
+    "the webhook fan-out ran",
+  );
+});
+
+test("screenLandedPush does nothing when the head did not move", async () => {
+  const { deps, sql } = fixture({ head: "head-1", trees: { "head-1": [blob("a.md", "a")] } });
+  await screenLandedPush(deps, { projectId: "folder-1", accountId: "account-1", before: "head-1", actor: "folder" });
+  assert.equal(sql.queries.some((q) => q.includes("'save.flagged'")), false);
+});
+
+test("screenLandedPush swallows a dead adapter", async () => {
+  const { deps, repos } = fixture({ head: "head-2" });
+  (repos as { head: unknown }).head = async () => { throw new Error("store down"); };
+  await screenLandedPush(deps, { projectId: "folder-1", accountId: "account-1", before: "head-1", actor: "folder" });
 });
 
 test("recordRemoteSave refuses a stale expected state", async () => {

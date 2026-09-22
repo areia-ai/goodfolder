@@ -152,6 +152,24 @@ test("an empty change is allowed and does nothing", () => {
   assert.deepEqual(allow({ tree: FOLDER }), { writes: [], removes: [] });
 });
 
+test("a file on the folder's ignore list is refused, and the list itself is not", () => {
+  const ignorePatterns = ["*.mov", "renders/"];
+  const refusal = deny({ tree: FOLDER, ignorePatterns, writes: [{ path: "clip.mov", sizeBytes: 90 }] });
+  assert.equal(refusal.code, "left-out");
+  assert.equal(refusal.message, "“clip.mov” is on this folder's ignore list (*.mov), so GoodFolder leaves it out.");
+  assert.equal(deny({ tree: FOLDER, ignorePatterns, writes: [{ path: "renders/final.png", sizeBytes: 10 }] }).code, "left-out");
+  // The list itself must always be writable, or it could never change.
+  allow({ tree: FOLDER, ignorePatterns, writes: [{ path: ".goodfolderignore", sizeBytes: 20 }] });
+  // Already in the folder means someone chose it — editing is not overruled.
+  allow({
+    tree: [...FOLDER, { path: "old.mov", type: "blob" }],
+    ignorePatterns,
+    writes: [{ path: "old.mov", sizeBytes: 90 }],
+  });
+  // No list, no refusal.
+  allow({ tree: FOLDER, writes: [{ path: "clip.mov", sizeBytes: 90 }] });
+});
+
 test("a file already in the folder can still be edited", () => {
   // Someone chose to protect a `.env` from the command line. Refusing to let
   // them edit what is already there would be overruling that after the fact.
