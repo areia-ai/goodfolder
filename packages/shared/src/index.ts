@@ -315,6 +315,34 @@ export interface WarnMatch {
 }
 
 /**
+ * A warn-tier match tied to what the save did to the file. `change` is
+ * absent on saves recorded before the field existed.
+ */
+export interface SaveWarning extends WarnMatch {
+  change: "added" | "changed";
+}
+
+/**
+ * One left-out path, with who asked for it and why, in plain language.
+ * `source` is "built-in" for the default rules, "ignore-list" for the
+ * folder's own `.goodfolderignore`, and "their-own" for anything the
+ * project's other settings exclude.
+ */
+export interface SkippedEntry {
+  path: string;
+  source: "built-in" | "ignore-list" | "their-own";
+  category?: SkipCategory;
+  pattern: string;
+  reason: string;
+}
+
+/**
+ * The most skipped paths a save may report. The server never sees skipped
+ * files, so this is the device's own word — capped because it is stored.
+ */
+export const SKIPPED_REPORT_CAP = 200;
+
+/**
  * Names worth a raised eyebrow, not a refusal. These are deliberately looser
  * than the credential rules above — "Secret Santa.xlsx" warns where `.env`
  * refuses — because a warning costs a line of output and a wrong skip loses

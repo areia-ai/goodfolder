@@ -82,6 +82,8 @@ export async function cmdSave(
         ...(input.includedOnPurpose !== undefined
           ? { includedOnPurpose: input.includedOnPurpose }
           : {}),
+        ...(input.skipped !== undefined ? { skipped: input.skipped } : {}),
+        ...(input.skippedTotal !== undefined ? { skippedTotal: input.skippedTotal } : {}),
       });
       return { seq: res.seq, label: res.label };
     },

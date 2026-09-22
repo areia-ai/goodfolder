@@ -1,4 +1,4 @@
-import type { AiLabelContext, SaveRecord, WarnMatch } from "@goodfolder/shared";
+import type { AiLabelContext, SaveRecord, SaveWarning, SkippedEntry } from "@goodfolder/shared";
 import type { FolderConfig } from "./config.ts";
 import { CliError } from "./cli-error.ts";
 import { authHint } from "./auth.ts";
@@ -151,10 +151,14 @@ export function recordSave(
     counts?: { added: number; changed: number; removed: number };
     topPaths?: string[];
     harness?: string | null;
-    /** Added files whose names suggest secrets (informational). */
-    warnings?: WarnMatch[];
+    /** Files this save added or changed whose names suggest secrets (informational). */
+    warnings?: SaveWarning[];
     /** Left-out paths the person deliberately protected anyway. */
     includedOnPurpose?: string[];
+    /** What the save left out, capped at SKIPPED_REPORT_CAP entries. */
+    skipped?: SkippedEntry[];
+    /** Every left-out path counted, capped list or not. */
+    skippedTotal?: number;
   },
 ): Promise<{ id: string; seq: number; label: string }> {
   return call(cfg, "POST", "/api/saves", {
@@ -169,6 +173,8 @@ export function recordSave(
     harness: input.harness ?? undefined,
     warnings: input.warnings,
     includedOnPurpose: input.includedOnPurpose,
+    skipped: input.skipped,
+    skippedTotal: input.skippedTotal,
   }).then((r) => {
     if (!r.ok) throw new Error(r.json?.error?.message ?? `save failed (${r.status})`);
     return r.json;
@@ -180,6 +186,11 @@ export interface TimelineEntry extends Omit<SaveRecord, "createdAt"> {
   commit_sha: string;
   /** MCP client identity, or null when a person ran the save. */
   harness?: string | null;
+  /** What the device reported leaving out; [] when nothing was reported. */
+  skipped?: SkippedEntry[];
+  skippedTotal?: number;
+  /** "device" when the save carried the device's left-out report. */
+  skippedReportedBy?: "device" | null;
 }
 
 export interface TimelineReceipt {

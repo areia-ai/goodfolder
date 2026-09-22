@@ -36,6 +36,26 @@ const project = {
   },
 };
 
+const SKIPPED_DESCRIPTION =
+  "Files the device left out of this save, with the rule that excluded each: a built-in rule (source built-in, " +
+  "pattern = the rule), the folder's .goodfolderignore (source ignore-list, pattern = that line), or the project's " +
+  "own settings on the device (their-own). Reported by the saving device, not verified by the server — the server " +
+  "never receives skipped files. Folders are one entry (path ends in /). Capped at 200 entries; skippedTotal is " +
+  "the full count. skippedReportedBy is null when the save carried no report (browser saves, services that didn't " +
+  "report, older devices), in which case skipped is [] and says nothing either way.";
+
+const skippedEntry = {
+  type: "object",
+  required: ["path", "source"],
+  properties: {
+    path: { type: "string" },
+    source: { type: "string", enum: ["built-in", "ignore-list", "their-own"] },
+    category: { type: "string", enum: ["installed", "rebuildable", "credentials", "noise"] },
+    pattern: { type: "string" },
+    reason: { type: "string" },
+  },
+};
+
 const save = {
   type: "object",
   properties: {
@@ -55,12 +75,76 @@ const save = {
     deviceName: { type: ["string", "null"] },
     warnings: {
       type: "array",
-      description: "Files this save added whose names suggest secrets — saved, but worth knowing about.",
+      description:
+        "Files this save added or changed whose names match the warn tier (names containing secret/password/credential, or *.key.*). They were saved — a warning never blocks. Names only; contents are never read. Removed files are not evaluated, and files this save did not touch are not re-evaluated, so an empty array means only that nothing this save added or changed has a warn-tier name — not that the folder holds no secrets. Credential-shaped files are the skip tier and are reported in `flagged`, not here.",
       items: {
         type: "object",
-        properties: { path: { type: "string" }, pattern: { type: "string" } },
+        required: ["path", "pattern"],
+        properties: {
+          path: { type: "string" },
+          pattern: { type: "string" },
+          change: {
+            type: "string",
+            enum: ["added", "changed"],
+            description: "What the save did to the file. Absent on saves recorded before this field existed.",
+          },
+        },
       },
     },
+    skipped: {
+      type: "array",
+      description: SKIPPED_DESCRIPTION,
+      items: skippedEntry,
+    },
+    skippedTotal: { type: "integer" },
+    skippedReportedBy: { type: ["string", "null"], enum: ["device", null] },
+  },
+};
+
+const exclusions = {
+  type: "object",
+  description:
+    "The leave-out rules a folder stands under, as the server sees them: the built-in rules, the warn tier, " +
+    "and the folder's own .goodfolderignore read at the current head.",
+  properties: {
+    at: { type: ["string", "null"], description: "The head the rules were read from; null when nothing is saved yet." },
+    ignoreFile: {
+      type: "object",
+      properties: {
+        present: { type: "boolean" },
+        patterns: { type: "array", items: { type: "string" } },
+        invalid: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              line: { type: "integer" },
+              text: { type: "string" },
+              reason: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    builtIn: {
+      type: "object",
+      properties: {
+        skip: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              pattern: { type: "string" },
+              category: { type: "string", enum: ["installed", "rebuildable", "credentials", "noise"] },
+              label: { type: "string" },
+              needs: { type: "string", description: "Evidence that must exist on disk before this rule applies." },
+            },
+          },
+        },
+        warn: { type: "array", items: { type: "string" }, description: "Warn-tier name patterns; a warning never blocks a save." },
+      },
+    },
+    deviceOnly: { type: "string", description: "The one exclusion source the server cannot see." },
   },
 };
 
@@ -420,6 +504,22 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
           },
         }),
       },
+      "/api/projects/{id}/exclusions": {
+        get: operation({
+          summary: "Read a folder's leave-out rules",
+          description:
+            "The rules that decide what a save leaves out, as the server sees them: built-in skip rules, " +
+            "the warn tier, and the folder's .goodfolderignore at the current head. A device's own settings " +
+            "are the one source not listed — see deviceOnly.",
+          tag: "Folders",
+          security: projectSecurity,
+          parameters: [folderParam],
+          responses: {
+            "200": jsonResponse("The effective exclusion rules.", exclusions),
+            "404": jsonResponse("No such folder on this account.", error),
+          },
+        }),
+      },
       "/api/projects/{id}/restore": {
         post: operation({
           summary: "Return a folder to an earlier save",
@@ -503,6 +603,13 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
               commitSha: { type: "string", description: "The state this save records, as the transport reported it." },
               label: { type: "string", maxLength: 120 },
               harness: { type: "string", maxLength: 40 },
+              skipped: {
+                type: "array",
+                description: "What the device left out of this save. " + SKIPPED_DESCRIPTION,
+                items: skippedEntry,
+                maxItems: 200,
+              },
+              skippedTotal: { type: "integer", description: "Every left-out path counted, capped list or not." },
             },
           }),
           responses: {
@@ -513,8 +620,21 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
                 label: { type: "string" },
                 warnings: {
                   type: "array",
-                  description: "Added files whose names suggest secrets.",
-                  items: { type: "object", properties: { path: { type: "string" }, pattern: { type: "string" } } },
+                  description:
+                    "Files this save added or changed whose names match the warn tier (names containing secret/password/credential, or *.key.*). They were saved — a warning never blocks. Names only; contents are never read. Removed files are not evaluated, and files this save did not touch are not re-evaluated, so an empty array means only that nothing this save added or changed has a warn-tier name — not that the folder holds no secrets. Credential-shaped files are the skip tier and are reported in `flagged`, not here.",
+                  items: {
+                    type: "object",
+                    required: ["path", "pattern"],
+                    properties: {
+                      path: { type: "string" },
+                      pattern: { type: "string" },
+                      change: {
+                        type: "string",
+                        enum: ["added", "changed"],
+                        description: "What the save did to the file. Absent on saves recorded before this field existed.",
+                      },
+                    },
+                  },
                 },
                 flagged: {
                   type: "array",
@@ -529,6 +649,13 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
                     },
                   },
                 },
+                skipped: {
+                  type: "array",
+                  description: SKIPPED_DESCRIPTION,
+                  items: skippedEntry,
+                },
+                skippedTotal: { type: "integer" },
+                skippedReportedBy: { type: ["string", "null"], enum: ["device", null] },
               },
             }),
             "402": jsonResponse("Hosted access is required.", error),
@@ -541,6 +668,15 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
           tag: "Timeline",
           security: [{ folderCredential: [] }],
           responses: { "200": jsonResponse("The timeline.", { type: "array", items: save }) },
+        }),
+      },
+      "/api/exclusions": {
+        get: operation({
+          summary: "Read a folder's leave-out rules (folder credential)",
+          description: "The same rules as the folder route, reached with the folder's own credential.",
+          tag: "Folders",
+          security: [{ folderCredential: [] }],
+          responses: { "200": jsonResponse("The effective exclusion rules.", exclusions) },
         }),
       },
       "/api/projects/{id}/files": {

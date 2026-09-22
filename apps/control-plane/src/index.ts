@@ -47,7 +47,7 @@ import {
 import { HostedBilling } from "./hosted-billing.ts";
 import { safeDocumentPath } from "./collaboration.ts";
 import { dashboardLink } from "./links.ts";
-import { IGNORE_FILE, ROUTING_CEILING_BYTES, parseIgnoreFile } from "@goodfolder/shared";
+import { IGNORE_FILE, ROUTING_CEILING_BYTES, parseIgnoreFile, type SaveWarning } from "@goodfolder/shared";
 import { checkWrite, filesUnder } from "./write-gate.ts";
 import { transportRoute } from "./transport.ts";
 import { formulaRefusal } from "./formula.ts";
@@ -55,13 +55,16 @@ import { acceptStagedFile, forgetStagedFile, hashFile, putStoredFileFromPath, st
 import { parseCookies, SESSION_COOKIE, makePrincipals } from "./principals.ts";
 import {
   applyRevert,
+  asJson,
+  exclusionsFor,
   loadSave,
   loadTimeline,
   previewRevert,
+  readSkippedReport,
   recordRemoteSave,
   runnerRun,
   screenLandedPush,
-  screenSavedAdds,
+  screenSaveChanges,
   treeChanges,
   type FlaggedPath,
   type RemoteDeps,
@@ -1496,20 +1499,44 @@ app.get("/api/projects/:id/saves", async (c) => {
            s.removed_count AS "removedCount",
            s.top_paths AS "topPaths",
            ${wantFull ? sql`s.changed_paths AS "changedPaths"` : sql`'[]'::jsonb AS "changedPaths"`},
-           s.warnings, s.harness, d.name AS "deviceName"
+           s.warnings, s.skipped, s.skipped_total AS "skippedTotal",
+           s.harness, d.name AS "deviceName"
     FROM saves s LEFT JOIN devices d ON d.id = s.actor_device_id
     WHERE s.project_id = ${projectId}
     ORDER BY s.seq DESC LIMIT 100`;
   const shaped = (rows as Array<Record<string, unknown>>).map((r) => {
-    if (!wantFull) return r;
+    const withSkipped = {
+      ...r,
+      skipped: Array.isArray(r.skipped) ? r.skipped : [],
+      skippedTotal: Number(r.skippedTotal ?? 0),
+      skippedReportedBy: r.skipped === null || r.skipped === undefined ? null : "device",
+    };
+    if (!wantFull) return withSkipped;
     const paths = Array.isArray(r.changedPaths) ? (r.changedPaths as string[]) : [];
     return {
-      ...r,
+      ...withSkipped,
       changedPaths: paths.slice(0, 100),
       changedPathsTruncated: paths.length > 100,
     };
   });
   return c.json(shaped);
+});
+
+/**
+ * The leave-out rules a folder stands under, as the server sees them —
+ * read-side twin of the folder-token route below.
+ */
+app.get("/api/projects/:id/exclusions", async (c) => {
+  const acct = await externalCaller(c, "read:folders", c.req.param("id"));
+  if (!acct) {
+    return c.json({ error: { code: "account-scope", message: "account approval required" } }, 403);
+  }
+  const projectId = c.req.param("id");
+  const access = await projectAccess(projectId, acct.accountId);
+  if (!access) {
+    return c.json({ error: { code: "not-found", message: "no such folder on this account" } }, 404);
+  }
+  return c.json(await exclusionsFor(remoteDeps, projectId));
 });
 
 type ProjectRole = "owner" | "contributor";
@@ -3763,11 +3790,13 @@ app.post("/api/saves", async (c) => {
     topPaths?: string[];
     harness?: string;
     includedOnPurpose?: string[];
+    skipped?: unknown;
+    skippedTotal?: unknown;
   }>().catch(() => ({} as {
     projectId?: string; label?: string; labelSource?: "user" | "agent"; changedPaths?: string[];
     commitSha?: string; collision?: string; ai?: { summary: string; excerpt: string; truncated: boolean };
     counts?: { added?: number; changed?: number; removed?: number }; topPaths?: string[]; harness?: string;
-    includedOnPurpose?: string[];
+    includedOnPurpose?: string[]; skipped?: unknown; skippedTotal?: unknown;
   }));
 
   // A service credential records a save for a folder it may change. The
@@ -3804,12 +3833,14 @@ app.post("/api/saves", async (c) => {
       includedOnPurpose: Array.isArray(b.includedOnPurpose)
         ? b.includedOnPurpose.filter((p): p is string => typeof p === "string").slice(0, 500)
         : [],
+      skippedReport: readSkippedReport(b),
     });
     if (outcome.status === "refused") return revertRefusal(c, outcome);
     if (outcome.status === "unchanged") {
       return c.json({ ok: true, unchanged: true, seq: outcome.seq, label: outcome.label });
     }
-    return c.json({ ok: true, id: null, seq: outcome.seq, label: outcome.label, counts: outcome.counts, warnings: outcome.warnings, flagged: outcome.flagged });
+    return c.json({ ok: true, id: null, seq: outcome.seq, label: outcome.label, counts: outcome.counts, warnings: outcome.warnings, flagged: outcome.flagged,
+      skipped: outcome.skipped, skippedTotal: outcome.skippedTotal, skippedReportedBy: outcome.skippedReportedBy });
   }
 
   if (!scope) {
@@ -3846,13 +3877,17 @@ app.post("/api/saves", async (c) => {
 
   const { label, source } = await generateLabel(b.ai, b.label ? b.label : undefined);
 
-  // Screen what this save ADDED, from the trees themselves — the client's
+  // The device's left-out report is stored as reported — informational only,
+  // since the server never receives the files it describes.
+  const skippedReport = readSkippedReport(b);
+
+  // Screen what this save changed, from the trees themselves — the client's
   // own path list is not trusted to describe what landed. A tree that will
   // not read records the save anyway, with no warnings.
   const includedOnPurpose = Array.isArray(b.includedOnPurpose)
     ? b.includedOnPurpose.filter((p): p is string => typeof p === "string").slice(0, 500)
     : [];
-  let warnings: Array<{ path: string; pattern: string }> = [];
+  let warnings: SaveWarning[] = [];
   let flagged: FlaggedPath[] = [];
   try {
     const prior = await sql`
@@ -3866,8 +3901,8 @@ app.post("/api/saves", async (c) => {
       const list = await repos.readFile(scope.projectId, IGNORE_FILE, b.commitSha);
       if (list) ignorePatterns = parseIgnoreFile(list.content.toString("utf8")).patterns;
     }
-    const screening = screenSavedAdds(
-      treeChanges(baseTree, newTree).filter((ch) => ch.kind === "added").map((ch) => ch.path),
+    const screening = screenSaveChanges(
+      treeChanges(baseTree, newTree),
       { presentInTree: present, ignorePatterns, includedOnPurpose },
     );
     warnings = screening.warnings;
@@ -3878,14 +3913,16 @@ app.post("/api/saves", async (c) => {
 
   const rows = await sql`
     INSERT INTO saves (id, project_id, seq, label, label_source, actor_device_id, collision, changed_paths, commit_sha,
-                       added_count, changed_count, removed_count, top_paths, harness, warnings)
+                       added_count, changed_count, removed_count, top_paths, harness, warnings, skipped, skipped_total)
     SELECT ${crypto.randomUUID()}, ${scope.projectId},
            COALESCE(MAX(s.seq), 0) + 1,
            ${label}, ${source},
            ${scope.deviceId}, ${b.collision ?? null},
            ${sql.json(b.changedPaths ?? [])}, ${b.commitSha},
            ${counts?.added ?? 0}, ${counts?.changed ?? 0}, ${counts?.removed ?? 0},
-           ${sql.json(topPaths)}, ${harness}, ${sql.json(warnings)}
+           ${sql.json(topPaths)}, ${harness}, ${sql.json(asJson(warnings))},
+           ${skippedReport ? sql.json(asJson(skippedReport.entries)) : null},
+           ${skippedReport ? skippedReport.total : null}
     FROM saves s WHERE s.project_id = ${scope.projectId}
     RETURNING id, seq`;
   const save = rows[0]!;
@@ -3914,7 +3951,10 @@ app.post("/api/saves", async (c) => {
   }).catch(() => {});
   // The save.flagged alarm fires where the push lands (screenLandedPush in
   // the transport proxy), so a push that is never recorded still raises it.
-  return c.json({ id: save.id, seq: save.seq, label, warnings, flagged });
+  return c.json({ id: save.id, seq: save.seq, label, warnings, flagged,
+    skipped: skippedReport?.entries ?? [],
+    skippedTotal: skippedReport?.total ?? 0,
+    skippedReportedBy: skippedReport ? "device" : null });
 });
 
 app.get("/api/saves", async (c) => {
@@ -3930,11 +3970,29 @@ app.get("/api/saves", async (c) => {
            s.commit_sha AS "commitSha", s.created_at::text AS "createdAt",
            s.added_count AS "addedCount", s.changed_count AS "changedCount",
            s.removed_count AS "removedCount", s.top_paths AS "topPaths",
-           s.warnings, s.harness, d.name AS "deviceName"
+           s.warnings, s.skipped, s.skipped_total AS "skippedTotal",
+           s.harness, d.name AS "deviceName"
     FROM saves s LEFT JOIN devices d ON d.id = s.actor_device_id
     WHERE s.project_id = ${scope.projectId}
     ORDER BY s.seq DESC LIMIT 100`;
-  return c.json(rows);
+  return c.json((rows as Array<Record<string, unknown>>).map((r) => ({
+    ...r,
+    skipped: Array.isArray(r.skipped) ? r.skipped : [],
+    skippedTotal: Number(r.skippedTotal ?? 0),
+    skippedReportedBy: r.skipped === null || r.skipped === undefined ? null : "device",
+  })));
+});
+
+/** The leave-out rules this folder stands under, as the server sees them. */
+app.get("/api/exclusions", async (c) => {
+  const scope = c.get("scope");
+  if (!scope) {
+    return c.json(
+      { error: { code: "project-scope", message: "folder token required" } },
+      403,
+    );
+  }
+  return c.json(await exclusionsFor(remoteDeps, scope.projectId));
 });
 
 // ---------------------------------------------------------------------------

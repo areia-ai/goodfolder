@@ -3,8 +3,15 @@ import {
   IGNORE_FILE,
   ignoreRuleFor,
   parseIgnoreFile,
+  SKIP_CATEGORY_LABEL,
+  SKIP_RULES,
+  SKIPPED_REPORT_CAP,
   skipRuleFor,
+  WARN_PATTERNS,
   warnRuleFor,
+  type SaveWarning,
+  type SkipCategory,
+  type SkippedEntry,
   type WarnMatch,
 } from "@goodfolder/shared";
 import type { FileChange, RepositoryAdapter, Sql } from "@goodfolder/serverlib";
@@ -12,7 +19,7 @@ import { emitWebhookEvent } from "./webhooks.ts";
 
 /** The shape postgres.js accepts for a jsonb parameter, borrowed from it. */
 type JsonParameter = Parameters<Sql["json"]>[0];
-const asJson = (value: unknown): JsonParameter => value as JsonParameter;
+export const asJson = (value: unknown): JsonParameter => value as JsonParameter;
 
 /**
  * What a service on the other side of the internet can do to a folder.
@@ -183,7 +190,13 @@ export interface TimelineRow {
   changedCount: number;
   removedCount: number;
   topPaths: string[];
-  warnings: WarnMatch[];
+  /** `change` is absent on warnings recorded before that field existed. */
+  warnings: Array<WarnMatch & { change?: "added" | "changed" }>;
+  /** What the device reported leaving out; [] when nothing was reported. */
+  skipped: SkippedEntry[];
+  skippedTotal: number;
+  /** "device" when the save carried the device's left-out report. */
+  skippedReportedBy: "device" | null;
 }
 
 export async function loadTimeline(deps: RemoteDeps, projectId: string, limit = 50): Promise<TimelineRow[]> {
@@ -191,7 +204,8 @@ export async function loadTimeline(deps: RemoteDeps, projectId: string, limit = 
     SELECT s.seq, s.label, s.created_at::text AS "createdAt", s.harness,
            s.commit_sha AS "commitSha", s.added_count AS "addedCount",
            s.changed_count AS "changedCount", s.removed_count AS "removedCount",
-           s.top_paths AS "topPaths", s.warnings, d.name AS "deviceName"
+           s.top_paths AS "topPaths", s.warnings,
+           s.skipped, s.skipped_total AS "skippedTotal", d.name AS "deviceName"
     FROM saves s LEFT JOIN devices d ON d.id = s.actor_device_id
     WHERE s.project_id = ${projectId}
     ORDER BY s.seq DESC LIMIT ${limit}`;
@@ -206,7 +220,12 @@ export async function loadTimeline(deps: RemoteDeps, projectId: string, limit = 
     changedCount: Number(row.changedCount ?? 0),
     removedCount: Number(row.removedCount ?? 0),
     topPaths: Array.isArray(row.topPaths) ? (row.topPaths as string[]) : [],
-    warnings: Array.isArray(row.warnings) ? (row.warnings as WarnMatch[]) : [],
+    warnings: Array.isArray(row.warnings)
+      ? (row.warnings as Array<WarnMatch & { change?: "added" | "changed" }>)
+      : [],
+    skipped: Array.isArray(row.skipped) ? (row.skipped as SkippedEntry[]) : [],
+    skippedTotal: Number(row.skippedTotal ?? 0),
+    skippedReportedBy: row.skipped === null || row.skipped === undefined ? null : "device",
   }));
 }
 
@@ -404,7 +423,7 @@ export async function applyRevert(
 }
 
 export type RecordOutcome =
-  | { status: "recorded"; seq: number; label: string; changes: TreeChange[]; counts: SaveCounts; warnings: WarnMatch[]; flagged: FlaggedPath[] }
+  | { status: "recorded"; seq: number; label: string; changes: TreeChange[]; counts: SaveCounts; warnings: SaveWarning[]; flagged: FlaggedPath[]; skipped: SkippedEntry[]; skippedTotal: number; skippedReportedBy: "device" | null }
   | { status: "unchanged"; seq: number; label: string }
   | { status: "refused"; code: string; message: string; httpStatus: number };
 
@@ -422,18 +441,20 @@ export interface FlaggedPath {
 }
 
 export interface SaveScreening {
-  warnings: WarnMatch[];
+  warnings: SaveWarning[];
   flagged: FlaggedPath[];
 }
 
 /**
- * Screen the paths a save ADDED — never the changed ones, which were let in
- * by an earlier decision and are not news. Pure: the caller supplies the
- * new tree's path set and the parsed ignore list, so this is the same check
- * a folder-token save and a service save both run.
+ * Screen what a save did to the paths it touched. The warn tier covers
+ * ADDED and CHANGED paths — a secret-named file that changes is news again
+ * — while the flag tier stays added-only: a changed file was let in by an
+ * earlier decision. Removed paths are never evaluated. Pure: the caller
+ * supplies the new tree's path set and the parsed ignore list, so this is
+ * the same check a folder-token save and a service save both run.
  */
-export function screenSavedAdds(
-  addedPaths: readonly string[],
+export function screenSaveChanges(
+  changes: readonly Pick<TreeChange, "path" | "kind">[],
   input: {
     /** Every blob path in the new tree (for evidence-gated rules). */
     presentInTree: ReadonlySet<string>;
@@ -442,22 +463,60 @@ export function screenSavedAdds(
   },
 ): SaveScreening {
   const deliberate = new Set(input.includedOnPurpose);
-  const warnings: WarnMatch[] = [];
+  const warnings: SaveWarning[] = [];
   const flagged: FlaggedPath[] = [];
-  for (const path of addedPaths) {
-    const warn = warnRuleFor(path);
-    if (warn) warnings.push(warn);
-    const skipped = skipRuleFor(path, (candidate) => input.presentInTree.has(candidate));
+  for (const change of changes) {
+    if (change.kind === "removed") continue;
+    const warn = warnRuleFor(change.path);
+    if (warn) warnings.push({ ...warn, change: change.kind });
+    if (change.kind !== "added") continue;
+    const skipped = skipRuleFor(change.path, (candidate) => input.presentInTree.has(candidate));
     if (skipped && skipped.category === "credentials") {
-      flagged.push({ path, pattern: skipped.pattern, kind: "credentials", deliberate: deliberate.has(path) });
+      flagged.push({ path: change.path, pattern: skipped.pattern, kind: "credentials", deliberate: deliberate.has(change.path) });
       continue;
     }
-    const ignored = ignoreRuleFor(path, input.ignorePatterns);
+    const ignored = ignoreRuleFor(change.path, input.ignorePatterns);
     if (ignored) {
-      flagged.push({ path, pattern: ignored, kind: "ignored", deliberate: deliberate.has(path) });
+      flagged.push({ path: change.path, pattern: ignored, kind: "ignored", deliberate: deliberate.has(change.path) });
     }
   }
   return { warnings, flagged };
+}
+
+const SKIPPED_SOURCES = new Set<SkippedEntry["source"]>(["built-in", "ignore-list", "their-own"]);
+
+/**
+ * Read the device's left-out report out of a save request body. The server
+ * never sees the files themselves — the device is the only witness — so this
+ * is sanitized and stored, never trusted for enforcement. Null means the
+ * body carried no report at all (an older client, a browser save).
+ */
+export function readSkippedReport(
+  body: unknown,
+): { entries: SkippedEntry[]; total: number } | null {
+  if (typeof body !== "object" || body === null) return null;
+  const skipped = (body as { skipped?: unknown }).skipped;
+  if (!Array.isArray(skipped)) return null;
+  const entries: SkippedEntry[] = [];
+  for (const item of skipped.slice(0, SKIPPED_REPORT_CAP)) {
+    if (typeof item !== "object" || item === null) continue;
+    const { path, source, category, pattern, reason } = item as Record<string, unknown>;
+    if (typeof path !== "string" || path.length === 0) continue;
+    if (!SKIPPED_SOURCES.has(source as SkippedEntry["source"])) continue;
+    const entry: SkippedEntry = {
+      path: path.slice(0, 512),
+      source: source as SkippedEntry["source"],
+      pattern: typeof pattern === "string" ? pattern.slice(0, 200) : "",
+      reason: typeof reason === "string" ? reason.slice(0, 200) : "",
+    };
+    if (typeof category === "string" && category in SKIP_CATEGORY_LABEL) {
+      entry.category = category as SkipCategory;
+    }
+    entries.push(entry);
+  }
+  const rawTotal = Math.floor(Number((body as { skippedTotal?: unknown }).skippedTotal)) || 0;
+  const total = Math.max(entries.length, Math.min(10_000_000, rawTotal));
+  return { entries, total };
 }
 
 /**
@@ -525,12 +584,11 @@ export async function screenLandedPush(
     if (!after || after === input.before) return;
     const newTree = await deps.repos.tree(input.projectId, after);
     const baseTree = input.before ? await deps.repos.tree(input.projectId, input.before) : [];
-    const added = treeChanges(baseTree, newTree)
-      .filter((c) => c.kind === "added")
-      .map((c) => c.path);
-    if (added.length === 0) return;
+    const changes = treeChanges(baseTree, newTree);
+    // Only additions can flag — the flag tier never re-judges a changed file.
+    if (!changes.some((c) => c.kind === "added")) return;
     const ignorePatterns = await ignorePatternsAt(deps, input.projectId, newTree, after);
-    const screening = screenSavedAdds(added, {
+    const screening = screenSaveChanges(changes, {
       presentInTree: new Set(newTree.filter((e) => e.type === "blob").map((e) => e.path)),
       ignorePatterns,
       includedOnPurpose: [],
@@ -549,19 +607,78 @@ export async function screenLandedPush(
 }
 
 /**
- * Read the ignore list the new tree carries. Missing file, unreadable tree —
- * anything — answers an empty list rather than failing the save.
+ * Read the ignore list a tree carries. Missing file, unreadable tree —
+ * anything — answers an absent list rather than failing the save.
  */
+async function ignoreFileAt(
+  deps: RemoteDeps,
+  projectId: string,
+  tree: readonly TreeEntry[],
+  ref: string,
+): Promise<{
+  present: boolean;
+  patterns: string[];
+  invalid: Array<{ line: number; text: string; reason: string }>;
+}> {
+  if (!tree.some((e) => e.type === "blob" && e.path === IGNORE_FILE)) {
+    return { present: false, patterns: [], invalid: [] };
+  }
+  const file = await deps.repos.readFile(projectId, IGNORE_FILE, ref);
+  if (!file) return { present: false, patterns: [], invalid: [] };
+  const parsed = parseIgnoreFile(file.content.toString("utf8"));
+  return { present: true, patterns: parsed.patterns, invalid: parsed.invalid };
+}
+
 export async function ignorePatternsAt(
   deps: RemoteDeps,
   projectId: string,
   tree: readonly TreeEntry[],
   ref: string,
 ): Promise<string[]> {
-  if (!tree.some((e) => e.type === "blob" && e.path === IGNORE_FILE)) return [];
-  const file = await deps.repos.readFile(projectId, IGNORE_FILE, ref);
-  if (!file) return [];
-  return parseIgnoreFile(file.content.toString("utf8")).patterns;
+  return (await ignoreFileAt(deps, projectId, tree, ref)).patterns;
+}
+
+/**
+ * The leave-out rules a folder stands under, as the server sees them: the
+ * built-in rules, the warn tier, and the folder's own `.goodfolderignore`
+ * read at the current head. A device's own per-computer settings are the
+ * one source the server cannot see — `deviceOnly` says so.
+ */
+export async function exclusionsFor(
+  deps: RemoteDeps,
+  projectId: string,
+): Promise<{
+  at: string | null;
+  ignoreFile: {
+    present: boolean;
+    patterns: string[];
+    invalid: Array<{ line: number; text: string; reason: string }>;
+  };
+  builtIn: {
+    skip: Array<{ pattern: string; category: SkipCategory; label: string; needs?: string }>;
+    warn: string[];
+  };
+  deviceOnly: string;
+}> {
+  const head = await deps.repos.head(projectId);
+  const ignoreFile = head
+    ? await ignoreFileAt(deps, projectId, await deps.repos.tree(projectId, head), head)
+    : { present: false, patterns: [], invalid: [] };
+  return {
+    at: head,
+    ignoreFile,
+    builtIn: {
+      skip: SKIP_RULES.map((rule) => ({
+        pattern: rule.pattern,
+        category: rule.category,
+        label: SKIP_CATEGORY_LABEL[rule.category],
+        ...(rule.needs !== undefined ? { needs: rule.needs } : {}),
+      })),
+      warn: [...WARN_PATTERNS],
+    },
+    deviceOnly:
+      'A device can also leave out files through the project\'s own settings on that computer; those aren\'t listed here, and appear in a save\'s skipped list with source "their-own".',
+  };
 }
 
 /**
@@ -589,6 +706,8 @@ export async function recordRemoteSave(
     expectedHead?: string | null;
     /** Paths the device deliberately protected despite the defaults. */
     includedOnPurpose?: string[];
+    /** The device's left-out report, already sanitized by the caller. */
+    skippedReport?: { entries: SkippedEntry[]; total: number } | null;
   },
 ): Promise<RecordOutcome> {
   const denied = await deps.writeAccessError(input.accountId);
@@ -616,14 +735,14 @@ export async function recordRemoteSave(
   if (changes.length === 0) {
     return { status: "unchanged", seq: latest?.seq ?? 0, label: latest?.label ?? "Nothing has been saved yet." };
   }
-  // What the save added is read from the trees themselves — the caller's
+  // What the save changed is read from the trees themselves — the caller's
   // own list is not trusted to describe what landed.
   let screening: SaveScreening = { warnings: [], flagged: [] };
   try {
     const present = new Set(headTree.filter((e) => e.type === "blob").map((e) => e.path));
     const ignorePatterns = await ignorePatternsAt(deps, input.projectId, headTree, head);
-    screening = screenSavedAdds(
-      changes.filter((c) => c.kind === "added").map((c) => c.path),
+    screening = screenSaveChanges(
+      changes,
       { presentInTree: present, ignorePatterns, includedOnPurpose: input.includedOnPurpose ?? [] },
     );
   } catch (error) {
@@ -655,10 +774,14 @@ export async function recordRemoteSave(
     counts,
     harness: input.harness,
     warnings: screening.warnings,
+    skippedReport: input.skippedReport,
   });
   // The alarm itself is raised where the push lands (screenLandedPush), so
   // a push that is never recorded still fires it.
-  return { status: "recorded", seq, label: label.label, changes, counts, warnings: screening.warnings, flagged: screening.flagged };
+  return { status: "recorded", seq, label: label.label, changes, counts, warnings: screening.warnings, flagged: screening.flagged,
+    skipped: input.skippedReport?.entries ?? [],
+    skippedTotal: input.skippedReport?.total ?? 0,
+    skippedReportedBy: input.skippedReport ? "device" : null };
 }
 
 async function recordSaveRow(
@@ -674,7 +797,9 @@ async function recordSaveRow(
     changes: TreeChange[];
     counts: SaveCounts;
     harness: string | null;
-    warnings?: WarnMatch[];
+    warnings?: SaveWarning[];
+    /** The device's left-out report; absent or null means the save carried none. */
+    skippedReport?: { entries: SkippedEntry[]; total: number } | null | undefined;
   },
 ): Promise<number> {
   const paths = input.changes.map((change) => change.path).slice(0, RECEIPT_PATH_CAP);
@@ -682,11 +807,13 @@ async function recordSaveRow(
   const rows = await deps.sql`
     INSERT INTO saves (id, project_id, seq, label, label_source, actor_device_id,
                        changed_paths, commit_sha, added_count, changed_count, removed_count,
-                       top_paths, harness, warnings)
+                       top_paths, harness, warnings, skipped, skipped_total)
     SELECT ${crypto.randomUUID()}, ${input.projectId}, COALESCE(MAX(s.seq), 0) + 1,
            ${input.label.slice(0, 120)}, ${input.labelSource}, ${input.actorDeviceId},
            ${deps.sql.json(paths)}, ${input.commitSha}, ${input.counts.added}, ${input.counts.changed}, ${input.counts.removed},
-           ${deps.sql.json(topPaths)}, ${input.harness}, ${deps.sql.json(asJson(input.warnings ?? []))}
+           ${deps.sql.json(topPaths)}, ${input.harness}, ${deps.sql.json(asJson(input.warnings ?? []))},
+           ${input.skippedReport ? deps.sql.json(asJson(input.skippedReport.entries)) : null},
+           ${input.skippedReport ? input.skippedReport.total : null}
     FROM saves s WHERE s.project_id = ${input.projectId}
     RETURNING seq`;
   const seq = Number(rows[0]!.seq);

@@ -246,7 +246,7 @@ test("a non-first save names the credential files it skipped, and counts the res
     assert.ok(out.includes("Skipped 1 file that looks like credentials: app.pfx"), out);
     assert.ok(out.includes("Left out:"), out);
     assert.ok(out.includes("that look like credentials"), out);
-    assert.ok(out.includes("Saved, but 1 file has a name that suggests secrets: Secret notes.txt (*secret*)"), out);
+    assert.ok(out.includes("Saved, but 1 file has a name that suggests secrets: Secret notes.txt (added, *secret*)"), out);
   } finally {
     cleanup(dir);
   }
@@ -259,10 +259,14 @@ test("a warn-tier file is saved and lands in the outcome", async () => {
     git(dir, ["-c", "user.email=t@t", "-c", "user.name=T", "commit", "-m", "first"]);
     write(dir, "Passwords.xlsx", "x");
     const outcome = await runSavePipeline(dir, { ...CFG }, { skipPush: true });
-    assert.deepEqual(outcome.warnings, [{ path: "Passwords.xlsx", pattern: "*password*" }]);
+    assert.deepEqual(outcome.warnings, [{ path: "Passwords.xlsx", pattern: "*password*", change: "added" }]);
     const tracked = git(dir, ["ls-files"]).stdout;
     assert.ok(tracked.includes("Passwords.xlsx"), "warned, not skipped");
     assert.ok(Array.isArray(outcome.skipped));
+    // Editing it later is news again — the save says "changed".
+    write(dir, "Passwords.xlsx", "edited");
+    const again = await runSavePipeline(dir, { ...CFG }, { skipPush: true });
+    assert.deepEqual(again.warnings, [{ path: "Passwords.xlsx", pattern: "*password*", change: "changed" }]);
   } finally {
     cleanup(dir);
   }
@@ -279,6 +283,64 @@ test("invalid lines in .goodfolderignore are named once and otherwise ignored", 
       runSavePipeline(dir, { ...CFG }, { skipPush: true }),
     );
     assert.ok(out.includes('line 2 ("!nope")'), out);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("the recorder receives what the save left out, capped and counted", async () => {
+  const dir = folderWith({ ".env": "SECRET=1", "clip.mov": "x", "keep.md": "x" });
+  try {
+    writeFileSync(join(dir, IGNORE_FILE), "*.mov\n");
+    applySkipRules(dir, join(dir, ".git"));
+    git(dir, ["add", "-A"]);
+    git(dir, ["-c", "user.email=t@t", "-c", "user.name=T", "commit", "-m", "first"]);
+    write(dir, "next.md", "y");
+    let report: { skipped?: unknown[]; skippedTotal?: number } | undefined;
+    const out = await capture(() =>
+      runSavePipeline(dir, { ...CFG }, {
+        skipPush: true,
+        recorder: async (input) => {
+          report = input;
+          return {};
+        },
+      }),
+    );
+    const entries = (report?.skipped ?? []) as Array<{
+      path: string; source: string; category?: string; pattern: string; reason: string;
+    }>;
+    const env = entries.find((e) => e.path === ".env");
+    assert.deepEqual(
+      { source: env?.source, category: env?.category, pattern: env?.pattern },
+      { source: "built-in", category: "credentials", pattern: ".env" },
+    );
+    const mov = entries.find((e) => e.path === "clip.mov");
+    assert.deepEqual(
+      { source: mov?.source, pattern: mov?.pattern },
+      { source: "ignore-list", pattern: "*.mov" },
+    );
+    assert.ok((report?.skippedTotal ?? 0) >= 2, `skippedTotal: ${report?.skippedTotal}`);
+    // The printed report is unchanged.
+    assert.ok(out.includes("Left out:"), out);
+    assert.ok(out.includes(".env"), out);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("a folder with nothing left out reports an empty list", async () => {
+  const dir = folderWith({ "keep.md": "x" });
+  try {
+    let report: { skipped?: unknown[]; skippedTotal?: number } | undefined;
+    await runSavePipeline(dir, { ...CFG }, {
+      skipPush: true,
+      recorder: async (input) => {
+        report = input;
+        return {};
+      },
+    });
+    assert.deepEqual(report?.skipped, []);
+    assert.equal(report?.skippedTotal, 0);
   } finally {
     cleanup(dir);
   }

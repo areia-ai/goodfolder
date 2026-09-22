@@ -39,8 +39,11 @@ CREATE TABLE saves (
   removed_count INTEGER NOT NULL DEFAULT 0,
   top_paths JSONB NOT NULL DEFAULT '[]',
   harness TEXT, -- MCP clientInfo.name; null = a person ran the command directly
-  -- Warn tier: added files whose names suggest secrets (saved, but said out loud).
+  -- Warn tier: added or changed files whose names suggest secrets (saved, but said out loud).
   warnings JSONB NOT NULL DEFAULT '[]'::jsonb,
+  -- What the device reported leaving out; NULL = no report was carried.
+  skipped JSONB,
+  skipped_total INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (project_id, seq)
 );

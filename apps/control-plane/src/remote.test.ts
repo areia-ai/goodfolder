@@ -6,10 +6,12 @@ import {
   applyRevert,
   countsOf,
   previewRevert,
+  exclusionsFor,
+  readSkippedReport,
   recordRemoteSave,
   runnerRun,
   screenLandedPush,
-  screenSavedAdds,
+  screenSaveChanges,
   treeChanges,
   type RemoteDeps,
   type TreeEntry,
@@ -252,10 +254,13 @@ test("recordRemoteSave says nothing new when the folder matches its latest save"
   assert.equal(calls.changeFiles.length, 0);
 });
 
-test("screenSavedAdds flags credentials and ignored paths, and warns on secret names", () => {
+const added = (path: string) => ({ path, kind: "added" as const });
+const changed = (path: string) => ({ path, kind: "changed" as const });
+
+test("screenSaveChanges flags credentials and ignored paths, and warns on secret names", () => {
   const present = new Set([".env", "clip.mov", "notes.md", "Secret plan.txt", "package.json"]);
-  const result = screenSavedAdds(
-    [".env", "clip.mov", "notes.md", "Secret plan.txt", "deliberate.pem"],
+  const result = screenSaveChanges(
+    [".env", "clip.mov", "notes.md", "Secret plan.txt", "deliberate.pem"].map(added),
     {
       presentInTree: new Set([...present, "deliberate.pem"]),
       ignorePatterns: ["*.mov"],
@@ -267,16 +272,28 @@ test("screenSavedAdds flags credentials and ignored paths, and warns on secret n
     { path: "clip.mov", pattern: "*.mov", kind: "ignored", deliberate: false },
     { path: "deliberate.pem", pattern: "*.pem", kind: "credentials", deliberate: true },
   ]);
-  assert.deepEqual(result.warnings, [{ path: "Secret plan.txt", pattern: "*secret*" }]);
+  assert.deepEqual(result.warnings, [{ path: "Secret plan.txt", pattern: "*secret*", change: "added" }]);
 });
 
-test("screenSavedAdds only ever sees added paths — changed ones are not flagged", () => {
-  // The caller filters to kind === "added" before calling, so a .env that was
-  // merely edited is not news. Feeding an added path is what flags.
-  const present = new Set([".env", "notes.md"]);
-  const result = screenSavedAdds(["notes.md"], { presentInTree: present, ignorePatterns: [], includedOnPurpose: [] });
+test("screenSaveChanges warns on a changed secret-named file, but never flags one", () => {
+  const present = new Set(["Secret plan.txt", ".env", "notes.md"]);
+  const result = screenSaveChanges(
+    [changed("Secret plan.txt"), changed(".env"), changed("notes.md")],
+    { presentInTree: present, ignorePatterns: [], includedOnPurpose: [] },
+  );
+  // A changed file was let in by an earlier decision — no flag, even when the
+  // name is credential-shaped. The warn tier does re-flag it.
   assert.deepEqual(result.flagged, []);
+  assert.deepEqual(result.warnings, [{ path: "Secret plan.txt", pattern: "*secret*", change: "changed" }]);
+});
+
+test("screenSaveChanges never evaluates a removed path", () => {
+  const result = screenSaveChanges(
+    [{ path: "Secret plan.txt", kind: "removed" }],
+    { presentInTree: new Set(), ignorePatterns: [], includedOnPurpose: [] },
+  );
   assert.deepEqual(result.warnings, []);
+  assert.deepEqual(result.flagged, []);
 });
 
 test("recordRemoteSave screens what the trees show, not what the caller claims", async () => {
@@ -305,6 +322,52 @@ test("recordRemoteSave screens what the trees show, not what the caller claims",
   ]);
   // The alarm fires where the push lands, not here — recording only reports.
   assert.equal(sql.queries.some((query) => query.includes("'save.flagged'")), false);
+});
+
+test("recordRemoteSave warns again when an existing secret-named file changes", async () => {
+  const { deps } = fixture({
+    head: "head-2",
+    nextSeq: 12,
+    latest: { seq: 3, label: "Before", commitSha: "head-1" },
+    trees: {
+      main: [blob("Secret plan.txt", "b2"), blob("kept.md", "a")],
+      "head-1": [blob("Secret plan.txt", "b"), blob("kept.md", "a")],
+    },
+  });
+  const outcome = await recordRemoteSave(deps, {
+    projectId: "folder-1",
+    accountId: "account-1",
+    actorDeviceId: "device-1",
+    actorName: "Instinct",
+    harness: "Instinct",
+  });
+  assert.equal(outcome.status, "recorded");
+  if (outcome.status !== "recorded") return;
+  assert.deepEqual(outcome.warnings, [{ path: "Secret plan.txt", pattern: "*secret*", change: "changed" }]);
+  assert.deepEqual(outcome.flagged, []);
+});
+
+test("recordRemoteSave says nothing about a secret-named file leaving", async () => {
+  const { deps } = fixture({
+    head: "head-2",
+    nextSeq: 12,
+    latest: { seq: 3, label: "Before", commitSha: "head-1" },
+    trees: {
+      main: [blob("kept.md", "a")],
+      "head-1": [blob("Secret plan.txt", "b"), blob("kept.md", "a")],
+    },
+  });
+  const outcome = await recordRemoteSave(deps, {
+    projectId: "folder-1",
+    accountId: "account-1",
+    actorDeviceId: "device-1",
+    actorName: "Instinct",
+    harness: "Instinct",
+  });
+  assert.equal(outcome.status, "recorded");
+  if (outcome.status !== "recorded") return;
+  assert.deepEqual(outcome.warnings, []);
+  assert.deepEqual(outcome.flagged, []);
 });
 
 test("recordRemoteSave records anyway when the tree cannot be read", async () => {
@@ -366,6 +429,135 @@ test("screenLandedPush swallows a dead adapter", async () => {
   const { deps, repos } = fixture({ head: "head-2" });
   (repos as { head: unknown }).head = async () => { throw new Error("store down"); };
   await screenLandedPush(deps, { projectId: "folder-1", accountId: "account-1", before: "head-1", actor: "folder" });
+});
+
+test("readSkippedReport reads only a well-formed report", () => {
+  // No report at all: absent, wrong type, or a non-object body.
+  assert.equal(readSkippedReport({}), null);
+  assert.equal(readSkippedReport({ skipped: "nope" }), null);
+  assert.equal(readSkippedReport(null), null);
+
+  const result = readSkippedReport({
+    skipped: [
+      { path: ".env", source: "built-in", category: "credentials", pattern: ".env", reason: "looks like it holds passwords or keys" },
+      { path: "clip.mov", source: "ignore-list", pattern: "*.mov", reason: "on your ignore list" },
+      { path: 42, source: "built-in" },                       // path not a string — dropped
+      { path: "x.md", source: "made-up" },                    // unknown source — dropped
+      "not an object",                                        // dropped
+      { path: "y.log", source: "their-own" },                 // pattern/reason default to ""
+      { path: "z.pem", source: "built-in", category: "bogus" }, // bad category dropped
+    ],
+    skippedTotal: 7.9,
+  });
+  assert.ok(result);
+  assert.deepEqual(result.entries.map((e) => e.path), [".env", "clip.mov", "y.log", "z.pem"]);
+  assert.equal(result.entries[0]!.category, "credentials");
+  assert.equal(result.entries[2]!.pattern, "");
+  assert.equal(result.entries[2]!.reason, "");
+  assert.equal(result.entries[3]!.category, undefined);
+  assert.equal(result.total, 7);
+});
+
+test("readSkippedReport caps the list, clips the strings, and clamps the total", () => {
+  const many = Array.from({ length: 250 }, (_, i) => ({
+    path: `f${i}.env`, source: "built-in", pattern: ".env", reason: "x",
+  }));
+  const result = readSkippedReport({ skipped: many, skippedTotal: 999_999_999 });
+  assert.ok(result);
+  assert.equal(result.entries.length, 200);
+  assert.equal(result.total, 10_000_000);
+  const long = readSkippedReport({
+    skipped: [{ path: "p".repeat(600), source: "built-in", pattern: "x".repeat(300), reason: "r".repeat(300) }],
+  });
+  assert.equal(long?.entries[0]?.path.length, 512);
+  assert.equal(long?.entries[0]?.pattern.length, 200);
+  // A total smaller than the entries is lifted to match.
+  const low = readSkippedReport({ skipped: many.slice(0, 3), skippedTotal: 1 });
+  assert.equal(low?.total, 3);
+});
+
+test("recordRemoteSave stores the device's left-out report, or its absence", async () => {
+  const withReport = fixture({
+    head: "head-2",
+    nextSeq: 5,
+    latest: { seq: 4, label: "Before", commitSha: "head-1" },
+    trees: {
+      main: [blob("kept.md", "a"), blob("added.md", "d")],
+      "head-1": [blob("kept.md", "a")],
+    },
+  });
+  const outcome = await recordRemoteSave(withReport.deps, {
+    projectId: "folder-1",
+    accountId: "account-1",
+    actorDeviceId: "device-1",
+    actorName: "Instinct",
+    harness: "Instinct",
+    skippedReport: {
+      entries: [{ path: ".env", source: "built-in", category: "credentials", pattern: ".env", reason: "secret" }],
+      total: 3,
+    },
+  });
+  assert.equal(outcome.status, "recorded");
+  if (outcome.status !== "recorded") return;
+  assert.equal(outcome.skipped.length, 1);
+  assert.equal(outcome.skippedTotal, 3);
+  assert.equal(outcome.skippedReportedBy, "device");
+
+  const without = fixture({
+    head: "head-2",
+    nextSeq: 5,
+    latest: { seq: 4, label: "Before", commitSha: "head-1" },
+    trees: {
+      main: [blob("kept.md", "a"), blob("added.md", "d")],
+      "head-1": [blob("kept.md", "a")],
+    },
+  });
+  const plain = await recordRemoteSave(without.deps, {
+    projectId: "folder-1",
+    accountId: "account-1",
+    actorDeviceId: "device-1",
+    actorName: "Instinct",
+    harness: "Instinct",
+  });
+  assert.equal(plain.status, "recorded");
+  if (plain.status !== "recorded") return;
+  assert.deepEqual(plain.skipped, []);
+  assert.equal(plain.skippedTotal, 0);
+  assert.equal(plain.skippedReportedBy, null);
+});
+
+test("exclusionsFor answers with no history, no list, and a list with bad lines", async () => {
+  // Nothing saved yet.
+  const empty = await exclusionsFor(fixture({ head: null }).deps, "folder-1");
+  assert.equal(empty.at, null);
+  assert.equal(empty.ignoreFile.present, false);
+  assert.ok(empty.builtIn.skip.length > 0);
+  assert.ok(empty.builtIn.skip.some((r) => r.pattern === ".env" && r.category === "credentials" && r.label.length > 0));
+  assert.ok(empty.builtIn.skip.some((r) => r.pattern === "dist/" && r.needs === "package.json"));
+  assert.ok(empty.builtIn.warn.includes("*secret*"));
+  assert.ok(empty.deviceOnly.includes("their-own"));
+
+  // A head with no ignore file.
+  const noList = await exclusionsFor(
+    fixture({ head: "h1", trees: { h1: [blob("a.md", "a")] } }).deps,
+    "folder-1",
+  );
+  assert.equal(noList.at, "h1");
+  assert.equal(noList.ignoreFile.present, false);
+
+  // Valid and invalid lines both surface.
+  const listed = await exclusionsFor(
+    fixture({
+      head: "h1",
+      trees: { h1: [blob("a.md", "a"), blob(".goodfolderignore", "i")] },
+      files: { "h1:.goodfolderignore": { content: Buffer.from("*.mov\n!bad\n# note\n"), sha: "i", size: 16 } },
+    }).deps,
+    "folder-1",
+  );
+  assert.equal(listed.ignoreFile.present, true);
+  assert.deepEqual(listed.ignoreFile.patterns, ["*.mov"]);
+  assert.equal(listed.ignoreFile.invalid.length, 1);
+  assert.equal(listed.ignoreFile.invalid[0]!.line, 2);
 });
 
 test("recordRemoteSave refuses a stale expected state", async () => {

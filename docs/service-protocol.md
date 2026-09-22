@@ -90,6 +90,91 @@ between the last recorded save and the current state — the caller sends no
 file list, and a stale `commitSha` (optional) is refused rather than
 recorded. `harness` names the assistant on the timeline.
 
+### Reading a save result: `warnings`, `flagged`, `skipped`
+
+Every recorded save answers with three lists. They describe different
+things, and none of them is a scan of the folder.
+
+**The two tiers.** The rules are data in `packages/shared` and match on
+names only. File contents are never read.
+
+- **Skip tier**: names shaped like credentials, such as `.env`, `.env.*`,
+  `*.pem`, `id_rsa`, `id_ed25519`, `*.p12`, `*.pfx`, `*.keystore`, `*.jks`
+  and a file named exactly `credentials`. Paths on the folder's
+  `.goodfolderignore` get the same treatment. These are kept out. A folder
+  client leaves them out before pushing, and the browser refuses to add
+  them. If one arrives anyway, it is saved and `flagged`, not warned.
+- **Warn tier**: file names containing `secret`, `password` or
+  `credential` (case-insensitive), or shaped like `*.key.*`. These are
+  saved. A warning never blocks a save. Plain `*.key` is neither tier,
+  because it is a Keynote deck.
+
+**`warnings`: `[{ path, pattern, change }]`**. The server computes these
+from the folder's own tree, comparing the last recorded save with this
+one. It does not take the caller's word for them.
+
+- Only files this save **added or changed** are evaluated.
+  `change` is `added` or `changed`. It is absent on saves recorded before
+  the field existed.
+- Removed files are not evaluated, and neither are files this save did not
+  touch. A secret-named file saved last week does not warn again until it
+  changes.
+- If the trees can't be read, the save is still recorded, with no warnings.
+
+**What an empty `warnings` array means.** Only that nothing this save
+added or changed has a warn-tier name. It does **not** mean:
+
+- the folder holds no secrets, since files the save didn't touch aren't
+  evaluated;
+- no file contains a secret, since contents are never read;
+- no credential-shaped file arrived, since those appear in `flagged`, not
+  here;
+- the device left nothing out, which is what `skipped` reports.
+
+To judge the whole folder, read its files and history. No save result can
+tell you that.
+
+**`flagged`: `[{ path, pattern, kind, deliberate }]`**. Files this save
+**added** that the skip tier (`kind: "credentials"`) or the folder's
+`.goodfolderignore` (`kind: "ignored"`) should have kept out. It appears in
+the `POST /api/saves` response only; timeline reads do not return it. The
+durable record is the audit log and the `save.flagged` webhook (section 5),
+and that webhook also fires for pushes that are never recorded as saves.
+Changed files are not flagged again: an already-saved `.env` that changes
+appears in neither list. The bytes have landed either way. Flagging
+reports that; it doesn't prevent it.
+
+**`skipped`: `[{ path, source, category?, pattern, reason }]`**, with
+`skippedTotal` and `skippedReportedBy`. These are the files the **device**
+left out of this save, and the rule that left each one out:
+
+- `source: "built-in"`: `pattern` is the built-in rule and `category` its
+  group (`credentials`, `installed`, `rebuildable` or `noise`).
+- `source: "ignore-list"`: `pattern` is the `.goodfolderignore` line.
+- `source: "their-own"`: the project's own settings on that computer.
+
+The server never receives skipped files, so this list is what the device
+reported, stored as it was sent and not verified. A folder the device left
+out whole is one entry, and its path ends in `/`. The list is capped at
+200 entries, and `skippedTotal` is the full count.
+`skippedReportedBy` is `"device"` when the save carried a report. It is
+`null` for browser saves, services that didn't report, and older
+devices. In that case `skipped` is `[]` and tells you nothing either way.
+An empty list only means "nothing was left out" when `skippedReportedBy`
+is `"device"`.
+
+**Which rules apply to a folder.** `GET /api/projects/{id}/exclusions`
+(read:folders), or `GET /api/exclusions` with a folder credential,
+returns:
+
+- the built-in skip rules, with the evidence each one needs, if any;
+- the warn-tier patterns;
+- the folder's `.goodfolderignore` as the server reads it at the latest
+  state: valid `patterns` plus each `invalid` line and why it's invalid.
+
+`at` names the state it was read from, and is `null` before the first
+save. Settings that exist only on a device can't be seen from here.
+
 Scoped keys cannot mint folder transfer tokens
 (`POST /api/folder-token/renew` requires a folder credential), and a key
 bound to one folder is refused on every other folder's routes and transport
@@ -104,6 +189,7 @@ no credential required). Highlights:
 | --- | --- |
 | `GET /api/projects` | read:folders (folder-bound keys see only their folder) |
 | `GET /api/projects/{id}/saves` | read:folders |
+| `GET /api/projects/{id}/exclusions` | read:folders |
 | `GET /api/projects/{id}/files`, `/file`, `/file/raw` | read:files |
 | `GET /api/projects/{id}/proposals` | read:folders |
 | `POST /api/projects/{id}/proposals` | write:proposals |
@@ -176,7 +262,8 @@ addresses are refused at creation time.
 - `PUBLIC_URL` must be the public origin: approval links, MCP tool output,
   and the OpenAPI `servers[0].url` are built from it.
 - `GF_API_URL` is what the CLI and the example script point at.
-- Apply `infra/migrations/2026-09-17-service-access-and-webhooks.sql` through
+- Apply `infra/migrations/2026-09-17-service-access-and-webhooks.sql`,
+  `2026-09-22-save-warnings.sql` and `2026-09-23-save-skipped.sql` through
   the normal upgrade path (`infra/selfhost/migrate.sh`).
 - No new required environment variables, no external service, no cloud
   account.

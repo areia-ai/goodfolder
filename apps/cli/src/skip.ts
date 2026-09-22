@@ -10,6 +10,7 @@ import {
   SKIP_CATEGORY_LABEL,
   SKIP_RULES,
   type SkipCategory,
+  type SkippedEntry,
 } from "@goodfolder/shared";
 import { git } from "./git.ts";
 
@@ -132,19 +133,7 @@ export function credentialFilesLeftOut(
   return r.stdout.split("\0").filter((p) => p && !opted.has(p));
 }
 
-/**
- * One left-out path, with who asked for it and why, in plain language.
- * `source` is "built-in" for the default rules, "ignore-list" for the
- * folder's own `.goodfolderignore`, and "their-own" for anything the
- * project's other settings exclude.
- */
-export interface SkippedEntry {
-  path: string;
-  source: "built-in" | "ignore-list" | "their-own";
-  category?: SkipCategory;
-  pattern: string;
-  reason: string;
-}
+export type { SkippedEntry };
 
 /** Why one built-in rule left this path out, in singular form. */
 const ENTRY_REASON: Record<SkipCategory, string> = {

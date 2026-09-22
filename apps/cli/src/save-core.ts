@@ -9,7 +9,8 @@ import {
   type AiLabelContext,
   type SaveCounts,
   type SkipCategory,
-  type WarnMatch,
+  SKIPPED_REPORT_CAP,
+  type SaveWarning,
 } from "@goodfolder/shared";
 import type { FolderConfig } from "./config.ts";
 import { CliError } from "./cli-error.ts";
@@ -255,15 +256,12 @@ function groupSummary(key: SkippedEntry["source"] | SkipCategory, paths: string[
   }
 }
 
-function reportWhatStayedOut(
-  folder: string,
-  alsoProtect: readonly string[],
-  wasImport: boolean,
-): SkippedEntry[] {
+/** Print what a save left out — the entries were computed earlier so the
+ * recorder could carry the same list. */
+function reportWhatStayedOut(entries: readonly SkippedEntry[], wasImport: boolean): void {
   if (wasImport) {
-    const entries = traceSync("skipped", () => skippedEntries(folder, alsoProtect));
     const groups = groupSkippedEntries(entries);
-    if (groups.length === 0) return entries;
+    if (groups.length === 0) return;
     console.log("  Left out, because your own tools remake them or they hold secrets:");
     for (const group of groups) {
       const shown = group.paths.slice(0, 3).join(", ");
@@ -272,12 +270,9 @@ function reportWhatStayedOut(
       console.log(`    • ${group.label}: ${shown}${more}`);
     }
     console.log("  To see the whole list, or protect one anyway: goodfolder skipped");
-    return entries;
+    return;
   }
-  // One `status --ignored` answers both lines below; it is traced so the
-  // per-save budget can see what it costs.
-  const entries = traceSync("skipped", () => skippedEntries(folder, alsoProtect));
-  if (entries.length === 0) return [];
+  if (entries.length === 0) return;
   const secrets = entries.filter((e) => e.source === "built-in" && e.category === "credentials");
   if (secrets.length > 0) {
     const many = secrets.length === 1 ? "file that looks" : "files that look";
@@ -301,7 +296,6 @@ function reportWhatStayedOut(
     if (paths.length) parts.push(groupSummary(key, paths));
   }
   console.log(`  Left out: ${parts.join(" · ")} — goodfolder skipped`);
-  return entries;
 }
 
 export interface SaveOutcome {
@@ -316,10 +310,12 @@ export interface SaveOutcome {
   timings: Record<string, number>;
   counts: SaveCounts;
   topPaths: string[];
-  /** Added files whose names suggest secrets — saved, but worth saying. */
-  warnings: WarnMatch[];
-  /** What the save left out, capped at 200 entries. */
+  /** Files this save added or changed whose names suggest secrets — saved, but worth saying. */
+  warnings: SaveWarning[];
+  /** What the save left out, capped at SKIPPED_REPORT_CAP entries. */
   skipped: SkippedEntry[];
+  /** Every left-out path counted, capped list or not. */
+  skippedTotal: number;
   /** alsoProtect paths that went into this save — the deliberate ones. */
   includedOnPurpose: string[];
 }
@@ -332,8 +328,10 @@ export interface SaveRecorder {
     ai?: AiLabelContext;
     counts: SaveCounts;
     topPaths: string[];
-    warnings?: WarnMatch[];
+    warnings?: SaveWarning[];
     includedOnPurpose?: string[];
+    skipped?: SkippedEntry[];
+    skippedTotal?: number;
   }): Promise<{ seq?: number; label?: string }>;
 }
 
@@ -376,7 +374,7 @@ export async function runSavePipeline(
   } else if (changes.all.length === 0) {
     void trackedPromise; // drain
     console.log("Nothing new to save — your folder matches the last save.");
-    const nothing: SaveOutcome = { sha: "", changedCount: 0, wasImport: false, seq: undefined, label: "", truncated: false, pushSkipped: opts.skipPush ?? false, timings: {}, counts: { added: 0, changed: 0, removed: 0 }, topPaths: [], warnings: [], skipped: [], includedOnPurpose: [] };
+    const nothing: SaveOutcome = { sha: "", changedCount: 0, wasImport: false, seq: undefined, label: "", truncated: false, pushSkipped: opts.skipPush ?? false, timings: {}, counts: { added: 0, changed: 0, removed: 0 }, topPaths: [], warnings: [], skipped: [], skippedTotal: 0, includedOnPurpose: [] };
     return nothing;
   }
   if (wasImport && changes.all.length === 0) {
@@ -384,7 +382,7 @@ export async function runSavePipeline(
     // saying so beats a failed command.
     void trackedPromise;
     console.log("Connected. The folder is empty right now — anything you add and save is protected from then on.");
-    const empty: SaveOutcome = { sha: "", changedCount: 0, wasImport: true, seq: undefined, label: "", truncated: false, pushSkipped: opts.skipPush ?? false, timings: {}, counts: { added: 0, changed: 0, removed: 0 }, topPaths: [], warnings: [], skipped: [], includedOnPurpose: [] };
+    const empty: SaveOutcome = { sha: "", changedCount: 0, wasImport: true, seq: undefined, label: "", truncated: false, pushSkipped: opts.skipPush ?? false, timings: {}, counts: { added: 0, changed: 0, removed: 0 }, topPaths: [], warnings: [], skipped: [], skippedTotal: 0, includedOnPurpose: [] };
     return empty;
   }
 
@@ -533,12 +531,24 @@ export async function runSavePipeline(
 
   // ---- names that suggest secrets, and deliberate inclusions ---------------
   // Warn tier: these were saved — the point is to say so, not to stop it.
-  const warnMatches: WarnMatch[] = [];
-  for (const path of changes.added) {
-    const match = warnRuleFor(path);
-    if (match) warnMatches.push(match);
+  // Added and changed files both warn; a removed one is gone, not news.
+  const warnMatches: SaveWarning[] = [];
+  for (const [paths, change] of [
+    [changes.added, "added"],
+    [changes.modified, "changed"],
+  ] as const) {
+    for (const path of paths) {
+      const match = warnRuleFor(path);
+      if (match) warnMatches.push({ ...match, change });
+    }
   }
   const includedOnPurpose = alsoProtect.filter((p) => changes.all.includes(p));
+
+  // ---- what stayed out ------------------------------------------------------
+  // Computed once, before the recorder runs, so the save report carries the
+  // same list the confirmation prints. One `status --ignored` answers both;
+  // it is traced so the per-save budget can see what it costs.
+  const skippedAll = traceSync("skipped", () => skippedEntries(folder, alsoProtect));
 
   // ---- timeline (never blocks the checkpoint) ------------------------------
   let label = commitMsg;
@@ -557,6 +567,8 @@ export async function runSavePipeline(
         topPaths: pickTopPaths(changes),
         warnings: warnMatches,
         includedOnPurpose,
+        skipped: skippedAll.slice(0, SKIPPED_REPORT_CAP),
+        skippedTotal: skippedAll.length,
       };
       if (opts.message) input.label = opts.message;
       if (ai) input.ai = ai;
@@ -589,13 +601,13 @@ export async function runSavePipeline(
   }
   console.log(`  ${label}`);
   if (truncated) console.log("  (large change — the label saw a partial preview)");
-  const skipped = reportWhatStayedOut(folder, alsoProtect, wasImport);
+  reportWhatStayedOut(skippedAll, wasImport);
   if (warnMatches.length > 0) {
     const many =
       warnMatches.length === 1
         ? "file has a name that suggests"
         : "files have names that suggest";
-    const list = warnMatches.map((w) => `${w.path} (${w.pattern})`).join(", ");
+    const list = warnMatches.map((w) => `${w.path} (${w.change}, ${w.pattern})`).join(", ");
     console.log(
       `  Saved, but ${warnMatches.length} ${many} secrets: ${list}`,
     );
@@ -617,6 +629,6 @@ export async function runSavePipeline(
   const tr = renderTrace();
   if (tr) console.log(tr);
 
-  const outcome: SaveOutcome = { sha: commit, changedCount: changes.all.length, wasImport, seq, label, truncated, pushSkipped, timings, counts, topPaths: pickTopPaths(changes), warnings: warnMatches, skipped: skipped.slice(0, 200), includedOnPurpose };
+  const outcome: SaveOutcome = { sha: commit, changedCount: changes.all.length, wasImport, seq, label, truncated, pushSkipped, timings, counts, topPaths: pickTopPaths(changes), warnings: warnMatches, skipped: skippedAll.slice(0, SKIPPED_REPORT_CAP), skippedTotal: skippedAll.length, includedOnPurpose };
   return outcome;
 }
