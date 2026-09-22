@@ -8,6 +8,12 @@ tag that the published packages and images are built from.
 
 - The dashboard's key list is called **API keys** (it was "Services and
   assistants"), and its create button says what it does.
+- A command that needs your confirmation no longer takes "no" for an
+  answer when there is no terminal to ask in (a script, a pipe, an agent's
+  shell). `goodfolder ignore add --remove` used to report "Nothing was taken
+  out of the saves" and exit 0; `goodfolder undo` printed a hint and also
+  exited 0. Both now stop with exit code 1 and print the exact command to
+  re-run with `--yes`.
 
 ## [0.2.0] - 2026-09-17
 

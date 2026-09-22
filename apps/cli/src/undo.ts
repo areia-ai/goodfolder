@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline/promises";
 import { friendlyHarness, type SaveCounts } from "@goodfolder/shared";
 import { CliError } from "./cli-error.ts";
+import { requireTerminalToConfirm } from "./confirm.ts";
 import type { FolderConfig } from "./config.ts";
 import { requireConnection } from "./connect.ts";
 import { git, gitOk } from "./git.ts";
@@ -158,7 +159,6 @@ function ensureObjects(folder: string, cfg: FolderConfig, sha: string): void {
 }
 
 async function confirm(question: string, choices: string[], fallback: string): Promise<string> {
-  if (!process.stdin.isTTY) return fallback;
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     const answer = (await rl.question(`${question} `)).trim().toLowerCase();
@@ -215,15 +215,10 @@ export async function cmdUndo(folder: string, opts: UndoOptions = {}): Promise<v
   let proceedScope = scope;
   let proceedTarget = target;
   if (!opts.yes && !wantRun) {
-    if (!process.stdin.isTTY) {
-      console.log("");
-      console.log(
-        runLen >= 2
-          ? "Re-run with --yes to undo this save, or --session to undo the whole run."
-          : "Re-run with --yes to undo this save.",
-      );
-      return;
-    }
+    requireTerminalToConfirm(
+      "goodfolder undo --yes",
+      runLen >= 2 ? "Or undo the whole run of saves:  goodfolder undo --session" : undefined,
+    );
     if (runLen >= 2) {
       const pick = await confirm(
         `Undo one save (o), the whole run of ${runLen} (r), or cancel (c)?`,

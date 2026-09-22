@@ -1,8 +1,10 @@
 import { strict as assert } from "node:assert";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { IGNORE_FILE, skipRuleFor } from "@goodfolder/shared";
 import { git } from "./git.ts";
 import { saveConfig, type FolderConfig } from "./config.ts";
@@ -159,6 +161,27 @@ test("add --remove stops protecting saved matches but leaves them on disk", asyn
     const tracked = git(dir, ["ls-files"]).stdout;
     assert.ok(!tracked.includes("old.mov"), "no longer protected");
     assert.ok(existsSync(join(dir, "old.mov")), "the file stays on this computer");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("add --remove with no terminal stops with the --yes message instead of assuming no", () => {
+  const dir = folderWith({ "old.mov": "x" });
+  try {
+    git(dir, ["add", "-A"]);
+    git(dir, ["-c", "user.email=t@t", "-c", "user.name=T", "commit", "-m", "first"]);
+    const cli = join(dirname(fileURLToPath(import.meta.url)), "index.ts");
+    // Piped stdin: exactly what a script or an agent's shell looks like.
+    const r = spawnSync(
+      process.execPath,
+      ["--experimental-transform-types", cli, "ignore", "add", "*.mov", "--remove"],
+      { cwd: dir, input: "", encoding: "utf8" },
+    );
+    assert.notEqual(r.status, 0, `exits non-zero\n${r.stdout}\n${r.stderr}`);
+    assert.ok(r.stderr.includes("no terminal here to ask in"), r.stderr);
+    assert.ok(r.stderr.includes('goodfolder ignore add "*.mov" --remove --yes'), r.stderr);
+    assert.ok(git(dir, ["ls-files"]).stdout.includes("old.mov"), "still protected — nothing was removed");
   } finally {
     cleanup(dir);
   }

@@ -9,6 +9,7 @@ import {
   validateIgnorePattern,
 } from "@goodfolder/shared";
 import { CliError } from "./cli-error.ts";
+import { requireTerminalToConfirm } from "./confirm.ts";
 import { loadConfig } from "./config.ts";
 import { applySkipRules } from "./skip.ts";
 import { findGitDir, git } from "./git.ts";
@@ -74,7 +75,6 @@ function requireConnectedFolder(folder: string): string {
 }
 
 async function confirm(question: string): Promise<boolean> {
-  if (!process.stdin.isTTY) return false;
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     return (await rl.question(question)).trim().toLowerCase() === "y";
@@ -138,6 +138,9 @@ async function ignoreAdd(
     console.log("devices follow on their next sync after your next save.");
     console.log("This does NOT take them out of earlier saves, and the files");
     console.log("stay on this computer.");
+    if (!opts.yes) {
+      requireTerminalToConfirm(`goodfolder ignore add ${nowList.map((p) => JSON.stringify(p)).join(" ")} --remove --yes`);
+    }
     const ok =
       opts.yes ||
       (await confirm(`Stop protecting ${saved.length} saved file${saved.length === 1 ? "" : "s"}? (y/N) `));
