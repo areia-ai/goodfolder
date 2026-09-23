@@ -92,7 +92,10 @@ tools/              the gates CI runs: vocabulary, brand SVG, contrast
 14. The transport proxy forwards exactly three paths — `info/refs`,
     `git-upload-pack`, `git-receive-pack` — and refuses the rest before any
     credential is attached (`apps/control-plane/src/transport.ts`). Every
-    JSON route reads its body only after it has been refused by size.
+    JSON route reads its body only after it has been refused by size. A
+    push is held and checked against the same leave-out rules before the
+    transport service sees any of it (`apps/control-plane/src/push-gate/`),
+    and is refused whole or forwarded byte for byte — never edited.
 
 ## Working on it
 

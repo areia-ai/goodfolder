@@ -44,7 +44,14 @@ export function ensureSaveAuthor(folder: string): void {
  * name.
  */
 export function pushCurrentHistory(folder: string, cfg: FolderConfig): GitResult {
-  return git(folder, ["push", GF_REMOTE, "HEAD:main"], undefined, transportEnv(cfg));
+  // Deliberate inclusions travel as push options so the gate knows they
+  // were asked for. A path with a newline can't ride an option line; the
+  // cap keeps the option block small.
+  const options = (cfg.alsoProtect ?? [])
+    .filter((p) => !p.includes("\n"))
+    .slice(0, 100)
+    .flatMap((p) => ["-o", `goodfolder-include=${p}`]);
+  return git(folder, ["push", ...options, GF_REMOTE, "HEAD:main"], undefined, transportEnv(cfg));
 }
 
 /** Bring history down from GoodFolder. */

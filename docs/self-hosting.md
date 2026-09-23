@@ -85,6 +85,30 @@ setup. Set `RESEND_API_KEY` when you want other people to be able to sign in.
 Leave `OPENROUTER_API_KEY` empty. Saves still work; they get a plain generated
 summary instead of a written one. A label can never block a save.
 
+## The save gate
+
+The control plane checks every push before the transport service sees it
+and refuses — as a whole — any save that adds files the folder's rules keep
+out. Two variables tune it:
+
+- `GF_PUSH_GATE`: `enforce` (default) refuses; `observe` forwards but logs
+  and audits what it would have refused; `off` restores plain streaming.
+- `GF_PUSH_MAX_BYTES`: the largest push body checked in one go (default
+  2 GiB). Bigger saves get a `too-large` answer before anything
+  upstream is touched; saving in parts is the workaround.
+
+The check spools each push to a temporary file under the API container's
+`/tmp` first, so that filesystem needs free space up to
+`GF_PUSH_MAX_BYTES` per concurrent push (at most four are checked at a
+time; the rest wait). Spool files are always removed when a push finishes
+or is refused, and any left behind are swept at startup.
+
+One boundary matters: the gate — and the post-push check that raises
+`save.flagged` — only cover traffic that passes through the control plane.
+Publishing Gitea's port, enabling its SSH access, or pointing a client
+straight at Gitea bypasses both. The compose file publishes nothing for
+Gitea and enables no SSH; keep it that way.
+
 ## Putting it on the internet
 
 The compose file binds every published port to `127.0.0.1`, so nothing is

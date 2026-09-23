@@ -323,6 +323,25 @@ export interface SaveWarning extends WarnMatch {
 }
 
 /**
+ * Would this path have been left out if it had arrived through a save?
+ * The one rule the push gate and the post-push screen share: credentials
+ * first, then the folder's own ignore list. A hit names what caught it.
+ */
+export function pushRefusalFor(
+  path: string,
+  ignorePatterns: readonly string[],
+  exists: (p: string) => boolean,
+): { kind: "credentials" | "ignored"; pattern: string } | null {
+  const skipped = skipRuleFor(path, exists);
+  if (skipped && skipped.category === "credentials") {
+    return { kind: "credentials", pattern: skipped.pattern };
+  }
+  const ignored = ignoreRuleFor(path, ignorePatterns);
+  if (ignored) return { kind: "ignored", pattern: ignored };
+  return null;
+}
+
+/**
  * One left-out path, with who asked for it and why, in plain language.
  * `source` is "built-in" for the default rules, "ignore-list" for the
  * folder's own `.goodfolderignore`, and "their-own" for anything the

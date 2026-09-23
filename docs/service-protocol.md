@@ -180,6 +180,38 @@ Scoped keys cannot mint folder transfer tokens
 bound to one folder is refused on every other folder's routes and transport
 paths.
 
+### Refused saves
+
+The control plane checks every push before the transport service sees it.
+A push that adds a credential-shaped path, or a path on the folder's
+`.goodfolderignore` list, is refused **as a whole** — no refs move, nothing
+lands. Paths the push only changes are not refused. Codes:
+
+- `left-out`: the push added files the folder's rules keep out.
+- `unreadable`: the push could not be read well enough to check (a corrupt
+  pack, or a delta whose base is not in the pack despite `no-thin`).
+- `too-large`: over `GF_PUSH_MAX_BYTES`; save it in parts.
+
+How the refusal reaches the client depends on the push's capabilities:
+
+- With `side-band-64k` (what every modern client asks for): HTTP 200 with
+  the result type; band 2 carries the readable lines and a
+  `goodfolder-refusal {…}` JSON line (`code`, `refusalId`, up to 200
+  `paths` of `{path, kind, pattern, reason}`, and `total`), then band 1
+  carries `unpack ok` plus `ng <ref>` for every ref in the push.
+- Without side-band: HTTP 403 with `error.code` and the same refusal shape
+  under `error.refusal`.
+
+Because the check must see every object, the proxy advertises `no-thin` on
+the receive-pack capability list, so accepted pushes arrive self-contained.
+A device can ask for a credential-shaped path on purpose with the push
+option `goodfolder-include=<path>` (one per path, at most 100). Options
+from service keys are ignored. A refusal writes a `push.refused` audit row
+and fires the `push.refused` webhook; a device inclusion writes
+`push.included-on-purpose`. `GF_PUSH_GATE=observe` forwards everything and
+writes `push.would-refuse` instead; `off` restores plain streaming.
+Large-file objects uploaded ahead of a refused save stay in storage for now.
+
 ## 3. REST surface
 
 The authoritative description is served at `GET /openapi.json` (OpenAPI 3.1,
@@ -226,7 +258,7 @@ local server returns, adapted for a caller with no local folder.
 
 ## 5. Webhooks
 
-Events: `save.created`, `save.flagged`, `proposal.created`,
+Events: `save.created`, `save.flagged`, `push.refused`, `proposal.created`,
 `proposal.reviewed`, and `save.requested` (reserved; no emitter yet).
 
 `save.flagged` fires when a push lands files the leave-out rules would
@@ -236,7 +268,14 @@ covers work that is never recorded as a save; when it is, `data.seq` is
 `null` and `data.head` names the state the push produced. The rest of
 `data` is `flagged`, a list of `{ path, pattern, kind, deliberate }`
 entries where `kind` is `credentials` or `ignored` and `deliberate` says
-the saver asked for the file on purpose.
+the saver asked for the file on purpose. `data.gate` names the push gate's
+mode (`enforce`, `observe`, or `off`) and `data.refusalId` links the alarm
+to a would-refusal the gate recorded in observe mode.
+
+`push.refused` fires when the push gate refuses a save (section 2,
+Refused saves). `data` is `{ refusalId, refs, paths, total }`: the refs
+the push tried to move and the left-out paths it carried, with `kind` and
+`pattern` for each.
 
 ```
 POST <your address>

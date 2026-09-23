@@ -13,7 +13,7 @@ import {
   type SaveWarning,
 } from "@goodfolder/shared";
 import type { FolderConfig } from "./config.ts";
-import { CliError } from "./cli-error.ts";
+import { CliError, type SaveRefusal } from "./cli-error.ts";
 import { git, gitOk, gitStream, gitAsync, findGitDir } from "./git.ts";
 import { trace, traceSync, renderTrace, snapshotMarks } from "./perf.ts";
 import type { GitResult } from "./git.ts";
@@ -521,6 +521,16 @@ export async function runSavePipeline(
     await trace("push", async () => {
       const push = pushCurrentHistory(folder, cfg);
       if (push.code !== 0) {
+        // A refused save carries its reasons as a marker line. Undo only the
+        // save this run just made, leave the files and the index alone, and
+        // show what the gate said — never confuse it with another device.
+        const refusal = parseRefusal(push.stderr);
+        if (refusal) {
+          undoRefusedSave(folder, commit);
+          const err = new CliError(refusalMessage(push.stderr, refusal), 1);
+          err.refusal = refusal;
+          throw err;
+        }
         if (/non-fast-forward|rejected/i.test(push.stderr)) {
           throw new CliError("✗ Another device saved first. Run: goodfolder sync");
         }
@@ -631,4 +641,45 @@ export async function runSavePipeline(
 
   const outcome: SaveOutcome = { sha: commit, changedCount: changes.all.length, wasImport, seq, label, truncated, pushSkipped, timings, counts, topPaths: pickTopPaths(changes), warnings: warnMatches, skipped: skippedAll.slice(0, SKIPPED_REPORT_CAP), skippedTotal: skippedAll.length, includedOnPurpose };
   return outcome;
+}
+
+/** The `goodfolder-refusal {…}` marker a refused push leaves in stderr. */
+function parseRefusal(stderr: string): SaveRefusal | null {
+  const line = stderr.split("\n").find((l) => l.includes("goodfolder-refusal {"));
+  if (!line) return null;
+  try {
+    const parsed = JSON.parse(line.slice(line.indexOf("goodfolder-refusal ") + "goodfolder-refusal ".length)) as SaveRefusal;
+    if (typeof parsed !== "object" || parsed === null || typeof parsed.code !== "string") return null;
+    return { ...parsed, paths: Array.isArray(parsed.paths) ? parsed.paths : [], total: typeof parsed.total === "number" ? parsed.total : 0 };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Take back the save this run just made and nothing else: HEAD must still
+ * be exactly the commit we created, then it is a soft step back (or the
+ * ref removed, for a first save). Files and the index are untouched.
+ */
+function undoRefusedSave(folder: string, sha: string): void {
+  const head = git(folder, ["rev-parse", "HEAD"]);
+  if (head.code !== 0 || head.stdout.trim() !== sha) return;
+  if (git(folder, ["rev-parse", "--verify", "HEAD~1"]).code === 0) {
+    git(folder, ["reset", "--soft", "HEAD~1"]);
+  } else {
+    git(folder, ["update-ref", "-d", "HEAD"]);
+  }
+}
+
+/** The readable lines the gate printed, with the marker left out. */
+function refusalMessage(stderr: string, refusal: SaveRefusal): string {
+  const readable = stderr
+    .split("\n")
+    .map((l) => l.trimEnd().replace(/^remote:\s*/, ""))
+    .filter((l) => l.length > 0 && !l.includes("goodfolder-refusal {"))
+    .filter((l) => !/^(To |!\s|\[remote|Everything up-to-date)/.test(l));
+  if (readable.length === 0) {
+    return `✗ GoodFolder refused this save (${refusal.code}). Nothing from this save was kept.`;
+  }
+  return "✗ " + readable.join("\n");
 }

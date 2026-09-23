@@ -3,6 +3,7 @@ import {
   IGNORE_FILE,
   ignoreRuleFor,
   parseIgnoreFile,
+  pushRefusalFor,
   SKIP_CATEGORY_LABEL,
   SKIP_RULES,
   SKIPPED_REPORT_CAP,
@@ -470,14 +471,11 @@ export function screenSaveChanges(
     const warn = warnRuleFor(change.path);
     if (warn) warnings.push({ ...warn, change: change.kind });
     if (change.kind !== "added") continue;
-    const skipped = skipRuleFor(change.path, (candidate) => input.presentInTree.has(candidate));
-    if (skipped && skipped.category === "credentials") {
-      flagged.push({ path: change.path, pattern: skipped.pattern, kind: "credentials", deliberate: deliberate.has(change.path) });
-      continue;
-    }
-    const ignored = ignoreRuleFor(change.path, input.ignorePatterns);
-    if (ignored) {
-      flagged.push({ path: change.path, pattern: ignored, kind: "ignored", deliberate: deliberate.has(change.path) });
+    const refusal = pushRefusalFor(change.path, input.ignorePatterns, (candidate) =>
+      input.presentInTree.has(candidate),
+    );
+    if (refusal) {
+      flagged.push({ path: change.path, pattern: refusal.pattern, kind: refusal.kind, deliberate: deliberate.has(change.path) });
     }
   }
   return { warnings, flagged };
@@ -535,6 +533,10 @@ export async function reportFlaggedSave(
     head?: string;
     actor: string;
     flagged: FlaggedPath[];
+    /** The gate posture the push went through, for the alarm's detail. */
+    gate?: "enforce" | "observe" | "off" | null;
+    /** The gate's would-refusal id, when observe mode noted one. */
+    refusalId?: string | null;
   },
 ): Promise<void> {
   if (input.flagged.length === 0) return;
@@ -545,6 +547,8 @@ export async function reportFlaggedSave(
         projectId: input.projectId,
         seq: input.seq,
         head: input.head ?? null,
+        gate: input.gate ?? null,
+        refusalId: input.refusalId ?? null,
         flagged: input.flagged,
       }))})`;
   } catch (error) {
@@ -559,7 +563,13 @@ export async function reportFlaggedSave(
     accountId: input.accountId,
     projectId: input.projectId,
     event: "save.flagged",
-    data: { seq: input.seq, head: input.head ?? null, flagged: input.flagged },
+    data: {
+      seq: input.seq,
+      head: input.head ?? null,
+      gate: input.gate ?? null,
+      refusalId: input.refusalId ?? null,
+      flagged: input.flagged,
+    },
   }).catch(() => {});
 }
 
@@ -577,6 +587,12 @@ export async function screenLandedPush(
     /** The head before the push; null when there was none or it was unreadable. */
     before: string | null;
     actor: string;
+    /** The gate posture the push went through — reported with the alarm. */
+    gate?: "enforce" | "observe" | "off";
+    /** The gate's would-refusal id, when observe mode noted one. */
+    refusalId?: string | null;
+    /** Paths the pusher deliberately included (device credentials only). */
+    includedOnPurpose?: readonly string[];
   },
 ): Promise<void> {
   try {
@@ -591,8 +607,14 @@ export async function screenLandedPush(
     const screening = screenSaveChanges(changes, {
       presentInTree: new Set(newTree.filter((e) => e.type === "blob").map((e) => e.path)),
       ignorePatterns,
-      includedOnPurpose: [],
+      includedOnPurpose: input.includedOnPurpose ?? [],
     });
+    if (screening.flagged.length && input.gate === "enforce") {
+      console.error(
+        `gate miss: a push through the enforcing gate still landed flagged files in ${input.projectId}: ` +
+          screening.flagged.map((f) => `${f.path} (${f.kind}: ${f.pattern})`).join(", "),
+      );
+    }
     await reportFlaggedSave(deps, {
       projectId: input.projectId,
       accountId: input.accountId,
@@ -600,6 +622,8 @@ export async function screenLandedPush(
       head: after,
       actor: input.actor,
       flagged: screening.flagged,
+      gate: input.gate ?? null,
+      refusalId: input.refusalId ?? null,
     });
   } catch (error) {
     console.error("post-push screen failed:", error);

@@ -817,7 +817,7 @@ export function openApiDocument(baseUrl: string): Record<string, unknown> {
               url: { type: "string", format: "uri", description: "A public https address." },
               events: {
                 type: "array",
-                items: { type: "string", enum: ["save.created", "save.requested", "save.flagged", "proposal.created", "proposal.reviewed"] },
+                items: { type: "string", enum: ["save.created", "save.requested", "save.flagged", "push.refused", "proposal.created", "proposal.reviewed"] },
               },
               projectId: { type: "string", format: "uuid", description: "Only this folder's events. Leave out for the whole account." },
             },

@@ -9,6 +9,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { cmdConnect, requireConnection } from "../../cli/src/connect.ts";
 import { cmdSave } from "../../cli/src/save.ts";
+import { CliError } from "../../cli/src/cli-error.ts";
 import { cmdSync } from "../../cli/src/sync.ts";
 import { cmdRestore } from "../../cli/src/restore.ts";
 import { cmdUndo } from "../../cli/src/undo.ts";
@@ -146,8 +147,14 @@ server.tool(
   async ({ folder, label }) => {
     const { cfg } = await requireConnection(folder);
     let outcome: Awaited<ReturnType<typeof cmdSave>> | undefined;
+    let refusal: CliError["refusal"] | undefined;
     const r = await run(async () => {
-      outcome = await cmdSave(folder, cfg, { message: label, harness: clientHarness() });
+      try {
+        outcome = await cmdSave(folder, cfg, { message: label, harness: clientHarness() });
+      } catch (e) {
+        refusal = e instanceof CliError ? e.refusal : undefined;
+        throw e;
+      }
     });
     return {
       content: [{ type: "text", text: r.text }],
@@ -160,6 +167,9 @@ server.tool(
           reason: e.reason,
         })),
         skippedTotal: outcome?.skippedTotal ?? 0,
+        ...(refusal
+          ? { refusal: { code: refusal.code, paths: refusal.paths, total: refusal.total } }
+          : {}),
       },
       isError: !!r.error,
     };

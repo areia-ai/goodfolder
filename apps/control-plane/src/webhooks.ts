@@ -18,6 +18,7 @@ export const WEBHOOK_EVENTS = [
   "save.created",
   "save.requested",
   "save.flagged",
+  "push.refused",
   "proposal.created",
   "proposal.reviewed",
 ] as const;
@@ -29,6 +30,7 @@ export const WEBHOOK_EVENT_LABELS: ReadonlyArray<{ event: WebhookEvent; label: s
   { event: "save.created", label: "A save was recorded" },
   { event: "save.requested", label: "A save was asked for (not sent yet)" },
   { event: "save.flagged", label: "A save added files the leave-out rules would have kept out" },
+  { event: "push.refused", label: "A save was refused because it added files the leave-out rules keep out" },
   { event: "proposal.created", label: "A change proposal was prepared" },
   { event: "proposal.reviewed", label: "A change proposal was accepted or turned down" },
 ];

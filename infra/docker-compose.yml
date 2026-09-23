@@ -1,7 +1,7 @@
 name: goodfolder
 
 # Every service is memory-capped: this stack is expected to share a host with
-# other workloads. Total cap ≈ 1.1 GB.
+# other workloads. Total cap ≈ 1.25 GB.
 # Nothing publishes to 0.0.0.0. Loopback-only ports are for local debugging;
 # Gitea publishes nothing at all.
 
@@ -153,6 +153,8 @@ services:
       STRIPE_PRICE_STUDIO_YEAR: ${STRIPE_PRICE_STUDIO_YEAR:-}
       STRIPE_OVERAGE_PRICE_STUDIO: ${STRIPE_OVERAGE_PRICE_STUDIO:-}
       STRIPE_API_BASE: ${STRIPE_API_BASE:-}
+      GF_PUSH_GATE: ${GF_PUSH_GATE:-enforce}
+      GF_PUSH_MAX_BYTES: ${GF_PUSH_MAX_BYTES:-2147483648}
     ports:
       - "127.0.0.1:4100:4100"
     depends_on:
@@ -162,7 +164,7 @@ services:
         condition: service_healthy
       goodfolder-migrate:
         condition: service_completed_successfully
-    mem_limit: 192m
+    mem_limit: 320m
     networks: [goodfolder-net]
 
   goodfolder-lfs:

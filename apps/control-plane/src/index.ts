@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { magicLinkEmail } from "./magic-link-email.js";
 import { createReadStream } from "node:fs";
-import { mkdtemp, open as openFile, readFile as readTempFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, open as openFile, readFile as readTempFile, rm, stat, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, Transform } from "node:stream";
@@ -35,6 +35,7 @@ import {
   SERVICE_SCOPE_LABELS,
   GetObjectCommand,
   PutObjectCommand,
+  DeleteObjectCommand,
   loadBillingConfig,
   type FileChange,
   makeS3,
@@ -43,6 +44,9 @@ import {
   type AuthContext,
   type ServiceScope,
   type TokenScope,
+  type Sql,
+  type ServerConfig,
+  type S3Client,
 } from "@goodfolder/serverlib";
 import { HostedBilling } from "./hosted-billing.ts";
 import { safeDocumentPath } from "./collaboration.ts";
@@ -50,8 +54,10 @@ import { dashboardLink } from "./links.ts";
 import { IGNORE_FILE, ROUTING_CEILING_BYTES, parseIgnoreFile, type SaveWarning } from "@goodfolder/shared";
 import { checkWrite, filesUnder } from "./write-gate.ts";
 import { transportRoute } from "./transport.ts";
+import { gateModeFrom, sweepSpoolDir, SlotLimiter } from "./push-gate/gate.ts";
+import { createGitProxy } from "./push-gate/proxy.ts";
 import { formulaRefusal } from "./formula.ts";
-import { acceptStagedFile, forgetStagedFile, hashFile, putStoredFileFromPath, stagingKey } from "./stored-file.ts";
+import { acceptStagedFile, forgetStagedFile, hashFile, putStoredFileFromPath, stagingKey, storedFileKey } from "./stored-file.ts";
 import { parseCookies, SESSION_COOKIE, makePrincipals } from "./principals.ts";
 import {
   applyRevert,
@@ -4003,133 +4009,26 @@ app.get("/api/exclusions", async (c) => {
 // second boundary (identity-boundary test, TECHNICAL_PROPOSAL.md).
 // ---------------------------------------------------------------------------
 
-async function gitProxy(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) {
-  const deny = (code: number, msg: string, errorCode?: string) => {
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    // RFC-required challenge: stock git clients only offer credentials
-    // after seeing this on a 401.
-    if (code === 401) headers["www-authenticate"] = 'Basic realm="GoodFolder"';
-    res.writeHead(code, headers);
-    res.end(JSON.stringify({ error: { code: errorCode ?? (code === 403 ? "project-scope" : "unauthorized"), message: msg } }));
-  };
 
-  const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
-  // Path shape: /git/<projectId>/<one of the three smart HTTP endpoints>.
-  // Anything else never reaches the repository service (transport.ts).
-  const route = transportRoute(url);
-  if (!route) return deny(404, "malformed git path");
-
-  const raw = tokenFromAuthHeader(req.headers.authorization);
-  const scope = raw ? await resolveScope(sql, raw, route.projectId) : null;
-  if (!scope) return deny(401, "unauthorized");
-  if (route.projectId !== scope.projectId) return deny(403, "token not valid for this project");
-
-  const isWrite = route.isWrite;
-  // A scoped service credential reaches the transport only through the
-  // scope it was approved for; a folder's own credential is unchanged.
-  if (scope.service) {
-    const needed = isWrite ? "git:write" : "git:read";
-    if (!scope.service.scopes.includes(needed)) {
-      return deny(403, "This access key was not approved for that action.", "scope");
-    }
-  }
-  let remainingBytes = Number.POSITIVE_INFINITY;
-  if (isWrite) {
-    const denied = await writeAccessError(scope.ownerAccountId);
-    if (denied) return deny(denied.status, denied.message, denied.code);
-    const entitlement = await billing.entitlement(scope.ownerAccountId);
-    if (!entitlement.canWrite) {
-      const code = entitlement.reason ?? "subscription-required";
-      const message = code === "quota-exceeded"
-        ? "Protected-data limit reached; existing files and earlier versions remain available."
-        : code === "read-only"
-          ? "This account is in read and export mode."
-          : "Hosted access is required before saving.";
-      return deny(code === "quota-exceeded" ? 409 : code === "subscription-required" ? 402 : 403, message, code);
-    }
-    if (entitlement.authorizedBytes !== null) {
-      remainingBytes = Math.max(0, entitlement.authorizedBytes - entitlement.usageBytes - entitlement.reservedBytes);
-      const declared = Number(req.headers["content-length"] ?? 0);
-      if (Number.isFinite(declared) && declared > remainingBytes) {
-        return deny(413, "This save is larger than the remaining protected-data allowance.", "quota-exceeded");
-      }
-    }
-  }
-
-  // For the write that actually lands objects, remember where the folder
-  // stood first. After the answer has been relayed we look again — a push
-  // that is never recorded as a save still raises save.flagged. A failed
-  // read here just means the screen diffs from empty; it must never fail
-  // the push itself.
-  const headBefore =
-    isWrite && route.subpath === "/git-receive-pack"
-      ? await repos.head(route.projectId).catch(() => null)
-      : undefined;
-
-  const upstream = `${cfg.giteaInternalUrl}/${cfg.giteaAdminUser}/${route.projectId}.git${route.subpath}${url.search}`;
-  const headers = new Headers();
-  for (const [k, v] of Object.entries(req.headers)) {
-    const key = k.toLowerCase();
-    // Node's fetch owns framing for the streamed request body. Forwarding the
-    // incoming chunked header makes undici reject the request before it ever
-    // reaches the repository service (`UND_ERR_INVALID_ARG`). Keep an explicit
-    // content length when the client supplied one, but never forward transfer
-    // encoding itself.
-    if (key === "authorization" || key === "host" || key === "connection" || key === "expect" || key === "transfer-encoding" || key.startsWith("proxy-")) continue;
-    if (v !== undefined) headers.set(k, Array.isArray(v) ? v.join(", ") : v);
-  }
-  headers.set("Authorization", `Basic ${Buffer.from(`${cfg.giteaAdminUser}:${cfg.giteaAdminPassword}`).toString("base64")}`);
-
-  let upstreamRes: Response;
-  const method = req.method ?? "GET";
-  const init: RequestInit & { duplex?: "half" } = {
-    method,
-    headers,
-  };
-  if (!["GET", "HEAD"].includes(method)) {
-    if (isWrite && Number.isFinite(remainingBytes)) {
-      let received = 0;
-      const meter = new Transform({
-        transform(chunk, _encoding, callback) {
-          received += Buffer.byteLength(chunk);
-          if (received > remainingBytes) return callback(new Error("quota-exceeded"));
-          callback(null, chunk);
-        },
-      });
-      req.pipe(meter);
-      init.body = meter as unknown as import("node:stream/web").ReadableStream;
-    } else {
-      init.body = req as unknown as import("node:stream/web").ReadableStream;
-    }
-    init.duplex = "half";
-  }
-  try {
-    upstreamRes = await fetch(upstream, init);
-  } catch (e) {
-    if ((e as Error).message.includes("quota-exceeded")) {
-      return deny(413, "This save is larger than the remaining protected-data allowance.", "quota-exceeded");
-    }
-    console.error("transport upstream request failed:", e);
-    return deny(502, "repository service unreachable");
-  }
-
-  const outHeaders: Record<string, string> = {};
-  upstreamRes.headers.forEach((v, k) => {
-    if (!["transfer-encoding", "content-encoding", "content-length"].includes(k)) outHeaders[k] = v;
-  });
-  res.writeHead(upstreamRes.status, outHeaders);
-  if (headBefore !== undefined && upstreamRes.status >= 200 && upstreamRes.status < 300) {
-    res.once("finish", () => {
-      void screenLandedPush(remoteDeps, {
-        projectId: route.projectId,
-        accountId: scope.ownerAccountId,
-        before: headBefore,
-        actor: scope.service?.name ?? "folder",
-      });
-    });
-  }
-  relay(upstreamRes, res);
-}
+const spoolDir = join(tmpdir(), "gf-push-spool");
+const gitProxy = createGitProxy({
+  sql,
+  repos,
+  billing,
+  cfg,
+  remoteDeps,
+  writeAccessError,
+  gate: {
+    mode: gateModeFrom(process.env.GF_PUSH_GATE),
+    maxBytes: Number(process.env.GF_PUSH_MAX_BYTES) || 2_147_483_648,
+    spoolDir,
+    limiter: new SlotLimiter(4),
+    // Pushes wait for the sweep so a startup straggler can't be swept itself.
+    ready: sweepSpoolDir(spoolDir).catch((e) =>
+      console.error("push spool sweep failed:", e),
+    ),
+  },
+});
 
 /**
  * Stream an upstream answer to the client, and stop reading upstream the
