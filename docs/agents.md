@@ -60,6 +60,19 @@ read its Timeline. When you want to record work, explicitly ask the agent to
 use `goodfolder_save`; use `goodfolder_sync` to carry saved changes between
 computers.
 
+A `goodfolder_save` reply says what happened in a form an agent can read,
+not only in text:
+
+- `warnings` lists saved files whose names suggest a secret. The save still
+  happened; only the files it added or changed are looked at, so an empty
+  list is not a promise that the folder holds none.
+- `skipped` lists what stayed out of the save and the rule for each: a
+  built-in rule, the folder's `.goodfolderignore`, or the project's own
+  settings.
+- If GoodFolder refused the save — because it added a file shaped like a
+  credential or one on the ignore list — the reply carries `refusal` with
+  each path and rule, and nothing from that save was kept.
+
 For example, these are the arguments to `goodfolder_connect`:
 
 ```json

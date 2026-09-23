@@ -56,6 +56,36 @@ Both surfaces answer from the same history and obey the same access kinds.
 A return to an earlier save is always recorded as a new save — nothing a
 service does rewrites what already happened.
 
+## What stays out of a save
+
+The same rules apply to a service as to a person's own computer: files
+shaped like credentials (`.env`, `id_rsa`, `*.pem`, `*.p12` and the like)
+and anything on the folder's `.goodfolderignore` list stay out.
+`GET /api/projects/{id}/exclusions` lists those rules for a folder.
+
+GoodFolder checks every save a service sends back before storing it. A save
+that adds one of those files is refused as a whole — nothing from it is
+kept — and the answer names each file and the rule that caught it, in plain
+lines for a person and in one `goodfolder-refusal` line of JSON for a
+program. Changing a file that is already saved is not refused. A service
+key cannot mark a credential as included on purpose; only the folder's own
+computers can.
+
+## Reading a save result
+
+A recorded save answers with:
+
+- `warnings` — files this save added or changed whose names suggest a
+  secret (`Passwords.xlsx`, `Secret plan.txt`). They were saved; a warning
+  never blocks. Only the files this save touched are looked at, and only by
+  name, so an empty list does **not** mean the folder holds no secrets.
+- `skipped` — what the saving computer reported leaving out, with the rule
+  for each. `skippedReportedBy` is `null` when nothing was reported; then an
+  empty list says nothing either way.
+
+The [service integration reference](../docs/service-protocol.md) spells out
+every field.
+
 ## Hear about changes
 
 Add an **Event destination** in the dashboard — an address that should hear
@@ -64,8 +94,9 @@ retries on a schedule if the address does not answer, and keeps every attempt
 where you can see it. The signing secret is shown once, when the destination
 is created.
 
-Events: `save.created`, `proposal.created`, `proposal.reviewed`, and
-`save.requested` (reserved for a future release).
+Events: `save.created`, `save.flagged` (a save carried a file the rules keep
+out), `push.refused` (a save was refused), `proposal.created`,
+`proposal.reviewed`, and `save.requested` (reserved for a future release).
 
 Every message carries a signature over its timestamp and body, so the
 receiving service can prove the message came from GoodFolder and was not

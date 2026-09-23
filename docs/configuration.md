@@ -67,6 +67,16 @@ it runs.
 | `GITEA_INTERNAL_URL` | `http://goodfolder-gitea:3000` | Always in Docker | `api`, `lfs` |
 | `GITEA_ADMIN_USER` | `gf-service` | Always | `api`, `lfs` |
 
+## The save check
+
+Every save is held and checked against the leave-out rules before it is
+stored; see [Self-hosting](self-hosting.md) for what that costs.
+
+| Variable | Default | Required when | Read by |
+| --- | --- | --- | --- |
+| `GF_PUSH_GATE` | `enforce` | `observe` to only record what would be refused; `off` to skip the check | `api` |
+| `GF_PUSH_MAX_BYTES` | `2147483648` (2 GiB) | Allowing larger single saves (the temporary disk must hold one per concurrent save) | `api` |
+
 ## Sign-in email
 
 | Variable | Default | Required when | Read by |
