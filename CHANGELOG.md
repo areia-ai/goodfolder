@@ -6,6 +6,33 @@ tag that the published packages and images are built from.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-23
+
+- Every file a save leaves out now says why: `goodfolder skipped` and the
+  save output name the rule that caught each one — a built-in rule, the
+  folder's own ignore list, or the project's own settings.
+- More credential shapes stay out of a save by default: `*.p12`, `*.pfx`,
+  `*.keystore`, `*.jks`, and a file named exactly `credentials`. Names that
+  merely suggest a secret (`Passwords.xlsx`, `Secret plan.txt`,
+  `server.key.bak`) are saved but reported as warnings, in the command's
+  output and in the save result an agent or service reads. A warning now
+  covers files a save changed as well as files it added.
+- `goodfolder ignore add | list | remove` manages a `.goodfolderignore`
+  list that travels with the folder. Ignoring changes future saves only;
+  `ignore add --remove` also stops saving a file that already has history,
+  after asking. Earlier saves are never rewritten.
+- `goodfolder save --include-secrets` saves credential-shaped files on
+  purpose, after you type `include`. It needs a person at the keyboard.
+- Save results carry a `skipped` list — what the saving computer left out,
+  with the rule for each — and `GET /api/projects/{id}/exclusions` answers
+  which rules a folder stands under.
+- The server now checks every save before it is stored. A save that adds a
+  credential-shaped file, or one on the folder's ignore list, is refused as
+  a whole with the path and the rule named; nothing from it is kept. The
+  command line explains a refusal and takes back the save it just made.
+  Self-hosted installs choose `GF_PUSH_GATE=enforce` (default), `observe`,
+  or `off`. New events: `save.flagged` and `push.refused`.
+
 - The dashboard's key list is called **API keys** (it was "Services and
   assistants"), and its create button says what it does.
 - A command that needs your confirmation no longer takes "no" for an
