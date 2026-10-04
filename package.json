@@ -25,11 +25,11 @@
     "gate": "pnpm typecheck && pnpm vocab"
   },
   "devDependencies": {
-    "docx": "^9.7.1",
+    "docx": "^9.8.1",
     "esbuild": "^0.28.2",
     "pdf-lib": "^1.17.1",
     "pptxgenjs": "^4.0.1",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }
