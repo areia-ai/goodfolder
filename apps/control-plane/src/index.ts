@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { magicLinkEmail } from "./magic-link-email.js";
+import { magicLinkEmail } from "./magic-link-email.ts";
 import { createReadStream } from "node:fs";
 import { mkdtemp, open as openFile, readFile as readTempFile, rm, stat, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -58,12 +58,14 @@ import { transportRoute } from "./transport.ts";
 import { gateModeFrom, sweepSpoolDir, SlotLimiter } from "./push-gate/gate.ts";
 import { createGitProxy } from "./push-gate/proxy.ts";
 import { formulaRefusal } from "./formula.ts";
+import { makeRateLimiter } from "./rate-limit.ts";
 import { acceptStagedFile, forgetStagedFile, hashFile, putStoredFileFromPath, stagingKey, storedFileKey } from "./stored-file.ts";
 import { parseCookies, SESSION_COOKIE, makePrincipals } from "./principals.ts";
 import {
   applyRevert,
   exclusionsFor,
   insertSave,
+  LABEL_WAIT_MS,
   loadSave,
   loadTimeline,
   previewRevert,
@@ -73,6 +75,7 @@ import {
   screenLandedPush,
   screenSaveChanges,
   treeChanges,
+  writeLateLabel,
   type FlaggedPath,
   type RemoteDeps,
 } from "./remote.ts";
@@ -247,22 +250,7 @@ const { sha256, sessionAccount, accountFrom, externalCaller } = makePrincipals(s
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-/** In-memory sliding-window limiter — single container, stopgap-grade. */
-const rateBuckets = new Map<string, Map<string, number[]>>();
-function rateLimit(name: string, key: string, max: number, windowMs: number): boolean {
-  const now = Date.now();
-  let bucket = rateBuckets.get(name);
-  if (!bucket) {
-    bucket = new Map();
-    rateBuckets.set(name, bucket);
-  }
-  if (bucket.size > 10_000) bucket.clear();
-  const hits = (bucket.get(key) ?? []).filter((t) => now - t < windowMs);
-  if (hits.length >= max) return false;
-  hits.push(now);
-  bucket.set(key, hits);
-  return true;
-}
+const rateLimit = makeRateLimiter();
 
 const SESSION_TTL_SECONDS = 30 * 86400;
 const MAGIC_TTL_MINUTES = 15;
@@ -1597,14 +1585,19 @@ function previewMime(path: string): string | null {
 }
 
 async function ensureWebDevice(projectId: string): Promise<string> {
-  const existing = await sql`
-    SELECT id FROM devices WHERE project_id = ${projectId} AND name = 'GoodFolder web' LIMIT 1`;
-  if (existing[0]?.id) return String(existing[0].id);
-  const id = crypto.randomUUID();
-  await sql`
-    INSERT INTO devices (id, project_id, name, kind)
-    VALUES (${id}, ${projectId}, 'GoodFolder web', 'user')`;
-  return id;
+  // Two concurrent first uses would both pass the SELECT and insert two
+  // devices; the per-folder lock makes the second one see the first's row.
+  return sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(hashtext('devices'), hashtext(${projectId}))`;
+    const existing = await tx`
+      SELECT id FROM devices WHERE project_id = ${projectId} AND name = 'GoodFolder web' LIMIT 1`;
+    if (existing[0]?.id) return String(existing[0].id);
+    const id = crypto.randomUUID();
+    await tx`
+      INSERT INTO devices (id, project_id, name, kind)
+      VALUES (${id}, ${projectId}, 'GoodFolder web', 'user')`;
+    return id;
+  });
 }
 
 async function recordWebSave(input: {
@@ -3686,15 +3679,10 @@ app.use("/api/*", async (c, next) => {
 // falls back to a generic label — a failed AI summary never blocks a save.
 // ---------------------------------------------------------------------------
 
-async function generateLabel(
-  ai?: { summary: string; excerpt: string; truncated: boolean },
-  userLabel?: string,
-): Promise<{ label: string; source: "user" | "agent" }> {
-  if (userLabel) return { label: userLabel, source: "user" };
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key || !ai || (!ai.excerpt && !ai.summary)) {
-    return { label: fallbackOf(ai), source: "agent" };
-  }
+async function askLabelModel(
+  key: string,
+  ai: { summary: string; excerpt: string; truncated: boolean },
+): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12_000);
@@ -3732,10 +3720,41 @@ async function generateLabel(
     const data: any = await res.json();
     const text = data?.choices?.[0]?.message?.content?.trim();
     if (!text) throw new Error("empty label");
-    return { label: text.replace(/^["']|["']$/g, "").slice(0, 120), source: "agent" };
+    return text.replace(/^["']|["']$/g, "").slice(0, 120);
   } catch {
+    return null;
+  }
+}
+
+const LABEL_WAIT_TIMEOUT = Symbol("label-wait");
+
+/**
+ * The save waits at most waitMs for the model; past that it records the
+ * plain summary and the label is written in when it arrives (writeLateLabel).
+ * A failed label resolves null and never blocks.
+ */
+async function generateLabel(
+  ai?: { summary: string; excerpt: string; truncated: boolean },
+  userLabel?: string,
+  waitMs = LABEL_WAIT_MS,
+): Promise<{ label: string; source: "user" | "agent"; late?: Promise<string | null> }> {
+  if (userLabel) return { label: userLabel, source: "user" };
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key || !ai || (!ai.excerpt && !ai.summary)) {
     return { label: fallbackOf(ai), source: "agent" };
   }
+  const model = askLabelModel(key, ai);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const answered = await Promise.race([
+    model,
+    new Promise<typeof LABEL_WAIT_TIMEOUT>((resolve) => { timer = setTimeout(() => resolve(LABEL_WAIT_TIMEOUT), waitMs); }),
+  ]);
+  clearTimeout(timer);
+  if (answered === LABEL_WAIT_TIMEOUT) {
+    return { label: fallbackOf(ai), source: "agent", late: model };
+  }
+  if (answered) return { label: answered, source: "agent" };
+  return { label: fallbackOf(ai), source: "agent" };
 }
 
 function fallbackOf(ai?: { summary: string }): string {
@@ -3877,7 +3896,7 @@ app.post("/api/saves", async (c) => {
       ? b.harness.trim()
       : null;
 
-  const { label, source } = await generateLabel(b.ai, b.label ? b.label : undefined);
+  const { label, source, late } = await generateLabel(b.ai, b.label ? b.label : undefined);
 
   // The device's left-out report is stored as reported — informational only,
   // since the server never receives the files it describes.
@@ -3932,6 +3951,7 @@ app.post("/api/saves", async (c) => {
     skipped: skippedReport ? skippedReport.entries : null,
     skippedTotal: skippedReport ? skippedReport.total : null,
   });
+  if (late) writeLateLabel(sql, save.id, label, late);
   await sql`
     UPDATE devices SET cursor_save_seq = ${save.seq} WHERE id = ${scope.deviceId}`;
   void billing.refreshProject(scope.projectId, "save").catch((error) => {

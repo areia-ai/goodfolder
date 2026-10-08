@@ -101,6 +101,9 @@ export interface RemoteCaller {
   credentialId?: string;
 }
 
+/** How long a save waits for its model-written label before recording. */
+export const LABEL_WAIT_MS = 4_000;
+
 export interface RemoteDeps {
   sql: Sql;
   repos: RepositoryAdapter;
@@ -110,7 +113,7 @@ export interface RemoteDeps {
   labelFor: (
     ai: { summary: string; excerpt: string; truncated: boolean } | undefined,
     userLabel?: string,
-  ) => Promise<{ label: string; source: "user" | "agent" }>;
+  ) => Promise<{ label: string; source: "user" | "agent"; late?: Promise<string | null> | undefined }>;
 }
 
 export interface FolderSummary {
@@ -772,7 +775,7 @@ export async function recordRemoteSave(
   } catch (error) {
     console.error("save screening failed; recording without it:", error);
   }
-  const label =
+  const label: { label: string; source: "user" | "agent"; late?: Promise<string | null> | undefined } =
     input.labelOverride ??
     (await deps.labelFor(
       {
@@ -799,6 +802,7 @@ export async function recordRemoteSave(
     harness: input.harness,
     warnings: screening.warnings,
     skippedReport: input.skippedReport,
+    late: label.late,
   });
   // The alarm itself is raised where the push lands (screenLandedPush), so
   // a push that is never recorded still fires it.
@@ -830,6 +834,19 @@ export interface SaveRowInput {
  * folder need the advisory lock — the unique constraint would otherwise turn
  * the race into a 500 after the push already landed.
  */
+/**
+ * Writes the model's label into a save that was already recorded with the
+ * fallback. The `AND label = fallback` guard means a label someone has since
+ * edited is never overwritten by the late answer.
+ */
+export function writeLateLabel(sql: Sql, saveId: string, fallback: string, late: Promise<string | null>): void {
+  void late
+    .then((label) => {
+      if (label) void sql`UPDATE saves SET label = ${label} WHERE id = ${saveId} AND label = ${fallback}`;
+    })
+    .catch(() => {});
+}
+
 export async function insertSave(sql: Sql, input: SaveRowInput): Promise<{ id: string; seq: number }> {
   return sql.begin(async (tx) => {
     await tx`SELECT pg_advisory_xact_lock(hashtext('saves'), hashtext(${input.projectId}))`;
@@ -866,11 +883,13 @@ async function recordSaveRow(
     warnings?: SaveWarning[];
     /** The device's left-out report; absent or null means the save carried none. */
     skippedReport?: { entries: SkippedEntry[]; total: number } | null | undefined;
+    /** A model label still in flight; written in when it arrives. */
+    late?: Promise<string | null> | undefined;
   },
 ): Promise<number> {
   const paths = input.changes.map((change) => change.path).slice(0, RECEIPT_PATH_CAP);
   const topPaths = paths.slice(0, 10);
-  const { seq } = await insertSave(deps.sql, {
+  const { id, seq } = await insertSave(deps.sql, {
     projectId: input.projectId,
     label: input.label,
     labelSource: input.labelSource,
@@ -884,6 +903,7 @@ async function recordSaveRow(
     skipped: input.skippedReport?.entries ?? null,
     skippedTotal: input.skippedReport?.total ?? null,
   });
+  if (input.late) writeLateLabel(deps.sql, id, input.label, input.late);
   await deps.sql`UPDATE devices SET cursor_save_seq = ${seq} WHERE id = ${input.actorDeviceId}`;
   deps.refreshUsage(input.projectId);
   void emitWebhookEvent(deps.sql, {

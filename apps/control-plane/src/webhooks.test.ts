@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import type { Sql } from "@goodfolder/serverlib";
 import {
   WEBHOOK_EVENTS,
@@ -7,6 +9,7 @@ import {
   attemptDelivery,
   emitWebhookEvent,
   parseWebhookEvents,
+  pinnedSend,
   signWebhook,
   verifyWebhookSignature,
   webhookRetryDelayMs,
@@ -213,4 +216,47 @@ test("a network failure is retried, never swallowed", async () => {
   assert.equal(outcome, "pending");
   const update = queries.find((query) => query.text.includes("next_attempt_at"));
   assert.equal(update?.values.includes("connection refused"), true);
+});
+
+test("a pinned send keeps the name but connects to the checked address", async () => {
+  let seenHost: string | undefined;
+  const server = createServer((req, res) => {
+    seenHost = req.headers.host;
+    res.writeHead(204).end();
+  });
+  try {
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    const send = pinnedSend(["127.0.0.1"]);
+    const result = await send(`http://hooks.example.test:${port}/x`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+      signal: AbortSignal.timeout(5_000),
+    });
+    assert.deepEqual(result, { ok: true, status: 204 });
+    assert.equal(seenHost, `hooks.example.test:${port}`);
+  } finally {
+    server.close();
+  }
+});
+
+test("a redirect answer is not followed", async () => {
+  const server = createServer((_req, res) => {
+    res.writeHead(302, { location: "http://elsewhere.example/" }).end();
+  });
+  try {
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    const send = pinnedSend(["127.0.0.1"]);
+    const result = await send(`http://hooks.example.test:${port}/x`, {
+      method: "POST",
+      headers: {},
+      body: "{}",
+      signal: AbortSignal.timeout(5_000),
+    });
+    assert.deepEqual(result, { ok: false, status: 302 });
+  } finally {
+    server.close();
+  }
 });

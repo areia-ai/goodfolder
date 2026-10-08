@@ -186,7 +186,17 @@ async function main() {
     },
   );
   closeSync(apiLog);
-  await waitForOk(`${API}/healthz`);
+  try {
+    await waitForOk(`${API}/healthz`);
+  } catch (error) {
+    // The next failure should say why the api never answered, not just time out.
+    try {
+      const lines = readFileSync(join(TMP, "api.log"), "utf8").trimEnd().split("\n");
+      for (const line of lines.slice(-40)) console.error(`  api| ${line}`);
+    } catch { /* no log captured */ }
+    api.kill("SIGTERM");
+    throw error;
+  }
   log(`control plane up on ${API} (log: e2e/.tmp/api.log)`);
 
   if (process.env.E2E_SKIP_WEB_BUILD === "1") {

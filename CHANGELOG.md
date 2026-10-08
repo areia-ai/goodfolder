@@ -25,6 +25,13 @@ tag that the published packages and images are built from.
 - Dependency patches: `@modelcontextprotocol/sdk` 1.31.0 (the hosted `/mcp`
   endpoint and the local server), `next` 15.5.27, and patched versions of the
   transitive packages `pnpm audit` named.
+- A save no longer waits more than a few seconds for its AI label — the plain
+  summary is recorded and the model's label is written in afterwards.
+- Event destinations are now contacted only at the addresses that passed the
+  check.
+- Running the control plane from source (`pnpm dev`, the services browser
+  check) works again — a single import named the wrong file extension since
+  2026-09-17.
 
 ## [0.3.0] - 2026-09-23
 

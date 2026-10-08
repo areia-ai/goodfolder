@@ -1,5 +1,7 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { promises as dns } from "node:dns";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { BlockList, isIP } from "node:net";
 import type { Sql } from "@goodfolder/serverlib";
 
@@ -267,6 +269,48 @@ export async function queueTestDelivery(sql: Sql, endpointId: string): Promise<s
   return id;
 }
 
+/** The send half of a delivery attempt; test stubs return Response, which fits. */
+export type WebhookSend = (
+  url: string,
+  init: { method: "POST"; headers: Record<string, string>; body: string; signal: AbortSignal },
+) => Promise<{ ok: boolean; status: number }>;
+
+/**
+ * A send whose connect goes only to the addresses the check just approved:
+ * the lookup is answered from `addresses`, never from DNS again, while the
+ * URL — and so the Host header and TLS name — keeps the registered name.
+ */
+export function pinnedSend(addresses: string[]): WebhookSend {
+  const lookup = (
+    _host: string,
+    opts: { all?: boolean | undefined },
+    cb: (err: NodeJS.ErrnoException | null, address: string | Array<{ address: string; family: number }>, family?: number) => void,
+  ) => {
+    if (opts.all) {
+      cb(null, addresses.map((address) => ({ address, family: isIP(address) })));
+    } else {
+      cb(null, addresses[0]!, isIP(addresses[0]!));
+    }
+  };
+  return (url, init) =>
+    new Promise((resolve, reject) => {
+      const target = new URL(url);
+      const request = target.protocol === "https:" ? httpsRequest : httpRequest;
+      const req = request(
+        target,
+        { method: init.method, headers: init.headers, lookup, signal: init.signal },
+        (res) => {
+          res.on("error", reject);
+          res.resume(); // the body is not needed; drain so the socket frees
+          res.on("end", () =>
+            resolve({ ok: (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300, status: res.statusCode ?? 0 }));
+        },
+      );
+      req.on("error", reject);
+      req.end(init.body);
+    });
+}
+
 /**
  * One attempt at one delivery. A 2xx is delivered; anything else, or a
  * network failure, leaves it pending until the schedule runs out.
@@ -274,7 +318,7 @@ export async function queueTestDelivery(sql: Sql, endpointId: string): Promise<s
 export async function attemptDelivery(
   sql: Sql,
   row: WebhookDeliveryRow,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl?: WebhookSend,
   lookup: WebhookLookup = dns.lookup,
 ): Promise<"delivered" | "pending" | "failed"> {
   const body = JSON.stringify(row.payload);
@@ -308,23 +352,21 @@ export async function attemptDelivery(
     error = target.message;
   } else {
     try {
-      const res = await fetchImpl(row.url, {
+      // The connect is pinned to the addresses the check just approved —
+      // request() never follows a redirect, so a 3xx is simply not ok.
+      const send = fetchImpl ?? pinnedSend(target.addresses);
+      const res = await send(row.url, {
         method: "POST",
         headers,
         body,
-        // A redirect could send the signed body somewhere else entirely.
-        redirect: "error",
         signal: AbortSignal.timeout(10_000),
       });
       status = res.status;
       if (!res.ok) error = `The endpoint answered ${res.status}.`;
     } catch (e) {
-      error = e instanceof Error ? (e.name === "TimeoutError" ? "The endpoint did not answer in time." : e.message) : "The endpoint could not be reached.";
+      error = e instanceof Error ? (e.name === "TimeoutError" || e.name === "AbortError" ? "The endpoint did not answer in time." : e.message) : "The endpoint could not be reached.";
     }
   }
-  // The remaining gap is the DNS answer changing between this lookup and the
-  // connect (TOCTOU); closing it needs a resolver-pinned dispatcher, which we
-  // deliberately don't attempt.
   const attempts = row.attempts + 1;
   if (status !== null && status >= 200 && status < 300) {
     await sql`
@@ -362,7 +404,7 @@ export async function attemptDelivery(
  */
 export async function deliverDueWebhooks(
   sql: Sql,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl?: WebhookSend,
   limit = 20,
   lookup: WebhookLookup = dns.lookup,
 ): Promise<number> {

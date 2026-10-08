@@ -38,8 +38,11 @@ tools/              the gates CI runs: vocabulary, brand SVG, contrast
    middleware. Hono runs handlers in registration order, so a middleware
    registered after the routes never runs for them.
 4. A Save label is written by an AI model when a key is configured and falls
-   back to a plain summary when it isn't. A slow or failed label must never
-   block or delay the Save.
+   back to a plain summary when it isn't. The Save waits at most a few seconds
+   for the model (`LABEL_WAIT_MS` in `apps/control-plane/src/remote.ts`); past
+   that it is recorded with the plain summary and the model's label is written
+   in when it arrives, never over a label someone has since changed. A failed
+   label never blocks a Save.
 5. Restore writes a new Save. It never rewrites history.
 6. Self-hosting works with nothing but Docker — no cloud account, no mail
    provider, no billing provider, no AI key. Any change to the server keeps
@@ -108,7 +111,9 @@ tools/              the gates CI runs: vocabulary, brand SVG, contrast
     inside the deployment — loopback, link-local, private ranges, their
     IPv4-mapped and NAT64 forms — at registration and again before every
     send, since a public name can start answering with a private address
-    later (`apps/control-plane/src/webhooks.ts`). The response status of a
+    later (`apps/control-plane/src/webhooks.ts`). The send itself connects
+    only to the addresses that were just checked, so a name cannot change its
+    answer between the check and the connect. The response status of a
     delivery is shown to the person who registered it, which is exactly why
     the destination can never be something on the private network.
 17. Every lookup a request runs has an index. The schema is read by

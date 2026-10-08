@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -86,5 +86,39 @@ describe("schema", () => {
     // The audit_log lookup runs on an expression; the parser skips it, so
     // the named index is asserted directly.
     assert.ok(schema.includes("audit_log_service_request"), "schema.sql is missing audit_log_service_request");
+  });
+});
+
+const REPO_ROOT = join(SRC_DIR, "..", "..", "..");
+
+describe("module specifiers", () => {
+  test("relative imports name the .ts file that exists", () => {
+    // esbuild resolves a "./x.js" specifier to the .ts source, but
+    // `node --experimental-transform-types` (pnpm dev, the services browser
+    // check) does not — such an import breaks starting from source.
+    const srcDirs: string[] = [];
+    for (const scope of ["apps", "packages"]) {
+      for (const pkg of readdirSync(join(REPO_ROOT, scope), { withFileTypes: true })) {
+        const src = join(REPO_ROOT, scope, pkg.name, "src");
+        if (pkg.isDirectory() && existsSync(src)) srcDirs.push(src);
+      }
+    }
+    const specRe = /(?:from|import)\s*\(?\s*["'](\.{1,2}\/[^"']+)["']/g;
+    const bad: string[] = [];
+    for (const dir of srcDirs) {
+      for (const file of sourceFiles(dir)) {
+        const lines = readFileSync(file, "utf8").split("\n");
+        lines.forEach((line, i) => {
+          for (const m of line.matchAll(specRe)) {
+            const spec = m[1]!;
+            if (!spec.endsWith(".js")) continue;
+            if (existsSync(resolve(dirname(file), `${spec.slice(0, -3)}.ts`))) {
+              bad.push(`${file}:${i + 1} ${spec}`);
+            }
+          }
+        });
+      }
+    }
+    assert.deepEqual(bad, []);
   });
 });
