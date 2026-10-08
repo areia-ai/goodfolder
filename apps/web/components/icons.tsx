@@ -135,10 +135,6 @@ export function DownloadIcon(props: IconProps) {
   return <Icon {...props}><path d="M12 4v10" /><path d="m8 10 4 4 4-4" /><path d="M5 19.5h14" /></Icon>;
 }
 
-export function SignOutIcon(props: IconProps) {
-  return <Icon {...props}><path d="M14 5.5H7A1.5 1.5 0 0 0 5.5 7v10A1.5 1.5 0 0 0 7 18.5h7" /><path d="M17 8.5 20.5 12 17 15.5M20 12h-9" /></Icon>;
-}
-
 /* --- Everyday file kinds -------------------------------------------------- */
 /* One glyph per family the dashboard can open, drawn on the same grid so a
    row of them reads as a set rather than a pile of borrowed icons. */
@@ -169,10 +165,6 @@ export function PdfIcon(props: IconProps) {
 
 export function TerminalIcon(props: IconProps) {
   return <Icon {...props}><rect x="3" y="4.5" width="18" height="15" rx="2" /><path d="m7.5 10 2.5 2-2.5 2M13 15h4" /></Icon>;
-}
-
-export function DeviceIcon(props: IconProps) {
-  return <Icon {...props}><rect x="2.5" y="5" width="14" height="10" rx="1.8" /><path d="M2.5 18.5h11" /><rect x="16.5" y="10.5" width="5" height="9" rx="1.4" /></Icon>;
 }
 
 /* The one exception to the stroke-only rule above. GitHub's mark is a filled
@@ -253,15 +245,6 @@ export function SortIcon(props: IconProps) {
   return <Icon {...props}><path d="M7 4.5v15M7 4.5 4 8M7 4.5 10 8" /><path d="M17 19.5v-15M17 19.5 14 16M17 19.5 20 16" /></Icon>;
 }
 
-export function GearIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <circle cx="12" cy="12" r="3.1" />
-      <path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M18 6l-1.6 1.6M7.6 16.4 6 18M18 18l-1.6-1.6M7.6 7.6 6 6" />
-    </Icon>
-  );
-}
-
 export function HomeIcon(props: IconProps) {
   return (
     <Icon {...props}>
@@ -284,25 +267,12 @@ export function StarIcon(props: IconProps) {
   return <Icon {...props}><path d="m12 4.5 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4-3.9-3.8 5.4-.8z" /></Icon>;
 }
 
-export function ShareIcon(props: IconProps) {
-  return <Icon {...props}><path d="M12 15.5V4M12 4 8.5 7.5M12 4l3.5 3.5" /><path d="M5.5 13v5.5a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V13" /></Icon>;
-}
-
 export function CloseIcon(props: IconProps) {
   return <Icon {...props}><path d="M6 6l12 12M18 6 6 18" /></Icon>;
 }
 
 export function ExpandIcon(props: IconProps) {
   return <Icon {...props}><path d="M4 9.5V4h5.5M20 14.5V20h-5.5M20 9.5V4h-5.5M4 14.5V20h5.5" /></Icon>;
-}
-
-export function FolderOpenIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M3.5 17.2V6.8A1.8 1.8 0 0 1 5.3 5h3.9a1.8 1.8 0 0 1 1.4.7l1.2 1.6a1.8 1.8 0 0 0 1.4.7h5.5a1.8 1.8 0 0 1 1.8 1.8v1" />
-      <path d="M3.5 17.2 5.8 11.4a1.8 1.8 0 0 1 1.7-1.1h13a1.2 1.2 0 0 1 1.1 1.6l-2.1 5.7a1.8 1.8 0 0 1-1.7 1.2H5.3a1.8 1.8 0 0 1-1.8-1.6z" />
-    </Icon>
-  );
 }
 
 export function WebPageIcon(props: IconProps) {

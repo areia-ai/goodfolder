@@ -1,7 +1,11 @@
-import posthog from "posthog-js";
-
 const DEFAULT_POSTHOG_HOST = "https://eu.i.posthog.com";
 const DEMO_STORAGE_KEY = "goodfolder.demo";
+
+// posthog-js is heavy and only ever needed once, so it loads lazily: a static
+// import would put it in every page's shared chunk. lib/bundle-hygiene.test.ts
+// keeps it that way.
+let client: typeof import("posthog-js").default | null = null;
+let loading: Promise<void> | null = null;
 
 export type ProductAnalyticsEvent =
   | "sign_in_link_requested"
@@ -51,36 +55,42 @@ export function analyticsEnvironment(): "demo" | "development" | "production" | 
 }
 
 /** Initialize from either Next's client instrumentation hook or the layout fallback. */
-export function initializePostHog(): void {
-  if (typeof window === "undefined" || !isPostHogConfigured() || isDemoMode() || initializationAttempted) return;
+export function initializePostHog(): Promise<void> {
+  if (typeof window === "undefined" || !isPostHogConfigured() || isDemoMode() || initializationAttempted) {
+    return loading ?? Promise.resolve();
+  }
   initializationAttempted = true;
 
   const key = (process.env.NEXT_PUBLIC_POSTHOG_KEY ?? "").trim();
   const host = (process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "").trim() || DEFAULT_POSTHOG_HOST;
-  posthog.init(key, {
-    api_host: host,
-    ui_host: "https://eu.posthog.com",
-    // Product analytics does not need a durable browser identity. Keeping the
-    // anonymous id in memory avoids analytics cookies and local-storage state;
-    // a new page load is deliberately a new anonymous visit.
-    persistence: "memory",
-    person_profiles: "never",
-    capture_pageview: "history_change",
-    capture_pageleave: true,
-    autocapture: false,
-    disable_session_recording: true,
-    capture_exceptions: false,
-    capture_heatmaps: false,
-    capture_dead_clicks: false,
-    disable_surveys: true,
-    disable_conversations: true,
-    disable_product_tours: true,
-    advanced_disable_feature_flags: true,
-    advanced_disable_decide: true,
-    save_campaign_params: false,
-    save_referrer: false,
-    respect_dnt: true,
+  loading ??= import("posthog-js").then((m) => {
+    client = m.default;
+    client.init(key, {
+      api_host: host,
+      ui_host: "https://eu.posthog.com",
+      // Product analytics does not need a durable browser identity. Keeping the
+      // anonymous id in memory avoids analytics cookies and local-storage state;
+      // a new page load is deliberately a new anonymous visit.
+      persistence: "memory",
+      person_profiles: "never",
+      capture_pageview: "history_change",
+      capture_pageleave: true,
+      autocapture: false,
+      disable_session_recording: true,
+      capture_exceptions: false,
+      capture_heatmaps: false,
+      capture_dead_clicks: false,
+      disable_surveys: true,
+      disable_conversations: true,
+      disable_product_tours: true,
+      advanced_disable_feature_flags: true,
+      advanced_disable_decide: true,
+      save_campaign_params: false,
+      save_referrer: false,
+      respect_dnt: true,
+    });
   });
+  return loading;
 }
 
 function filterSafeProperties(properties: ProductAnalyticsProperties): Record<string, SafePropertyValue> {
@@ -100,10 +110,17 @@ function filterSafeProperties(properties: ProductAnalyticsProperties): Record<st
 /** Capture one product action without allowing file-derived data into events. */
 export function captureProductEvent(event: ProductAnalyticsEvent, properties: ProductAnalyticsProperties = {}): void {
   if (typeof window === "undefined" || !isPostHogConfigured() || isDemoMode()) return;
-  try {
-    initializePostHog();
-    posthog.capture(event, filterSafeProperties(properties));
-  } catch {
-    // Analytics must never delay or break a GoodFolder action.
-  }
+  const safe = filterSafeProperties(properties);
+  // Analytics must never delay or break a GoodFolder action.
+  void initializePostHog().then(() => client?.capture(event, safe)).catch(() => {});
+}
+
+/** Attach the signed-in account to analytics events once the client is up. */
+export function identifyAnalyticsUser(accountId: string, props: Record<string, string>): void {
+  void initializePostHog().then(() => client?.identify(accountId, props)).catch(() => {});
+}
+
+/** Drop the analytics identity on sign-out. */
+export function resetAnalyticsUser(): void {
+  void initializePostHog().then(() => client?.reset()).catch(() => {});
 }

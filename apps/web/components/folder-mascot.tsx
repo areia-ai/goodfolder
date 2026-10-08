@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { BrandMark } from "@/components/brand";
 
 const POSES = {
   hero: {
@@ -29,15 +28,13 @@ const POSES = {
   },
 } as const;
 
-export type MascotPoseName = keyof typeof POSES;
-
 /** Editorial mascot poses. The canonical mark remains the identity source. */
 export function MascotPose({
   pose,
   className = "",
   priority = false,
 }: {
-  pose: MascotPoseName;
+  pose: keyof typeof POSES;
   className?: string;
   priority?: boolean;
 }) {
@@ -54,18 +51,4 @@ export function MascotPose({
       sizes="(max-width: 640px) 150px, 260px"
     />
   );
-}
-
-/** Compatibility wrapper for existing callers while the final vector master is approved. */
-export function FolderMascot({
-  size = 180,
-  className = "",
-}: {
-  size?: number;
-  body?: string;
-  tab?: string;
-  glasses?: boolean;
-  className?: string;
-}) {
-  return <BrandMark size={size} className={className} title="GoodFolder mascot" />;
 }

@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import pkg from "../package.json" with { type: "json" };
 import {
   resolveAuthContext,
   tokenFromAuthHeader,
@@ -155,7 +156,7 @@ export interface McpAuth {
 export function buildServer(services: McpServices, auth: McpAuth): McpServer {
   const { caller } = auth;
   const accountLevel = auth.scopes === "account";
-  const server = new McpServer({ name: "goodfolder", version: "0.1.2" });
+  const server = new McpServer({ name: "goodfolder", version: pkg.version });
 
   /** The sentence a service should read when a scope is missing. */
   function requireScope(scope: ServiceScope, projectId?: string | null): void {

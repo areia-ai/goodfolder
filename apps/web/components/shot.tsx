@@ -26,7 +26,7 @@
        that identifies whose machine it is.
 -------------------------------------------------------------------------- */
 
-export type ShotId =
+type ShotId =
   | "workspace"
   | "agent-connect"
   | "view-document"
@@ -52,7 +52,7 @@ interface ShotSpec {
   brief: string;
 }
 
-export const SHOTS: Record<ShotId, ShotSpec> = {
+const SHOTS: Record<ShotId, ShotSpec> = {
   workspace: {
     src: "/shots/workspace.png",
     kind: "illustration",

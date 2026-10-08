@@ -8,10 +8,10 @@
 //
 // Two things keep it honest:
 //
-//   1. It is removed from a production build. `NODE_ENV` is replaced with a
-//      literal at build time, so the guard below folds to `false` and every
-//      byte of this file is dropped. Nothing here can be reached on the
-//      hosted service, with or without the address that switches it on.
+//   1. It ships on purpose, as the public sample workspace. It runs only
+//      when the address asks for `demo=1` — the README links that address
+//      and `/challenge` redirects to it — and it never talks to an account
+//      or the hosted API.
 //   2. It answers at the transport, not above it. The real client in
 //      `gf-api.ts` runs unchanged — same requests, same parsing, same error
 //      paths — so what you see is the real screen with invented content, not

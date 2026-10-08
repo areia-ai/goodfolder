@@ -53,30 +53,6 @@ export function hashBytes(content: Buffer): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
-/**
- * Put a file's bytes in object storage and hand back the note to write in
- * its place. Safe to call twice with the same bytes: the name is the hash,
- * so the second call overwrites the object with itself.
- */
-export async function putStoredFile(input: {
-  s3: S3Client;
-  bucket: string;
-  projectId: string;
-  content: Buffer;
-  contentType?: string | undefined;
-}): Promise<StoredFile> {
-  const oid = hashBytes(input.content);
-  await input.s3.send(
-    new PutObjectCommand({
-      Bucket: input.bucket,
-      Key: storedFileKey(input.projectId, oid),
-      Body: input.content,
-      ...(input.contentType ? { ContentType: input.contentType } : {}),
-    }),
-  );
-  return { oid, size: input.content.byteLength, pointer: storedFilePointer(oid, input.content.byteLength) };
-}
-
 /** The same hash, taken a chunk at a time so a large file never sits in memory. */
 export async function hashFile(sourcePath: string): Promise<string> {
   const digest = createHash("sha256");

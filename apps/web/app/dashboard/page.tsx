@@ -24,8 +24,8 @@ type State =
 
 export default function Dashboard() {
   // Answering GoodFolder's own addresses from invented content, so the window
-  // can be built and looked at without a server. Removed from a production
-  // build entirely; see lib/demo.ts.
+  // can be built and looked at without a server. Shipped deliberately as the
+  // public sample workspace, switched on only by `?demo=1`; see lib/demo.ts.
   if (demoActive()) installDemoTransport(API);
 
   const [state, setState] = useState<State>({ phase: "checking" });

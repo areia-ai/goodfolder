@@ -5,6 +5,6 @@ import { initializePostHog } from "@/lib/analytics";
 
 /** Fallback initializer for static exports where instrumentation-client is skipped. */
 export function PostHogClient() {
-  useEffect(() => initializePostHog(), []);
+  useEffect(() => void initializePostHog(), []);
   return null;
 }
