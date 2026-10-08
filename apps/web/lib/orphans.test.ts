@@ -70,3 +70,24 @@ describe("module reachability", () => {
     assert.deepEqual(orphans, []);
   });
 });
+
+describe("class usage", () => {
+  test("every class globals.css defines is used by a component", () => {
+    const css = readFileSync(join(WEB_DIR, "app", "globals.css"), "utf8");
+    const defined = new Set<string>();
+    for (const m of css.matchAll(/\.(gf-[A-Za-z0-9_-]+)/g)) defined.add(m[1]!);
+    const corpus = importers()
+      .filter((file) => file.startsWith(WEB_DIR) && !isTest(file))
+      .map((file) => readFileSync(file, "utf8"))
+      .join("\n");
+    // Prefixes a template composes at runtime; a bare string never appears.
+    const composedPrefixes = [
+      "gf-badge-", // components/ui.tsx: `gf-badge-${tone}` — open/closed/attention/quiet/strong
+      "gf-notice-", // components/ui.tsx: `gf-notice-${message.kind}` — done/info/problem
+    ];
+    const unused = [...defined].filter(
+      (name) => !corpus.includes(name) && !composedPrefixes.some((prefix) => name.startsWith(prefix)),
+    );
+    assert.deepEqual(unused.sort(), []);
+  });
+});
