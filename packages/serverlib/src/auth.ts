@@ -142,7 +142,8 @@ export async function resolveAuthContext(
   const r = rows[0];
   if (!r) return resolveServiceCredential(sql, rawToken).then((s) => s ? { ...s, kind: "service" as const } : null);
   void sql`UPDATE account_devices SET last_used_at = now()
-    WHERE id = ${String(r.account_device_id)}`.catch(() => {});
+    WHERE id = ${String(r.account_device_id)}
+      AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')`.catch(() => {});
   return {
     kind: "account",
     accountId: String(r.account_id),

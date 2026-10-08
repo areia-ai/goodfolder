@@ -14,6 +14,7 @@ import {
   RepositoryAdapter,
   resolveScope,
   tokenFromAuthHeader,
+  type Entitlement,
   type Sql,
   type ServerConfig,
   type TokenScope,
@@ -50,7 +51,7 @@ export interface GitProxyEnv {
   cfg: ServerConfig;
   remoteDeps: RemoteDeps;
   fetchImpl?: typeof fetch;
-  writeAccessError?: (accountId: string) => Promise<{ code: string; message: string; status: number } | null>;
+  writeAccessError?: (accountId: string, known?: Entitlement) => Promise<{ code: string; message: string; status: number } | null>;
   gate?: {
     mode: GateMode;
     maxBytes: number;
@@ -104,9 +105,9 @@ export function createGitProxy(env: GitProxyEnv) {
   }
   let remainingBytes = Number.POSITIVE_INFINITY;
   if (isWrite) {
-    const denied = await (env.writeAccessError ?? (async () => null))(scope.ownerAccountId);
-    if (denied) return deny(denied.status, denied.message, denied.code);
     const entitlement = await billing.entitlement(scope.ownerAccountId);
+    const denied = await (env.writeAccessError ?? (async () => null))(scope.ownerAccountId, entitlement);
+    if (denied) return deny(denied.status, denied.message, denied.code);
     if (!entitlement.canWrite) {
       const code = entitlement.reason ?? "subscription-required";
       const message = code === "quota-exceeded"

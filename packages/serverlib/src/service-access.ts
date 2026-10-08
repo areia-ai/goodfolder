@@ -108,7 +108,8 @@ export async function resolveServiceCredential(
   const row = rows[0] as Record<string, unknown> | undefined;
   if (!row) return null;
   void sql`UPDATE service_credentials SET last_used_at = now()
-    WHERE id = ${String(row.credentialId)}`.catch(() => {});
+    WHERE id = ${String(row.credentialId)}
+      AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')`.catch(() => {});
   return credentialFromRow(row);
 }
 
@@ -142,7 +143,8 @@ export async function resolveServiceScope(
     projectId,
     name: String(row.name),
   });
-  void sql`UPDATE service_credentials SET last_used_at = now() WHERE id = ${credentialId}`.catch(() => {});
+  void sql`UPDATE service_credentials SET last_used_at = now() WHERE id = ${credentialId}
+    AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')`.catch(() => {});
   return {
     deviceId,
     projectId,

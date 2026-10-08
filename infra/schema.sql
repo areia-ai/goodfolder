@@ -14,6 +14,8 @@ CREATE TABLE projects (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS projects_account ON projects (account_id);
+
 CREATE TABLE devices (
   id UUID PRIMARY KEY,
   project_id UUID NOT NULL REFERENCES projects(id),
@@ -22,6 +24,8 @@ CREATE TABLE devices (
   cursor_save_seq INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS devices_project ON devices (project_id);
 
 CREATE TABLE saves (
   id UUID PRIMARY KEY,
@@ -67,6 +71,10 @@ CREATE TABLE audit_log (
   detail JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS audit_log_service_request
+  ON audit_log ((detail->>'credentialId'), created_at DESC)
+  WHERE action = 'service.request';
 
 CREATE TABLE IF NOT EXISTS waitlist (
   id UUID PRIMARY KEY,
@@ -183,6 +191,8 @@ CREATE TABLE IF NOT EXISTS project_members (
   PRIMARY KEY (project_id, account_id)
 );
 
+CREATE INDEX IF NOT EXISTS project_members_account ON project_members (account_id);
+
 CREATE TABLE IF NOT EXISTS project_invitations (
   id UUID PRIMARY KEY,
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -249,6 +259,8 @@ CREATE TABLE IF NOT EXISTS proposal_suggestions (
   reviewed_at TIMESTAMPTZ
 );
 
+CREATE INDEX IF NOT EXISTS proposal_suggestions_proposal ON proposal_suggestions (proposal_id, created_at);
+
 -- Typed proposal fields were added after the first text-only collaboration
 -- release. Keep the legacy before/replacement columns so old clients and
 -- already-created text proposals remain readable during the transition.
@@ -279,6 +291,8 @@ CREATE TABLE IF NOT EXISTS proposal_comments (
   body TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS proposal_comments_proposal ON proposal_comments (proposal_id, created_at);
 
 CREATE TABLE IF NOT EXISTS document_comments (
   id UUID PRIMARY KEY,
@@ -466,3 +480,4 @@ CREATE TABLE IF NOT EXISTS webhook_deliveries (
 );
 CREATE INDEX IF NOT EXISTS webhook_deliveries_due ON webhook_deliveries (status, next_attempt_at);
 CREATE INDEX IF NOT EXISTS webhook_deliveries_endpoint ON webhook_deliveries (endpoint_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS webhook_deliveries_created ON webhook_deliveries (created_at);

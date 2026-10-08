@@ -42,6 +42,7 @@ import {
   isPlanCode,
   PLANS,
   type AuthContext,
+  type Entitlement,
   type ServiceScope,
   type TokenScope,
   type Sql,
@@ -974,10 +975,10 @@ async function challengeAccessError(accountId: string): Promise<{ code: string; 
   return { code: "challenge-access-required", message: "Redeem the WebMCP Challenge code before changing a folder.", status: 402 };
 }
 
-async function writeAccessError(accountId: string): Promise<{ code: string; message: string; status: 402 | 403 | 409 } | null> {
+async function writeAccessError(accountId: string, known?: Entitlement): Promise<{ code: string; message: string; status: 402 | 403 | 409 } | null> {
   const challengeDenied = await challengeAccessError(accountId);
   if (challengeDenied) return challengeDenied;
-  const entitlement = await billing.entitlement(accountId);
+  const entitlement = known ?? await billing.entitlement(accountId);
   if (entitlement.canWrite) return null;
   if (entitlement.reason === "quota-exceeded") {
     return { code: "quota-exceeded", message: "This account has reached its protected-data limit. Existing files and earlier versions are still available.", status: 409 };
@@ -1153,8 +1154,10 @@ app.get("/api/projects", async (c) => {
            (SELECT COUNT(*)::int FROM project_members pm WHERE pm.project_id = p.id) AS "contributorCount",
            (SELECT COUNT(*)::int FROM change_proposals cp WHERE cp.project_id = p.id AND cp.status IN ('open','needs-review')) AS "openProposalCount"
     FROM projects p
-    LEFT JOIN project_members mine ON mine.project_id = p.id AND mine.account_id = ${acct.accountId}
-    WHERE (p.account_id = ${acct.accountId} OR mine.account_id = ${acct.accountId})
+    WHERE p.id IN (
+            SELECT id FROM projects WHERE account_id = ${acct.accountId}
+            UNION
+            SELECT project_id FROM project_members WHERE account_id = ${acct.accountId})
       AND (${bound}::uuid IS NULL OR p.id = ${bound}::uuid)
     ORDER BY p.created_at DESC LIMIT 200`;
   return c.json(rows);
@@ -3768,16 +3771,9 @@ app.post("/api/folder-token/renew", async (c) => {
 app.get("/api/save/preflight", async (c) => {
   const scope = c.get("scope");
   if (!scope) return c.json({ error: { code: "project-scope", message: "folder token required" } }, 403);
-  const denied = await writeAccessError(scope.ownerAccountId);
-  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   const entitlement = await billing.entitlement(scope.ownerAccountId);
-  if (!entitlement.canWrite) {
-    const accessDenied = await writeAccessError(scope.ownerAccountId);
-    return c.json(
-      { error: { code: accessDenied?.code ?? "subscription-required", message: accessDenied?.message ?? "Hosted access is required before saving." } },
-      accessDenied?.status ?? 402,
-    );
-  }
+  const denied = await writeAccessError(scope.ownerAccountId, entitlement);
+  if (denied) return c.json({ error: { code: denied.code, message: denied.message } }, denied.status);
   return c.json({ ok: true, canWrite: true, authorizedBytes: entitlement.authorizedBytes, usageBytes: entitlement.usageBytes, reservedBytes: entitlement.reservedBytes });
 });
 
