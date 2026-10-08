@@ -6,6 +6,26 @@ tag that the published packages and images are built from.
 
 ## [Unreleased]
 
+- An event destination that is, or resolves to, an address inside the
+  server's own network is now refused — including IPv4-mapped IPv6 and
+  NAT64 forms, which slipped past before — and the check is repeated before
+  every send. A destination whose name starts answering with a private
+  address fails its delivery with that reason instead of being contacted.
+- The hosted tool endpoint at `/mcp` refuses a request body over 2 MB before
+  reading it, like every other route already did.
+- Two saves recorded on one folder at the same moment no longer collide; the
+  second one is numbered after the first instead of failing.
+- Lookups the server runs on every request have indexes
+  (`infra/migrations/2026-10-08-lookup-indexes.sql`, applied by
+  `docker compose up -d`). The folder list and the write-access check stop
+  scanning tables that grow with other people's accounts.
+- The website's pages load less before they appear: analytics code now loads
+  after the page instead of with it, hashed assets are cached for a year, and
+  the two screenshots in the WebMCP section are a third of their former size.
+- Dependency patches: `@modelcontextprotocol/sdk` 1.31.0 (the hosted `/mcp`
+  endpoint and the local server), `next` 15.5.27, and patched versions of the
+  transitive packages `pnpm audit` named.
+
 ## [0.3.0] - 2026-09-23
 
 - Every file a save leaves out now says why: `goodfolder skipped` and the

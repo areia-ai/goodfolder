@@ -95,7 +95,36 @@ tools/              the gates CI runs: vocabulary, brand SVG, contrast
     JSON route reads its body only after it has been refused by size. A
     push is held and checked against the same leave-out rules before the
     transport service sees any of it (`apps/control-plane/src/push-gate/`),
-    and is refused whole or forwarded byte for byte — never edited.
+    and is refused whole or forwarded byte for byte — never edited. The
+    size rule covers the routes the raw server dispatches ahead of the
+    `/api/*` middleware too — `/mcp` caps its own body — so a new raw-server
+    route carries its own cap or doesn't ship.
+15. A save row is written in exactly one place, `insertSave` in
+    `apps/control-plane/src/remote.ts`, which holds a per-folder lock while
+    it takes the next number. Two saves landing on one folder at the same
+    moment used to turn into a 500 after the push had already landed.
+    `apps/control-plane/src/invariants.test.ts` fails on a second writer.
+16. A webhook address is refused when it is, or resolves to, an address
+    inside the deployment — loopback, link-local, private ranges, their
+    IPv4-mapped and NAT64 forms — at registration and again before every
+    send, since a public name can start answering with a private address
+    later (`apps/control-plane/src/webhooks.ts`). The response status of a
+    delivery is shown to the person who registered it, which is exactly why
+    the destination can never be something on the private network.
+17. Every lookup a request runs has an index. The schema is read by
+    `infra/schema.sql` and changed by additive files under
+    `infra/migrations/`; an index added in a migration is mirrored into
+    `schema.sql` in the same change, and `invariants.test.ts` fails when
+    the two disagree or when a hot lookup column loses its index. A new
+    query over a table by anything other than its primary key gets an index
+    in the same change, or a written reason why not.
+18. The web app keeps heavy packages off the shared bundle: `posthog-js`,
+    `mammoth`, `xlsx`, `docx` and `fflate` are loaded with `import()` where
+    they are used, never with a static import (`apps/web/lib/
+    bundle-hygiene.test.ts`). Every module under `apps/web/components` and
+    `apps/web/lib` is imported by something (`apps/web/lib/orphans.test.ts`);
+    when a component is retired, its CSS in `globals.css` and the assets only
+    it rendered go with it.
 
 ## Working on it
 

@@ -94,6 +94,12 @@ retries on a schedule if the address does not answer, and keeps every attempt
 where you can see it. The signing secret is shown once, when the destination
 is created.
 
+The address has to be one the public internet can reach. An address inside
+the server's own network — `localhost`, a private range, or a name that
+resolves to one — is refused when you add it, and a destination that later
+starts resolving to one has its deliveries fail with that reason rather than
+be contacted.
+
 Events: `save.created`, `save.flagged` (a save carried a file the rules keep
 out), `push.refused` (a save was refused), `proposal.created`,
 `proposal.reviewed`, and `save.requested` (reserved for a future release).
