@@ -35,6 +35,7 @@ function fakeSql(options: { nextSeq?: number; latest?: { seq: number; label: str
   const tagged = query as unknown as Sql & { queries: string[] };
   tagged.queries = queries;
   tagged.json = ((value: unknown) => value) as Sql["json"];
+  tagged.begin = (async (work: (tx: Sql) => Promise<unknown>) => work(tagged)) as unknown as Sql["begin"];
   return tagged;
 }
 

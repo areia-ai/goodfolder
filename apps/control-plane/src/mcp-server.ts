@@ -480,6 +480,59 @@ export function buildServer(services: McpServices, auth: McpAuth): McpServer {
   return server;
 }
 
+/**
+ * The request cap /mcp carries itself. It is dispatched on the raw server
+ * ahead of the /api/* body limit, which never runs for it — so the cap lives
+ * here, and a body over it is refused before the SDK reads anything.
+ */
+export const MCP_BODY_LIMIT = 2 * 1024 * 1024;
+
+/**
+ * Read a JSON request body with a hard byte cap. A declared content-length
+ * over the limit is refused without reading; a streamed body is refused the
+ * moment it crosses the limit. An empty body reads as undefined.
+ */
+export async function readJsonBody(
+  req: IncomingMessage,
+  limit: number,
+): Promise<{ ok: true; body: unknown } | { ok: false; status: 413 | 400; message: string }> {
+  const declared = Number(req.headers["content-length"]);
+  if (Number.isFinite(declared) && declared > limit) {
+    return { ok: false, status: 413, message: "That request is too large." };
+  }
+  // The stream is never destroyed: killing a real socket turns the refusal
+  // into a connection reset and the caller never sees the 413.
+  const read = await new Promise<
+    { ok: true; text: string } | { ok: false; status: 413 | 400; message: string }
+  >((resolve) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    const onData = (chunk: Buffer) => {
+      total += chunk.length;
+      if (total > limit) {
+        req.off("data", onData);
+        req.resume();
+        resolve({ ok: false, status: 413, message: "That request is too large." });
+        return;
+      }
+      chunks.push(chunk);
+    };
+    req.on("data", onData);
+    req.once("end", () => resolve({ ok: true, text: Buffer.concat(chunks).toString("utf8") }));
+    req.once("error", () =>
+      resolve({ ok: false, status: 400, message: "That request was not valid JSON." }),
+    );
+  });
+  if (!read.ok) return read;
+  const text = read.text.trim();
+  if (!text) return { ok: true, body: undefined };
+  try {
+    return { ok: true, body: JSON.parse(text) };
+  } catch {
+    return { ok: false, status: 400, message: "That request was not valid JSON." };
+  }
+}
+
 /** Handle one Streamable HTTP request: auth first, then a stateless MCP run. */
 export async function handleMcpRequest(
   services: McpServices,
@@ -496,6 +549,20 @@ export async function handleMcpRequest(
     res.end(JSON.stringify({ error: { code: "unauthorized", message: auth.message } }));
     return;
   }
+  let parsedBody: unknown;
+  if (req.method === "POST") {
+    const read = await readJsonBody(req, MCP_BODY_LIMIT);
+    if (!read.ok) {
+      res.writeHead(read.status, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: { code: read.status === 413 ? "too-large" : "invalid-json", message: read.message },
+        }),
+      );
+      return;
+    }
+    parsedBody = read.body;
+  }
   const server = buildServer(services, auth);
   // No session id generator: stateless mode, one call per request.
   const transport = new StreamableHTTPServerTransport({ enableJsonResponse: true });
@@ -504,5 +571,5 @@ export async function handleMcpRequest(
     void server.close();
   });
   await server.connect(transport as unknown as Parameters<McpServer["connect"]>[0]);
-  await transport.handleRequest(req, res);
+  await transport.handleRequest(req, res, parsedBody);
 }

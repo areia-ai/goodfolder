@@ -61,8 +61,8 @@ import { acceptStagedFile, forgetStagedFile, hashFile, putStoredFileFromPath, st
 import { parseCookies, SESSION_COOKIE, makePrincipals } from "./principals.ts";
 import {
   applyRevert,
-  asJson,
   exclusionsFor,
+  insertSave,
   loadSave,
   loadTimeline,
   previewRevert,
@@ -83,7 +83,7 @@ import {
   newWebhookSecret,
   parseWebhookEvents,
   queueTestDelivery,
-  webhookUrlAllowed,
+  webhookTargetAllowed,
 } from "./webhooks.ts";
 import { openApiDocument } from "./openapi.ts";
 import { handleMcpRequest, type McpServices } from "./mcp-server.ts";
@@ -1622,23 +1622,23 @@ async function recordWebSave(input: {
   const added = input.counts?.added ?? 0;
   const removed = input.counts?.removed ?? 0;
   const changed = input.counts?.changed ?? (input.counts ? 0 : input.changedPaths.length);
-  const rows = await sql`
-    INSERT INTO saves (id, project_id, seq, label, label_source, actor_device_id,
-                       changed_paths, commit_sha, added_count, changed_count, removed_count,
-                       top_paths, harness)
-    SELECT ${crypto.randomUUID()}, ${input.projectId}, COALESCE(MAX(s.seq), 0) + 1,
-           ${input.label.slice(0, 120)}, 'user', ${deviceId},
-           ${sql.json(input.changedPaths)}, ${input.commitSha}, ${added}, ${changed}, ${removed},
-           ${sql.json(input.changedPaths.slice(0, 10))}, 'GoodFolder web'
-    FROM saves s WHERE s.project_id = ${input.projectId}
-    RETURNING seq`;
+  const { seq } = await insertSave(sql, {
+    projectId: input.projectId,
+    label: input.label,
+    labelSource: "user",
+    actorDeviceId: deviceId,
+    commitSha: input.commitSha,
+    changedPaths: input.changedPaths,
+    counts: { added, changed, removed },
+    topPaths: input.changedPaths.slice(0, 10),
+    harness: "GoodFolder web",
+  });
   await sql`
     INSERT INTO audit_log (actor, action, detail)
     VALUES (${input.accountEmail}, 'document.saved', ${sql.json({ projectId: input.projectId, paths: input.changedPaths })})`;
   void billing.refreshProject(input.projectId, "web-save").catch((error) => {
     console.error("usage refresh after browser save failed:", error);
   });
-  const seq = Number(rows[0]!.seq);
   void emitWebhookEvent(sql, {
     accountId: await projectOwnerId(input.projectId),
     projectId: input.projectId,
@@ -3504,7 +3504,7 @@ app.post("/api/webhooks", async (c) => {
   const body = await c.req
     .json<{ url?: unknown; events?: unknown; projectId?: unknown }>()
     .catch(() => ({}) as { url?: unknown; events?: unknown; projectId?: unknown });
-  const checked = webhookUrlAllowed(body.url);
+  const checked = await webhookTargetAllowed(body.url);
   if (!checked.ok) return c.json({ error: { code: "url", message: checked.message } }, 400);
   const events = parseWebhookEvents(body.events);
   if (!events) {
@@ -3551,7 +3551,7 @@ app.patch("/api/webhooks/:id", async (c) => {
     .catch(() => ({}) as { url?: unknown; events?: unknown; active?: unknown });
   let url = String(row.url);
   if (body.url !== undefined) {
-    const checked = webhookUrlAllowed(body.url);
+    const checked = await webhookTargetAllowed(body.url);
     if (!checked.ok) return c.json({ error: { code: "url", message: checked.message } }, 400);
     url = checked.url;
   }
@@ -3917,21 +3917,25 @@ app.post("/api/saves", async (c) => {
     console.error("save screening failed; recording without it:", error);
   }
 
-  const rows = await sql`
-    INSERT INTO saves (id, project_id, seq, label, label_source, actor_device_id, collision, changed_paths, commit_sha,
-                       added_count, changed_count, removed_count, top_paths, harness, warnings, skipped, skipped_total)
-    SELECT ${crypto.randomUUID()}, ${scope.projectId},
-           COALESCE(MAX(s.seq), 0) + 1,
-           ${label}, ${source},
-           ${scope.deviceId}, ${b.collision ?? null},
-           ${sql.json(b.changedPaths ?? [])}, ${b.commitSha},
-           ${counts?.added ?? 0}, ${counts?.changed ?? 0}, ${counts?.removed ?? 0},
-           ${sql.json(topPaths)}, ${harness}, ${sql.json(asJson(warnings))},
-           ${skippedReport ? sql.json(asJson(skippedReport.entries)) : null},
-           ${skippedReport ? skippedReport.total : null}
-    FROM saves s WHERE s.project_id = ${scope.projectId}
-    RETURNING id, seq`;
-  const save = rows[0]!;
+  const save = await insertSave(sql, {
+    projectId: scope.projectId,
+    label,
+    labelSource: source,
+    actorDeviceId: scope.deviceId,
+    collision: b.collision ?? null,
+    changedPaths: b.changedPaths ?? [],
+    commitSha: b.commitSha,
+    counts: {
+      added: counts?.added ?? 0,
+      changed: counts?.changed ?? 0,
+      removed: counts?.removed ?? 0,
+    },
+    topPaths,
+    harness,
+    warnings,
+    skipped: skippedReport ? skippedReport.entries : null,
+    skippedTotal: skippedReport ? skippedReport.total : null,
+  });
   await sql`
     UPDATE devices SET cursor_save_seq = ${save.seq} WHERE id = ${scope.deviceId}`;
   void billing.refreshProject(scope.projectId, "save").catch((error) => {

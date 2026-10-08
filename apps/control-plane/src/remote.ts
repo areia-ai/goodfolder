@@ -808,6 +808,48 @@ export async function recordRemoteSave(
     skippedReportedBy: input.skippedReport ? "device" : null };
 }
 
+export interface SaveRowInput {
+  projectId: string;
+  label: string;
+  labelSource: "user" | "agent";
+  actorDeviceId: string;
+  commitSha: string;
+  changedPaths: string[];
+  counts: { added: number; changed: number; removed: number };
+  topPaths: string[];
+  harness: string | null;
+  collision?: string | null;
+  warnings?: SaveWarning[] | undefined;
+  /** The device's left-out report entries; null means no report was carried. */
+  skipped?: unknown[] | null;
+  skippedTotal?: number | null;
+}
+
+/**
+ * The only writer of a save row. seq is MAX+1, so two saves racing on one
+ * folder need the advisory lock — the unique constraint would otherwise turn
+ * the race into a 500 after the push already landed.
+ */
+export async function insertSave(sql: Sql, input: SaveRowInput): Promise<{ id: string; seq: number }> {
+  return sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(hashtext('saves'), hashtext(${input.projectId}))`;
+    const rows = await tx`
+      INSERT INTO saves (id, project_id, seq, label, label_source, actor_device_id, collision,
+                         changed_paths, commit_sha, added_count, changed_count, removed_count,
+                         top_paths, harness, warnings, skipped, skipped_total)
+      SELECT ${crypto.randomUUID()}, ${input.projectId}, COALESCE(MAX(s.seq), 0) + 1,
+             ${input.label.slice(0, 120)}, ${input.labelSource}, ${input.actorDeviceId}, ${input.collision ?? null},
+             ${sql.json(input.changedPaths)}, ${input.commitSha},
+             ${input.counts.added}, ${input.counts.changed}, ${input.counts.removed},
+             ${sql.json(input.topPaths)}, ${input.harness}, ${sql.json(asJson(input.warnings ?? []))},
+             ${input.skipped ? sql.json(asJson(input.skipped)) : null},
+             ${input.skippedTotal ?? null}
+      FROM saves s WHERE s.project_id = ${input.projectId}
+      RETURNING id, seq`;
+    return { id: String(rows[0]!.id), seq: Number(rows[0]!.seq) };
+  });
+}
+
 async function recordSaveRow(
   deps: RemoteDeps,
   input: {
@@ -828,19 +870,20 @@ async function recordSaveRow(
 ): Promise<number> {
   const paths = input.changes.map((change) => change.path).slice(0, RECEIPT_PATH_CAP);
   const topPaths = paths.slice(0, 10);
-  const rows = await deps.sql`
-    INSERT INTO saves (id, project_id, seq, label, label_source, actor_device_id,
-                       changed_paths, commit_sha, added_count, changed_count, removed_count,
-                       top_paths, harness, warnings, skipped, skipped_total)
-    SELECT ${crypto.randomUUID()}, ${input.projectId}, COALESCE(MAX(s.seq), 0) + 1,
-           ${input.label.slice(0, 120)}, ${input.labelSource}, ${input.actorDeviceId},
-           ${deps.sql.json(paths)}, ${input.commitSha}, ${input.counts.added}, ${input.counts.changed}, ${input.counts.removed},
-           ${deps.sql.json(topPaths)}, ${input.harness}, ${deps.sql.json(asJson(input.warnings ?? []))},
-           ${input.skippedReport ? deps.sql.json(asJson(input.skippedReport.entries)) : null},
-           ${input.skippedReport ? input.skippedReport.total : null}
-    FROM saves s WHERE s.project_id = ${input.projectId}
-    RETURNING seq`;
-  const seq = Number(rows[0]!.seq);
+  const { seq } = await insertSave(deps.sql, {
+    projectId: input.projectId,
+    label: input.label,
+    labelSource: input.labelSource,
+    actorDeviceId: input.actorDeviceId,
+    commitSha: input.commitSha,
+    changedPaths: paths,
+    counts: input.counts,
+    topPaths,
+    harness: input.harness,
+    warnings: input.warnings,
+    skipped: input.skippedReport?.entries ?? null,
+    skippedTotal: input.skippedReport?.total ?? null,
+  });
   await deps.sql`UPDATE devices SET cursor_save_seq = ${seq} WHERE id = ${input.actorDeviceId}`;
   deps.refreshUsage(input.projectId);
   void emitWebhookEvent(deps.sql, {

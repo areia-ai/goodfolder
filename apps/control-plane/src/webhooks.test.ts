@@ -10,8 +10,13 @@ import {
   signWebhook,
   verifyWebhookSignature,
   webhookRetryDelayMs,
+  webhookTargetAllowed,
   webhookUrlAllowed,
 } from "./webhooks.ts";
+import type { WebhookLookup } from "./webhooks.ts";
+
+/** A resolver that always answers with one public address. */
+const publicLookup: WebhookLookup = async () => [{ address: "93.184.216.34", family: 4 }];
 
 function fakeSql(rows: { endpoints?: Array<Record<string, unknown>> } = {}) {
   const queries: { text: string; values: unknown[] }[] = [];
@@ -41,8 +46,38 @@ test("a webhook address must be a public http or https address", () => {
   assert.equal(webhookUrlAllowed("ftp://example.com/hook").ok, false);
   assert.equal(webhookUrlAllowed("not a url").ok, false);
   assert.equal(webhookUrlAllowed("").ok, false);
+  // An inside address smuggled through IPv6 notation is refused too.
+  assert.equal(webhookUrlAllowed("http://[::ffff:127.0.0.1]/x").ok, false);
+  assert.equal(webhookUrlAllowed("http://[::ffff:10.0.0.1]/x").ok, false);
+  assert.equal(webhookUrlAllowed("http://[64:ff9b::7f00:1]/x").ok, false);
+  assert.equal(webhookUrlAllowed("http://[2002:7f00:1::]/x").ok, false);
+  assert.equal(webhookUrlAllowed("http://0.0.0.0/x").ok, false);
+  assert.equal(webhookUrlAllowed("http://100.64.0.1/x").ok, false);
   // A public address that merely starts like a private one still passes.
   assert.equal(webhookUrlAllowed("https://172.32.0.1/hook").ok, true);
+});
+
+test("a webhook target is refused when the name resolves inside", async () => {
+  assert.equal((await webhookTargetAllowed("https://hooks.example.com/x", publicLookup)).ok, true);
+  const privateLookup: WebhookLookup = async () => [{ address: "10.1.2.3", family: 4 }];
+  const refused = await webhookTargetAllowed("https://hooks.example.com/x", privateLookup);
+  assert.equal(refused.ok, false);
+  // One private answer among public ones refuses the whole name.
+  const mixedLookup: WebhookLookup = async () => [
+    { address: "93.184.216.34", family: 4 },
+    { address: "10.1.2.3", family: 4 },
+  ];
+  assert.equal((await webhookTargetAllowed("https://hooks.example.com/x", mixedLookup)).ok, false);
+  const v6Lookup: WebhookLookup = async () => [{ address: "fd12::1", family: 6 }];
+  assert.equal((await webhookTargetAllowed("https://hooks.example.com/x", v6Lookup)).ok, false);
+  const deadLookup: WebhookLookup = async () => {
+    throw new Error("ENOTFOUND");
+  };
+  const dead = await webhookTargetAllowed("https://hooks.example.com/x", deadLookup);
+  assert.equal(dead.ok, false);
+  assert.equal(dead.ok ? "" : dead.message, "That address could not be looked up. Check it and try again.");
+  // A public literal never needs the resolver.
+  assert.equal((await webhookTargetAllowed("https://93.184.216.34/x", deadLookup)).ok, true);
 });
 
 test("event lists refuse unknown names instead of dropping them", () => {
@@ -108,7 +143,7 @@ test("a delivery reports success once and failure with backoff", async () => {
     attempts: 0,
     event: "save.created",
     payload: { event: "save.created" },
-  }, okFetch);
+  }, okFetch, publicLookup);
   assert.equal(first, "delivered");
   assert.equal(queries.some((query) => query.text.startsWith("UPDATE webhook_deliveries SET status = 'delivered'")), true);
 
@@ -121,7 +156,7 @@ test("a delivery reports success once and failure with backoff", async () => {
     attempts: 0,
     event: "save.created",
     payload: { event: "save.created" },
-  }, failing);
+  }, failing, publicLookup);
   assert.equal(second, "pending");
   assert.equal(queries.some((query) => query.text.includes("next_attempt_at")), true);
 
@@ -133,9 +168,32 @@ test("a delivery reports success once and failure with backoff", async () => {
     attempts: WEBHOOK_MAX_ATTEMPTS - 1,
     event: "save.created",
     payload: { event: "save.created" },
-  }, failing);
+  }, failing, publicLookup);
   assert.equal(last, "failed");
   assert.equal(queries.some((query) => query.text.startsWith("UPDATE webhook_deliveries SET status = 'failed'")), true);
+});
+
+test("a delivery to a name that resolves inside fails without ever calling out", async () => {
+  const { sql, queries } = fakeSql();
+  let fetchCalls = 0;
+  const spyFetch = (async () => {
+    fetchCalls += 1;
+    return new Response("{}", { status: 200 });
+  }) as unknown as typeof fetch;
+  const insideLookup: WebhookLookup = async () => [{ address: "10.0.0.1", family: 4 }];
+  const outcome = await attemptDelivery(sql, {
+    id: "delivery-5",
+    endpointId: "endpoint-a",
+    url: "https://hooks.example.com/x",
+    secret: "gfwh_test",
+    attempts: 0,
+    event: "save.created",
+    payload: { event: "save.created" },
+  }, spyFetch, insideLookup);
+  assert.equal(outcome, "failed");
+  assert.equal(fetchCalls, 0);
+  assert.equal(queries.some((query) => query.text.startsWith("UPDATE webhook_deliveries SET status = 'failed'")), true);
+  assert.equal(queries.some((query) => query.text.startsWith("UPDATE webhook_endpoints SET last_failed_at")), true);
 });
 
 test("a network failure is retried, never swallowed", async () => {
@@ -151,7 +209,7 @@ test("a network failure is retried, never swallowed", async () => {
     attempts: 1,
     event: "proposal.created",
     payload: { event: "proposal.created" },
-  }, deadFetch);
+  }, deadFetch, publicLookup);
   assert.equal(outcome, "pending");
   const update = queries.find((query) => query.text.includes("next_attempt_at"));
   assert.equal(update?.values.includes("connection refused"), true);

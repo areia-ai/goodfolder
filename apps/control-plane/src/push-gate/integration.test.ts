@@ -181,6 +181,7 @@ function fakeSql(log: { audits: RecordedAudit[]; deliveries: { event: string; da
     return [];
   };
   const tagged = query as unknown as Sql & { texts: string[] };
+  tagged.begin = (async (work: (tx: Sql) => Promise<unknown>) => work(tagged)) as unknown as Sql["begin"];
   tagged.texts = texts;
   tagged.json = ((v: unknown) => v) as Sql["json"];
   return tagged;

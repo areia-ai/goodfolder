@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import http, { type IncomingMessage, type ServerResponse } from "node:http";
+import { Readable } from "node:stream";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { IncomingMessage } from "node:http";
 import type { RepositoryAdapter, Sql } from "@goodfolder/serverlib";
-import { buildServer, resolveMcpCaller, type McpAuth, type McpServices } from "./mcp-server.ts";
+import {
+  MCP_BODY_LIMIT,
+  buildServer,
+  handleMcpRequest,
+  readJsonBody,
+  resolveMcpCaller,
+  type McpAuth,
+  type McpServices,
+} from "./mcp-server.ts";
 
 const TOOL_NAMES = [
   "goodfolder_create",
@@ -54,6 +64,7 @@ function fakeSql(options: { service?: boolean; accountDevice?: boolean; projectT
   };
   const tagged = query as unknown as Sql;
   tagged.json = ((value: unknown) => value) as Sql["json"];
+  tagged.begin = (async (work: (tx: Sql) => Promise<unknown>) => work(tagged)) as unknown as Sql["begin"];
   return tagged;
 }
 
@@ -154,6 +165,102 @@ function request(headers: Record<string, string>): IncomingMessage {
   const lowered = Object.fromEntries(Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]));
   return { headers: lowered } as unknown as IncomingMessage;
 }
+
+/** A streamed request fake: real chunks, declared headers, a method and a url. */
+function streamedRequest(chunks: string[], headers: Record<string, string>, method = "POST"): IncomingMessage {
+  const lowered = Object.fromEntries(Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]));
+  const req = Readable.from(chunks.map((chunk) => Buffer.from(chunk))) as IncomingMessage;
+  req.headers = lowered;
+  req.method = method;
+  req.url = "/mcp";
+  return req;
+}
+
+class FakeResponse extends EventEmitter {
+  status = 0;
+  body = "";
+  writeHead(status: number) {
+    this.status = status;
+    return this;
+  }
+  end(body?: string) {
+    this.body = body ?? "";
+    return this;
+  }
+}
+
+test("readJsonBody parses a body inside the limit", async () => {
+  const req = streamedRequest(['{"a":"xy"}'], {});
+  const read = await readJsonBody(req, 64);
+  assert.deepEqual(read, { ok: true, body: { a: "xy" } });
+});
+
+test("readJsonBody refuses a declared size without reading the stream", async () => {
+  const req = streamedRequest(["x".repeat(128)], { "content-length": "65" });
+  const read = await readJsonBody(req, 64);
+  assert.deepEqual(read, { ok: false, status: 413, message: "That request is too large." });
+  assert.equal(req.readableDidRead, false);
+  assert.equal(req.listenerCount("data"), 0);
+});
+
+test("readJsonBody refuses a streamed body the moment it crosses the limit", async () => {
+  const req = streamedRequest(["x".repeat(40), "y".repeat(40)], {});
+  const read = await readJsonBody(req, 64);
+  assert.deepEqual(read, { ok: false, status: 413, message: "That request is too large." });
+});
+
+test("readJsonBody answers 400 on bytes that are not JSON", async () => {
+  const req = streamedRequest(["not json"], {});
+  const read = await readJsonBody(req, 64);
+  assert.deepEqual(read, { ok: false, status: 400, message: "That request was not valid JSON." });
+});
+
+test("the endpoint refuses an oversized request before the SDK sees it", async () => {
+  const req = streamedRequest(["{}"], {
+    authorization: "Bearer x",
+    "content-length": String(MCP_BODY_LIMIT + 1),
+    "content-type": "application/json",
+  });
+  const res = new FakeResponse();
+  await handleMcpRequest(services(fakeSql({ accountDevice: true })), fakeSql({ accountDevice: true }), req, res as unknown as ServerResponse);
+  assert.equal(res.status, 413);
+  const body = JSON.parse(res.body) as { error: { code: string } };
+  assert.equal(body.error.code, "too-large");
+});
+
+test("a real socket gets the 413, not a reset", async () => {
+  const server = http.createServer((req, res) => {
+    void handleMcpRequest(services(fakeSql({ accountDevice: true })), fakeSql({ accountDevice: true }), req, res);
+  });
+  try {
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    const result = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const req = http.request({
+        host: "127.0.0.1",
+        port,
+        path: "/mcp",
+        method: "POST",
+        headers: {
+          authorization: "Bearer x",
+          "content-type": "application/json",
+          "content-length": String(MCP_BODY_LIMIT + 1),
+        },
+      });
+      req.on("response", (res) => {
+        let body = "";
+        res.on("data", (chunk: Buffer) => (body += chunk.toString("utf8")));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
+      });
+      req.on("error", reject);
+      req.write("x".repeat(100));
+    });
+    assert.equal(result.status, 413);
+    assert.equal((JSON.parse(result.body) as { error: { code: string } }).error.code, "too-large");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
 
 test("the endpoint refuses a folder's own credential", async () => {
   const refused = await resolveMcpCaller(fakeSql({ projectToken: true }), request({ authorization: "Bearer folder-token" }));

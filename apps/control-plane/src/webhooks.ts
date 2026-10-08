@@ -1,4 +1,6 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { promises as dns } from "node:dns";
+import { BlockList, isIP } from "node:net";
 import type { Sql } from "@goodfolder/serverlib";
 
 /** The shape postgres.js accepts for a jsonb parameter, borrowed from it. */
@@ -60,6 +62,9 @@ export function parseWebhookEvents(value: unknown): WebhookEvent[] | null {
  * link-local and private ranges by name and by literal address costs nothing
  * for a real endpoint, which is always a public address.
  */
+const PRIVATE_ADDRESS_MESSAGE =
+  "That address points back inside the server. Use an address the public internet can reach.";
+
 export function webhookUrlAllowed(raw: unknown): { ok: true; url: string } | { ok: false; message: string } {
   if (typeof raw !== "string") return { ok: false, message: "Give the address to send events to." };
   const trimmed = raw.trim();
@@ -78,37 +83,88 @@ export function webhookUrlAllowed(raw: unknown): { ok: true; url: string } | { o
   }
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
-    return { ok: false, message: "That address points back inside the server. Use an address the public internet can reach." };
+    return { ok: false, message: PRIVATE_ADDRESS_MESSAGE };
   }
   if (isPrivateAddress(host)) {
-    return { ok: false, message: "That address points back inside the server. Use an address the public internet can reach." };
+    return { ok: false, message: PRIVATE_ADDRESS_MESSAGE };
   }
   // A single-label name ("goodfolder-postgres", "metadata") is a name the
   // private network resolves; a public endpoint always has a dot.
   if (!host.includes(".") && !host.includes(":")) {
-    return { ok: false, message: "That address points back inside the server. Use an address the public internet can reach." };
+    return { ok: false, message: PRIVATE_ADDRESS_MESSAGE };
   }
   return { ok: true, url: url.toString() };
 }
 
+/**
+ * Ranges a webhook may never point at. IPv4-mapped IPv6 literals like
+ * `::ffff:127.0.0.1` are checked against the IPv4 rules by BlockList itself.
+ */
+const PRIVATE_NETS = new BlockList();
+for (const [range, prefix] of [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.168.0.0", 16],
+] as const) {
+  PRIVATE_NETS.addSubnet(range, prefix, "ipv4");
+}
+for (const [range, prefix] of [
+  ["::", 128],
+  ["::1", 128],
+  ["fe80::", 10],
+  ["fc00::", 7],
+  ["64:ff9b::", 96], // NAT64
+  ["2002::", 16], // 6to4
+] as const) {
+  PRIVATE_NETS.addSubnet(range, prefix, "ipv6");
+}
+
 export function isPrivateAddress(host: string): boolean {
-  if (host.includes(":")) {
-    // IPv6: loopback, link-local, unique-local, unspecified.
-    const h = host.toLowerCase();
-    return h === "::1" || h === "::" || h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd");
+  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
+  const family = isIP(h);
+  if (family === 0) {
+    // A malformed dotted quad (an octet over 255) is refused rather than let through.
+    return /^\d{1,3}(\.\d{1,3}){3}$/.test(h);
   }
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (!m) return false;
-  const octets = m.slice(1).map(Number);
-  if (octets.some((n) => !Number.isInteger(n) || n > 255)) return true;
-  const [a, b] = octets as [number, number, number, number];
-  return (
-    a === 0 || a === 10 || a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168)
-  );
+  return PRIVATE_NETS.check(h, family === 4 ? "ipv4" : "ipv6");
+}
+
+/** The resolver signature the delivery path and the route check share. */
+export type WebhookLookup = (
+  host: string,
+  opts: { all: true },
+) => Promise<Array<{ address: string; family: number }>>;
+
+/**
+ * webhookUrlAllowed plus the one check a name needs that a literal never
+ * does: what it resolves to. A name that answers with a private address is
+ * refused the same way a private literal is.
+ */
+export async function webhookTargetAllowed(
+  raw: unknown,
+  lookup: WebhookLookup = dns.lookup,
+): Promise<{ ok: true; url: string; addresses: string[] } | { ok: false; message: string }> {
+  const checked = webhookUrlAllowed(raw);
+  if (!checked.ok) return checked;
+  const host = new URL(checked.url).hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (isIP(host)) return { ok: true, url: checked.url, addresses: [host] };
+  let resolved: Array<{ address: string; family: number }>;
+  try {
+    resolved = await lookup(host, { all: true });
+  } catch {
+    return { ok: false, message: "That address could not be looked up. Check it and try again." };
+  }
+  if (resolved.length === 0) {
+    return { ok: false, message: "That address could not be looked up. Check it and try again." };
+  }
+  if (resolved.some((entry) => isPrivateAddress(entry.address))) {
+    return { ok: false, message: PRIVATE_ADDRESS_MESSAGE };
+  }
+  return { ok: true, url: checked.url, addresses: resolved.map((entry) => entry.address) };
 }
 
 /** Seconds since the epoch, as sent and signed. */
@@ -219,6 +275,7 @@ export async function attemptDelivery(
   sql: Sql,
   row: WebhookDeliveryRow,
   fetchImpl: typeof fetch = fetch,
+  lookup: WebhookLookup = dns.lookup,
 ): Promise<"delivered" | "pending" | "failed"> {
   const body = JSON.stringify(row.payload);
   const timestamp = String(Math.floor(Date.now() / 1000));
@@ -230,22 +287,44 @@ export async function attemptDelivery(
     "x-goodfolder-timestamp": timestamp,
     "x-goodfolder-signature": signWebhook(row.secret, timestamp, body),
   };
+  // The destination is re-checked at send time: a name that resolved to a
+  // public address at registration can answer with a private one later.
+  const target = await webhookTargetAllowed(row.url, lookup);
+  if (!target.ok && target.message === PRIVATE_ADDRESS_MESSAGE) {
+    const attempts = row.attempts + 1;
+    await sql`
+      UPDATE webhook_deliveries
+      SET status = 'failed', attempts = ${attempts}, response_status = NULL, error = ${target.message}
+      WHERE id = ${row.id}`;
+    await sql`
+      UPDATE webhook_endpoints
+      SET last_failed_at = now(), last_error = ${target.message.slice(0, 500)}
+      WHERE id = ${row.endpointId}`;
+    return "failed";
+  }
   let status: number | null = null;
   let error: string | null = null;
-  try {
-    const res = await fetchImpl(row.url, {
-      method: "POST",
-      headers,
-      body,
-      // A redirect could send the signed body somewhere else entirely.
-      redirect: "error",
-      signal: AbortSignal.timeout(10_000),
-    });
-    status = res.status;
-    if (!res.ok) error = `The endpoint answered ${res.status}.`;
-  } catch (e) {
-    error = e instanceof Error ? (e.name === "TimeoutError" ? "The endpoint did not answer in time." : e.message) : "The endpoint could not be reached.";
+  if (!target.ok) {
+    error = target.message;
+  } else {
+    try {
+      const res = await fetchImpl(row.url, {
+        method: "POST",
+        headers,
+        body,
+        // A redirect could send the signed body somewhere else entirely.
+        redirect: "error",
+        signal: AbortSignal.timeout(10_000),
+      });
+      status = res.status;
+      if (!res.ok) error = `The endpoint answered ${res.status}.`;
+    } catch (e) {
+      error = e instanceof Error ? (e.name === "TimeoutError" ? "The endpoint did not answer in time." : e.message) : "The endpoint could not be reached.";
+    }
   }
+  // The remaining gap is the DNS answer changing between this lookup and the
+  // connect (TOCTOU); closing it needs a resolver-pinned dispatcher, which we
+  // deliberately don't attempt.
   const attempts = row.attempts + 1;
   if (status !== null && status >= 200 && status < 300) {
     await sql`
@@ -285,6 +364,7 @@ export async function deliverDueWebhooks(
   sql: Sql,
   fetchImpl: typeof fetch = fetch,
   limit = 20,
+  lookup: WebhookLookup = dns.lookup,
 ): Promise<number> {
   const due = await sql`
     SELECT d.id, d.endpoint_id AS "endpointId", d.attempts, d.payload, d.event,
@@ -303,7 +383,7 @@ export async function deliverDueWebhooks(
       attempts: Number(row.attempts ?? 0),
       event: String(row.event ?? "event"),
       payload: row.payload,
-    }, fetchImpl);
+    }, fetchImpl, lookup);
     if (outcome === "delivered") sent += 1;
   }
   return sent;
