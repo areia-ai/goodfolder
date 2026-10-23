@@ -7,7 +7,7 @@
 #   docker build --build-arg APP=control-plane .
 #   docker build --build-arg APP=lfs .
 
-FROM node:22-alpine AS build
+FROM node:22.23.4-alpine AS build
 ARG APP
 WORKDIR /src
 RUN corepack enable && corepack prepare pnpm@11.22.0 --activate
@@ -33,7 +33,7 @@ RUN ./node_modules/.bin/esbuild "apps/${APP}/src/index.ts" \
       --outfile=/out/index.js --log-level=warning \
       --banner:js="import{createRequire}from'node:module';const require=createRequire(import.meta.url);"
 
-FROM node:22-alpine
+FROM node:22.23.4-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /out/index.js ./index.js

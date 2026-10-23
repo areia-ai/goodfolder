@@ -8,7 +8,7 @@
 #
 #   docker compose up -d --build goodfolder-web
 
-FROM node:22-alpine AS build
+FROM node:22.23.4-alpine AS build
 WORKDIR /src
 RUN corepack enable && corepack prepare pnpm@11.22.0 --activate
 

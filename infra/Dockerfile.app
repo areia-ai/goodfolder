@@ -1,4 +1,4 @@
-FROM node:22-alpine
+FROM node:22.23.4-alpine
 WORKDIR /app
 COPY dist/index.js ./dist/index.js
 # Uploads are spooled under the temp directory; nothing else is written.
